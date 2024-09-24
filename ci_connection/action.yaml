@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 name: "Wait For Connection"
-description: 'Action to wait for connection from user (condtionally)'
+description: 'Action to wait for connection from user (conditionally)'
 inputs:
   halt-dispatch-input:
     description: 'Should the action wait for user connection from workflow_dispatch?'

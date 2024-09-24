@@ -41,7 +41,7 @@ logging.basicConfig(level=logging.INFO if not _SHOW_DEBUG else logging.DEBUG,
 last_time = time.time()
 timeout = 600  # 10 minutes for initial connection
 keep_alive_timeout = (
-  900  # 30 minutes for keep-alive, if no closed message (allow for reconnects)
+  900  # 15 minutes for keep-alive, if no closed message (allow for reconnects)
 )
 
 
