@@ -44,6 +44,13 @@ keep_alive_timeout = (
   900  # 15 minutes for keep-alive, if no closed message (allow for reconnects)
 )
 
+# Labels that are used for checking whether a workflow should wait for a
+# connection.
+# Note: there's always a small possibility these labels may change on the
+# repo/org level, in which case, they'd need to be updated below as well.
+ALWAYS_HALT_LABEL = "CI Connection Halt - Always"
+HALT_ON_RETRY_LABEL = "CI Connection Halt - On Retry"
+
 
 def _is_truthy_env_var(var_name: str) -> bool:
   var_val = os.getenv(var_name, "").lower()
@@ -72,22 +79,17 @@ def should_halt_for_connection() -> bool:
   # Check if any of the relevant labels are present
   labels = retrieve_labels(print_to_stdout=False)
 
-  # Note: there's always a small possibility these labels may change on the
-  # repo/org level, in which case, they'd need to be updated below as well.
-
   # TODO(belitskiy): Add the ability to halt on CI error.
 
-  always_halt_label = "CI Connection Halt - Always"
-  if always_halt_label in labels:
+  if ALWAYS_HALT_LABEL in labels:
     logging.info(f"Halt for connection requested via presence "
-                 f"of the {always_halt_label!r} label")
+                 f"of the {ALWAYS_HALT_LABEL!r} label")
     return True
 
   attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
-  halt_on_retry_label = "CI Connection Halt - On Retry"
-  if attempt > 1 and halt_on_retry_label in labels:
+  if attempt > 1 and HALT_ON_RETRY_LABEL in labels:
     logging.info(f"Halt for connection requested via presence "
-                 f"of the {halt_on_retry_label!r} label, "
+                 f"of the {HALT_ON_RETRY_LABEL!r} label, "
                  f"due to workflow run attempt being 2+ ({attempt})")
     return True
 
