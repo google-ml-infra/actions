@@ -12,23 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 name: "Wait For Connection"
-description: 'Action to wait for connection from user'
+description: 'Action to wait for connection from user (conditionally)'
 inputs:
-  should-wait:
-    description: 'Should the action wait for user connection'
-    required: true
-    default: "0"
-  repository:
-      description: 'Repository name with owner. For example, actions/checkout'
-      default: ${{ github.repository }}
+  halt-dispatch-input:
+    description: 'Should the action wait for user connection from workflow_dispatch?'
+    required: false
+    default: "no"
 runs:
   using: "composite"
   steps:
-  - name: Wait For Connection
+  - name: Wait for connection (conditionally)
     shell: bash
     env:
-      REPOSITORY: ${{ inputs.repository }}
-      INTERACTIVE_CI: ${{ inputs.should-wait }}
+      # This variable is on by default, but can be overridden for convenience,
+      # in case the workflow calling this action should not be halted, despite
+      # other labels/inputs.
+      INTERACTIVE_CI: 1
       PYTHONUNBUFFERED: 1
+      HALT_DISPATCH_INPUT: ${{ inputs.halt-dispatch-input }}
+    # The calling workflow shouldn't fail in case this step does
+    continue-on-error: true
     run: |
-      python3 ./actions/ci_connection/wait_for_connection.py
+      # Pick an existing Python alias
+      python_bin=$(which python3 2>/dev/null || which python)
+      # Wait for the connection, if a halt was requested via a label/input
+      "$python_bin" "$GITHUB_ACTION_PATH/wait_for_connection.py"

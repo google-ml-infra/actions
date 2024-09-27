@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
 from multiprocessing.connection import Listener
 import time
@@ -19,92 +20,163 @@ import signal
 import threading
 import sys
 
+from get_labels import retrieve_labels
+
+# Check if debug logging should be enabled for the script:
+# WAIT_FOR_CONNECTION_DEBUG is a custom variable.
+# RUNNER_DEBUG and ACTIONS_RUNNER_DEBUG are GH env vars, which can be set
+# in various ways, one of them - enabling debug logging from the UI, when
+# triggering a run:
+# https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
+# https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/troubleshooting-workflows/enabling-debug-logging#enabling-runner-diagnostic-logging
+_SHOW_DEBUG = bool(
+  os.getenv("WAIT_FOR_CONNECTION_DEBUG",
+            os.getenv("RUNNER_DEBUG",
+                      os.getenv("ACTIONS_RUNNER_DEBUG")))
+)
+logging.basicConfig(level=logging.INFO if not _SHOW_DEBUG else logging.DEBUG,
+                    format="%(levelname)s: %(message)s", stream=sys.stderr)
+
+
 last_time = time.time()
 timeout = 600  # 10 minutes for initial connection
 keep_alive_timeout = (
-    900  # 30 minutes for keep-alive if no closed message (allow for reconnects)
+  900  # 15 minutes for keep-alive, if no closed message (allow for reconnects)
 )
+
+# Labels that are used for checking whether a workflow should wait for a
+# connection.
+# Note: there's always a small possibility these labels may change on the
+# repo/org level, in which case, they'd need to be updated below as well.
+ALWAYS_HALT_LABEL = "CI Connection Halt - Always"
+HALT_ON_RETRY_LABEL = "CI Connection Halt - On Retry"
+
+
+def _is_truthy_env_var(var_name: str) -> bool:
+  var_val = os.getenv(var_name, "").lower()
+  negative_choices = {"0", "false", "n", "no", "none", "null", "n/a"}
+  if var_val and var_val not in negative_choices:
+    return True
+  return False
+
+
+def should_halt_for_connection() -> bool:
+  """Check if the workflow should wait, due to inputs, vars, and labels."""
+
+  logging.info("Checking if the workflow should be halted for a connection...")
+
+  if not _is_truthy_env_var("INTERACTIVE_CI"):
+    logging.info("INTERACTIVE_CI env var is not "
+                 "set, or is set to a falsy value in the workflow")
+    return False
+
+  explicit_halt_requested = _is_truthy_env_var("HALT_DISPATCH_INPUT")
+  if explicit_halt_requested:
+    logging.info("Halt for connection requested via "
+                 "explicit `halt-dispatch-input` input")
+    return True
+
+  # Check if any of the relevant labels are present
+  labels = retrieve_labels(print_to_stdout=False)
+
+  # TODO(belitskiy): Add the ability to halt on CI error.
+
+  if ALWAYS_HALT_LABEL in labels:
+    logging.info(f"Halt for connection requested via presence "
+                 f"of the {ALWAYS_HALT_LABEL!r} label")
+    return True
+
+  attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
+  if attempt > 1 and HALT_ON_RETRY_LABEL in labels:
+    logging.info(f"Halt for connection requested via presence "
+                 f"of the {HALT_ON_RETRY_LABEL!r} label, "
+                 f"due to workflow run attempt being 2+ ({attempt})")
+    return True
+
+  return False
 
 
 def wait_for_notification(address):
-    """Waits for connection notification from the listener."""
-    global last_time, timeout
-    while True:
-        with Listener(address) as listener:
-            print("Waiting for connection")
-            with listener.accept() as conn:
-                while True:
-                    try:
-                        message = conn.recv()
-                    except EOFError as e:
-                        print("EOFError occurred:", e)
-                        break
-                    print("Received message")
-                    if message == "keep_alive":
-                        print("Keep alive received")
-                        last_time = time.time()
-                        continue  # Keep-alive received, continue waiting
-                    elif message == "closed":
-                        print("Connection closed by the other process.")
-                        return  # Graceful exit
-                    elif message == "connected":
-                        last_time = time.time()
-                        timeout = keep_alive_timeout
-                        print("Connected")
-                    else:
-                        print("Unknown message received:", message)
-                        continue
+  """Waits for connection notification from the listener."""
+  # TODO(belitskiy): Get rid of globals?
+  global last_time, timeout
+  while True:
+    with Listener(address) as listener:
+      logging.info("Waiting for connection...")
+      with listener.accept() as conn:
+        while True:
+          try:
+            message = conn.recv()
+          except EOFError as e:
+            logging.error("EOFError occurred:", e)
+            break
+          logging.info("Received message")
+          if message == "keep_alive":
+            logging.info("Keep-alive received")
+            last_time = time.time()
+            continue  # Keep-alive received, continue waiting
+          elif message == "closed":
+            logging.info("Connection closed by the other process.")
+            return  # Graceful exit
+          elif message == "connected":
+            last_time = time.time()
+            timeout = keep_alive_timeout
+            logging.info("Connected")
+          else:
+            logging.warning("Unknown message received:", message)
+            continue
 
 
 def timer():
-    while True:
-        print("Checking status")
-        time_elapsed = time.time() - last_time
-        if time_elapsed < timeout:
-            print(f"Time since last keepalive {int(time_elapsed)}s")
-        else:
-            print("Timeout reached, exiting")
-            os.kill(os.getpid(), signal.SIGTERM)
-        time.sleep(60)
+  while True:
+    logging.info("Checking status")
+    time_elapsed = time.time() - last_time
+    if time_elapsed < timeout:
+      logging.info(f"Time since last keep-alive: {int(time_elapsed)}s")
+    else:
+      logging.info("Timeout reached, exiting")
+      os.kill(os.getpid(), signal.SIGTERM)
+    time.sleep(60)
+
+
+def wait_for_connection():
+  address = ("localhost", 12455)  # Address and port to listen on
+
+  # Print out the data required to connect to this VM
+  host = os.getenv("HOSTNAME")
+  cluster = os.getenv("CONNECTION_CLUSTER")
+  location = os.getenv("CONNECTION_LOCATION")
+  ns = os.getenv("CONNECTION_NS")
+  actions_path = os.getenv("GITHUB_ACTION_PATH")
+
+  logging.info("Googler connection only\n"
+               "See go/ml-github-actions:ssh for details")
+  logging.info(
+    f"Connection string: ml-actions-connect "
+    f"--runner={host} "
+    f"--ns={ns} "
+    f"--loc={location} "
+    f"--cluster={cluster} "
+    f"--halt_directory={actions_path}"
+  )
+
+  # Thread is running as a daemon, so it will quit when the
+  # main thread terminates.
+  timer_thread = threading.Thread(target=timer, daemon=True)
+  timer_thread.start()
+
+  # Wait for connection and get the connection object
+  wait_for_notification(address)
+
+  logging.info("Exiting connection wait loop.")
+  # Force a flush so we don't miss messages
+  sys.stdout.flush()
 
 
 if __name__ == "__main__":
-    address = ("localhost", 12455)  # Address and port to listen on
-    # Check if we should wait for the connection
-    wait_for_connection = False
-    if os.environ.get("WAIT_ON_ERROR") == "1":
-        print("WAIT_ON_ERROR is set")
-        if os.getppid() != 1:
-            print("Previous command did not exit with success, waiting for connection")
-            wait_for_connection = True
-        else:
-            print("Previous command exited with success")
-    else:
-        print("WAIT_ON_ERROR is not set")
+  if not should_halt_for_connection():
+    logging.info("No conditions for halting the workflow"
+                 "for connection were met")
+    exit()
 
-    if os.environ.get("INTERACTIVE_CI") == "1":
-        print("INTERACTIVE_CI is set, waiting for connection")
-        wait_for_connection = True
-    else:
-        print("INTERACTIVE_CI is not set")
-
-    if not wait_for_connection:
-        print("No condition was met to wait for connection. Continuing Job")
-        exit(0)
-
-    # Grab and print the data required to connect to this vm
-    host = os.environ.get("HOSTNAME")
-    repo = os.environ.get("REPOSITORY")
-
-    print(f"Connection parameters: '{host} {repo}'")
-
-    # Thread is running as a daemon so it will quit when the
-    # main thread terminates.
-    timer_thread = threading.Thread(target=timer, daemon=True)
-    timer_thread.start()
-
-    wait_for_notification(address)  # Wait for connection and get the connection object
-
-    print("Exiting connection wait loop.")
-    # Force a flush so we don't miss messages
-    sys.stdout.flush()
+  wait_for_connection()
