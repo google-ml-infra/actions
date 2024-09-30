@@ -12,40 +12,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
+import socket
 import time
 import threading
 import subprocess
-from multiprocessing.connection import Client
 
-lock = threading.Lock()
+from logging_setup import setup_logging
+
+setup_logging()
+
+_LOCK = threading.Lock()
 
 # Configuration (same as wait_for_connection.py)
-address = ("localhost", 12455)
-keep_alive_interval = 30  # 30 seconds
+HOST, PORT = "localhost", 12455
+KEEP_ALIVE_INTERVAL = 30
 
 
-def timer(conn):
+def send_message(message: str):
+    with _LOCK:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            # Append a newline to split the messages on the backend,
+            # in case multiple ones are received together
+            try:
+                sock.connect((HOST, PORT))
+                sock.sendall(f"{message}\n".encode('utf-8'))
+            except ConnectionRefusedError:
+                logging.error(
+                    f"Could not connect to server at {HOST}:{PORT}. "
+                    f"Is the server running?")
+            except Exception as e:
+                logging.error(f"An error occurred: {e}")
+
+
+def keep_alive():
     while True:
-        # We lock because closed and keep_alive could technically arrive at the same time
-        with lock:
-            conn.send("keep_alive")
-        time.sleep(keep_alive_interval)
+        time.sleep(KEEP_ALIVE_INTERVAL)
+        send_message("keep_alive")
+
+
+def main():
+    send_message("connection_established")
+
+    # Thread is running as a daemon so it will quit
+    # when the main thread terminates
+    timer_thread = threading.Thread(target=keep_alive,
+                                    daemon=True)
+    timer_thread.start()
+
+    # Enter an interactive Bash session
+    subprocess.run(["bash", "-i"])
+
+    send_message("connection_closed")
 
 
 if __name__ == "__main__":
-    with Client(address) as conn:
-        conn.send("connected")
-
-        # Thread is running as a daemon so it will quit when the
-        # main thread terminates.
-        timer_thread = threading.Thread(target=timer, daemon=True, args=(conn,))
-        timer_thread.start()
-
-        print("Entering interactive bash session")
-        # Enter interactive bash session
-        subprocess.run(["/bin/bash", "-i"])
-
-        print("Exiting interactive bash session")
-        with lock:
-            conn.send("closed")
-        conn.close()
+    main()

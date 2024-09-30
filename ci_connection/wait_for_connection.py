@@ -12,47 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Wait for an SSH connection from a user, if a wait was requested."""
+
+import asyncio
 import logging
 import os
-from multiprocessing.connection import Listener
 import time
-import signal
-import threading
-import sys
 
 from get_labels import retrieve_labels
+from logging_setup import setup_logging
 
-# Check if debug logging should be enabled for the script:
-# WAIT_FOR_CONNECTION_DEBUG is a custom variable.
-# RUNNER_DEBUG and ACTIONS_RUNNER_DEBUG are GH env vars, which can be set
-# in various ways, one of them - enabling debug logging from the UI, when
-# triggering a run:
-# https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
-# https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/troubleshooting-workflows/enabling-debug-logging#enabling-runner-diagnostic-logging
-_SHOW_DEBUG = bool(
-  os.getenv("WAIT_FOR_CONNECTION_DEBUG",
-            os.getenv("RUNNER_DEBUG",
-                      os.getenv("ACTIONS_RUNNER_DEBUG")))
-)
-logging.basicConfig(level=logging.INFO if not _SHOW_DEBUG else logging.DEBUG,
-                    format="%(levelname)s: %(message)s", stream=sys.stderr)
+setup_logging()
 
-
-last_time = time.time()
-timeout = 600  # 10 minutes for initial connection
-keep_alive_timeout = (
-  900  # 15 minutes for keep-alive, if no closed message (allow for reconnects)
-)
-
-# Labels that are used for checking whether a workflow should wait for a
-# connection.
-# Note: there's always a small possibility these labels may change on the
-# repo/org level, in which case, they'd need to be updated below as well.
 ALWAYS_HALT_LABEL = "CI Connection Halt - Always"
 HALT_ON_RETRY_LABEL = "CI Connection Halt - On Retry"
 
 
-def _is_truthy_env_var(var_name: str) -> bool:
+def _is_true_like_env_var(var_name: str) -> bool:
   var_val = os.getenv(var_name, "").lower()
   negative_choices = {"0", "false", "n", "no", "none", "null", "n/a"}
   if var_val and var_val not in negative_choices:
@@ -65,12 +41,12 @@ def should_halt_for_connection() -> bool:
 
   logging.info("Checking if the workflow should be halted for a connection...")
 
-  if not _is_truthy_env_var("INTERACTIVE_CI"):
+  if not _is_true_like_env_var("INTERACTIVE_CI"):
     logging.info("INTERACTIVE_CI env var is not "
-                 "set, or is set to a falsy value in the workflow")
+                 "set, or is set to a false-like value in the workflow")
     return False
 
-  explicit_halt_requested = _is_truthy_env_var("HALT_DISPATCH_INPUT")
+  explicit_halt_requested = _is_true_like_env_var("HALT_DISPATCH_INPUT")
   if explicit_halt_requested:
     logging.info("Halt for connection requested via "
                  "explicit `halt-dispatch-input` input")
@@ -78,6 +54,9 @@ def should_halt_for_connection() -> bool:
 
   # Check if any of the relevant labels are present
   labels = retrieve_labels(print_to_stdout=False)
+
+  # Note: there's always a small possibility these labels may change on the
+  # repo/org level, in which case, they'd need to be updated below as well.
 
   # TODO(belitskiy): Add the ability to halt on CI error.
 
@@ -96,54 +75,41 @@ def should_halt_for_connection() -> bool:
   return False
 
 
-def wait_for_notification(address):
-  """Waits for connection notification from the listener."""
-  # TODO(belitskiy): Get rid of globals?
-  global last_time, timeout
-  while True:
-    with Listener(address) as listener:
-      logging.info("Waiting for connection...")
-      with listener.accept() as conn:
-        while True:
-          try:
-            message = conn.recv()
-          except EOFError as e:
-            logging.error("EOFError occurred:", e)
-            break
-          logging.info("Received message")
-          if message == "keep_alive":
-            logging.info("Keep-alive received")
-            last_time = time.time()
-            continue  # Keep-alive received, continue waiting
-          elif message == "closed":
-            logging.info("Connection closed by the other process.")
-            return  # Graceful exit
-          elif message == "connected":
-            last_time = time.time()
-            timeout = keep_alive_timeout
-            logging.info("Connected")
-          else:
-            logging.warning("Unknown message received:", message)
-            continue
+class WaitInfo:
+  pre_connect_timeout = 10 * 60  # 10 minutes for initial connection
+  # allow for reconnects, in case no 'closed' message is received
+  re_connect_timeout = 15 * 60  # 15 minutes for reconnects
+  # Dynamic, depending on whether a connection was established, or not
+  timeout = pre_connect_timeout
+  last_time = time.time()
+  waiting_for_close = False
+  stop_event = asyncio.Event()
 
 
-def timer():
-  while True:
-    logging.info("Checking status")
-    time_elapsed = time.time() - last_time
-    if time_elapsed < timeout:
-      logging.info(f"Time since last keep-alive: {int(time_elapsed)}s")
+async def process_messages(reader, writer):
+  data = await reader.read(1024)
+  # Since this is a stream, multiple messages could come in at once
+  messages = [m for m in data.decode().strip().splitlines() if m]
+  for message in messages:
+    if message == "keep_alive":
+      logging.info("Keep-alive received")
+      WaitInfo.last_time = time.time()
+    elif message == "connection_closed":
+      WaitInfo.waiting_for_close = True
+      WaitInfo.stop_event.set()
+    elif message == "connection_established":
+      WaitInfo.last_time = time.time()
+      WaitInfo.timeout = WaitInfo.re_connect_timeout
+      logging.info("SSH connection detected.")
     else:
-      logging.info("Timeout reached, exiting")
-      os.kill(os.getpid(), signal.SIGTERM)
-    time.sleep(60)
+      logging.warning(f"Unknown message received: {message!r}")
+  writer.close()
 
 
-def wait_for_connection():
-  address = ("localhost", 12455)  # Address and port to listen on
-
+async def wait_for_connection(host: str = 'localhost',
+                              port: int = 12455):
   # Print out the data required to connect to this VM
-  host = os.getenv("HOSTNAME")
+  runner_name = os.getenv("HOSTNAME")
   cluster = os.getenv("CONNECTION_CLUSTER")
   location = os.getenv("CONNECTION_LOCATION")
   ns = os.getenv("CONNECTION_NS")
@@ -152,25 +118,43 @@ def wait_for_connection():
   logging.info("Googler connection only\n"
                "See go/ml-github-actions:ssh for details")
   logging.info(
-    f"Connection string: ml-actions-connect "
-    f"--runner={host} "
-    f"--ns={ns} "
-    f"--loc={location} "
-    f"--cluster={cluster} "
-    f"--halt_directory={actions_path}"
+      f"Connection string: ml-actions-connect "
+      f"--runner={runner_name} "
+      f"--ns={ns} "
+      f"--loc={location} "
+      f"--cluster={cluster} "
+      f"--halt_directory={actions_path}"
   )
 
-  # Thread is running as a daemon, so it will quit when the
-  # main thread terminates.
-  timer_thread = threading.Thread(target=timer, daemon=True)
-  timer_thread.start()
+  server = await asyncio.start_server(process_messages, host, port)
+  terminate = False
 
-  # Wait for connection and get the connection object
-  wait_for_notification(address)
+  logging.info(f"Listening for connection notifications on {host}:{port}...")
+  async with server:
+    while not WaitInfo.stop_event.is_set():
+      # Send a status msg every 60 seconds, unless a stop message is received
+      # from the companion script
+      await asyncio.wait([asyncio.create_task(WaitInfo.stop_event.wait())],
+                         timeout=60,
+                         return_when=asyncio.FIRST_COMPLETED)
 
-  logging.info("Exiting connection wait loop.")
-  # Force a flush so we don't miss messages
-  sys.stdout.flush()
+      elapsed_seconds = int(time.time() - WaitInfo.last_time)
+      if WaitInfo.waiting_for_close:
+        msg = "Connection was terminated."
+        terminate = True
+      elif elapsed_seconds > WaitInfo.timeout:
+        terminate = True
+        msg = f"No connection for {WaitInfo.timeout} seconds."
+
+      if terminate:
+        logging.info(f"{msg} Shutting down the waiting process...")
+        server.close()
+        await server.wait_closed()
+        break
+
+      logging.info(f"Time since last keep-alive: {elapsed_seconds}s")
+
+    logging.info("Waiting process terminated.")
 
 
 if __name__ == "__main__":
@@ -178,5 +162,4 @@ if __name__ == "__main__":
     logging.info("No conditions for halting the workflow"
                  "for connection were met")
     exit()
-
-  wait_for_connection()
+  asyncio.run(wait_for_connection())
