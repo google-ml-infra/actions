@@ -67,3 +67,7 @@ select = [
 
 [lint.mccabe]
 max-complexity = 18
+
+[lint.flake8-implicit-str-concat]
+# Don't concatenate multiline strings
+allow-multiline = false
