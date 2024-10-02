@@ -1,7 +1,11 @@
-name: Python Lint
+name: Python Checks
 on:
-  - push
-  - pull_request
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 permissions:
   contents: read
 concurrency:
