@@ -48,8 +48,10 @@ def should_halt_for_connection() -> bool:
 
   explicit_halt_requested = _is_true_like_env_var("HALT_DISPATCH_INPUT")
   if explicit_halt_requested:
-    logging.info("Halt for connection requested via "
-                 "explicit `halt-dispatch-input` input")
+    logging.info(
+      "Halt for connection requested via "
+      "explicit `halt-dispatch-input` input"
+    )
     return True
 
   # Check if any of the relevant labels are present
@@ -61,15 +63,19 @@ def should_halt_for_connection() -> bool:
   # TODO(belitskiy): Add the ability to halt on CI error.
 
   if ALWAYS_HALT_LABEL in labels:
-    logging.info(f"Halt for connection requested via presence "
-                 f"of the {ALWAYS_HALT_LABEL!r} label")
+    logging.info(
+      f"Halt for connection requested via presence "
+      f"of the {ALWAYS_HALT_LABEL!r} label"
+    )
     return True
 
   attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
   if attempt > 1 and HALT_ON_RETRY_LABEL in labels:
-    logging.info(f"Halt for connection requested via presence "
-                 f"of the {HALT_ON_RETRY_LABEL!r} label, "
-                 f"due to workflow run attempt being 2+ ({attempt})")
+    logging.info(
+      f"Halt for connection requested via presence "
+      f"of the {HALT_ON_RETRY_LABEL!r} label, "
+      f"due to workflow run attempt being 2+ ({attempt})"
+    )
     return True
 
   return False
@@ -159,7 +165,7 @@ async def wait_for_connection(host: str = 'localhost',
 
 if __name__ == "__main__":
   if not should_halt_for_connection():
-    logging.info("No conditions for halting the workflow"
+    logging.info("No conditions for halting the workflow "
                  "for connection were met")
     exit()
   asyncio.run(wait_for_connection())

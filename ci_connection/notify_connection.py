@@ -36,7 +36,7 @@ def send_message(message: str):
             # in case multiple ones are received together
             try:
                 sock.connect((HOST, PORT))
-                sock.sendall(f"{message}\n".encode('utf-8'))
+                sock.sendall(f"{message}\n".encode("utf-8"))
             except ConnectionRefusedError:
                 logging.error(
                     f"Could not connect to server at {HOST}:{PORT}. "
