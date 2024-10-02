@@ -25,27 +25,27 @@ keep_alive_interval = 30  # 30 seconds
 
 
 def timer(conn):
-    while True:
-        # We lock because closed and keep_alive could technically arrive at the same time
-        with lock:
-            conn.send("keep_alive")
-        time.sleep(keep_alive_interval)
+  while True:
+    # We lock because closed and keep_alive could technically arrive at the same time
+    with lock:
+      conn.send("keep_alive")
+    time.sleep(keep_alive_interval)
 
 
 if __name__ == "__main__":
-    with Client(address) as conn:
-        conn.send("connected")
+  with Client(address) as conn:
+    conn.send("connected")
 
-        # Thread is running as a daemon so it will quit when the
-        # main thread terminates.
-        timer_thread = threading.Thread(target=timer, daemon=True, args=(conn,))
-        timer_thread.start()
+    # Thread is running as a daemon so it will quit when the
+    # main thread terminates.
+    timer_thread = threading.Thread(target=timer, daemon=True, args=(conn,))
+    timer_thread.start()
 
-        print("Entering interactive bash session")
-        # Enter interactive bash session
-        subprocess.run(["/bin/bash", "-i"])
+    print("Entering interactive bash session")
+    # Enter interactive bash session
+    subprocess.run(["/bin/bash", "-i"])
 
-        print("Exiting interactive bash session")
-        with lock:
-            conn.send("closed")
-        conn.close()
+    print("Exiting interactive bash session")
+    with lock:
+      conn.send("closed")
+    conn.close()

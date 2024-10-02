@@ -30,12 +30,16 @@ from get_labels import retrieve_labels
 # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
 # https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/troubleshooting-workflows/enabling-debug-logging#enabling-runner-diagnostic-logging
 _SHOW_DEBUG = bool(
-  os.getenv("WAIT_FOR_CONNECTION_DEBUG",
-            os.getenv("RUNNER_DEBUG",
-                      os.getenv("ACTIONS_RUNNER_DEBUG")))
+  os.getenv(
+    "WAIT_FOR_CONNECTION_DEBUG",
+    os.getenv("RUNNER_DEBUG", os.getenv("ACTIONS_RUNNER_DEBUG")),
+  )
 )
-logging.basicConfig(level=logging.INFO if not _SHOW_DEBUG else logging.DEBUG,
-                    format="%(levelname)s: %(message)s", stream=sys.stderr)
+logging.basicConfig(
+  level=logging.INFO if not _SHOW_DEBUG else logging.DEBUG,
+  format="%(levelname)s: %(message)s",
+  stream=sys.stderr,
+)
 
 
 last_time = time.time()
@@ -66,14 +70,16 @@ def should_halt_for_connection() -> bool:
   logging.info("Checking if the workflow should be halted for a connection...")
 
   if not _is_truthy_env_var("INTERACTIVE_CI"):
-    logging.info("INTERACTIVE_CI env var is not "
-                 "set, or is set to a falsy value in the workflow")
+    logging.info(
+      "INTERACTIVE_CI env var is not " "set, or is set to a falsy value in the workflow"
+    )
     return False
 
   explicit_halt_requested = _is_truthy_env_var("HALT_DISPATCH_INPUT")
   if explicit_halt_requested:
-    logging.info("Halt for connection requested via "
-                 "explicit `halt-dispatch-input` input")
+    logging.info(
+      "Halt for connection requested via " "explicit `halt-dispatch-input` input"
+    )
     return True
 
   # Check if any of the relevant labels are present
@@ -82,15 +88,19 @@ def should_halt_for_connection() -> bool:
   # TODO(belitskiy): Add the ability to halt on CI error.
 
   if ALWAYS_HALT_LABEL in labels:
-    logging.info(f"Halt for connection requested via presence "
-                 f"of the {ALWAYS_HALT_LABEL!r} label")
+    logging.info(
+      f"Halt for connection requested via presence "
+      f"of the {ALWAYS_HALT_LABEL!r} label"
+    )
     return True
 
   attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
   if attempt > 1 and HALT_ON_RETRY_LABEL in labels:
-    logging.info(f"Halt for connection requested via presence "
-                 f"of the {HALT_ON_RETRY_LABEL!r} label, "
-                 f"due to workflow run attempt being 2+ ({attempt})")
+    logging.info(
+      f"Halt for connection requested via presence "
+      f"of the {HALT_ON_RETRY_LABEL!r} label, "
+      f"due to workflow run attempt being 2+ ({attempt})"
+    )
     return True
 
   return False
@@ -149,8 +159,7 @@ def wait_for_connection():
   ns = os.getenv("CONNECTION_NS")
   actions_path = os.getenv("GITHUB_ACTION_PATH")
 
-  logging.info("Googler connection only\n"
-               "See go/ml-github-actions:ssh for details")
+  logging.info("Googler connection only\n" "See go/ml-github-actions:ssh for details")
   logging.info(
     f"Connection string: ml-actions-connect "
     f"--runner={host} "
@@ -175,8 +184,7 @@ def wait_for_connection():
 
 if __name__ == "__main__":
   if not should_halt_for_connection():
-    logging.info("No conditions for halting the workflow"
-                 "for connection were met")
+    logging.info("No conditions for halting the workflow" "for connection were met")
     exit()
 
   wait_for_connection()

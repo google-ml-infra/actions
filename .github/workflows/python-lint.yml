@@ -1,0 +1,28 @@
+name: Python Checks
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  lint:
+    name: Ruff Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # ratchet:actions/checkout@v4
+      - uses: astral-sh/ruff-action@61703ed12ea97bfe6e7ede39595d6e14a3a2ecec # ratchet:astral-sh/ruff-action@v1.1.0
+  format:
+    name: Ruff Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # ratchet:actions/checkout@v4
+      - uses: astral-sh/ruff-action@61703ed12ea97bfe6e7ede39595d6e14a3a2ecec # ratchet:astral-sh/ruff-action@v1.1.0
+        with:
+          args: "format --check"
