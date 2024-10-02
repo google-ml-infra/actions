@@ -23,6 +23,7 @@ lock = threading.Lock()
 address = ("localhost", 12455)
 keep_alive_interval = 30  # 30 seconds
 
+print("Test" + "This is a test to see if the presubmit as part of this PR is correctly configured")
 
 def timer(conn):
     while True:
