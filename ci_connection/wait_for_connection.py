@@ -30,18 +30,22 @@ from get_labels import retrieve_labels
 # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
 # https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/troubleshooting-workflows/enabling-debug-logging#enabling-runner-diagnostic-logging
 _SHOW_DEBUG = bool(
-  os.getenv("WAIT_FOR_CONNECTION_DEBUG",
-            os.getenv("RUNNER_DEBUG",
-                      os.getenv("ACTIONS_RUNNER_DEBUG")))
+    os.getenv(
+        "WAIT_FOR_CONNECTION_DEBUG",
+        os.getenv("RUNNER_DEBUG", os.getenv("ACTIONS_RUNNER_DEBUG")),
+    )
 )
-logging.basicConfig(level=logging.INFO if not _SHOW_DEBUG else logging.DEBUG,
-                    format="%(levelname)s: %(message)s", stream=sys.stderr)
+logging.basicConfig(
+    level=logging.INFO if not _SHOW_DEBUG else logging.DEBUG,
+    format="%(levelname)s: %(message)s",
+    stream=sys.stderr,
+)
 
 
 last_time = time.time()
 timeout = 600  # 10 minutes for initial connection
 keep_alive_timeout = (
-  900  # 15 minutes for keep-alive, if no closed message (allow for reconnects)
+    900  # 15 minutes for keep-alive, if no closed message (allow for reconnects)
 )
 
 # Labels that are used for checking whether a workflow should wait for a
@@ -53,130 +57,135 @@ HALT_ON_RETRY_LABEL = "CI Connection Halt - On Retry"
 
 
 def _is_truthy_env_var(var_name: str) -> bool:
-  var_val = os.getenv(var_name, "").lower()
-  negative_choices = {"0", "false", "n", "no", "none", "null", "n/a"}
-  if var_val and var_val not in negative_choices:
-    return True
-  return False
+    var_val = os.getenv(var_name, "").lower()
+    negative_choices = {"0", "false", "n", "no", "none", "null", "n/a"}
+    if var_val and var_val not in negative_choices:
+        return True
+    return False
 
 
 def should_halt_for_connection() -> bool:
-  """Check if the workflow should wait, due to inputs, vars, and labels."""
+    """Check if the workflow should wait, due to inputs, vars, and labels."""
 
-  logging.info("Checking if the workflow should be halted for a connection...")
+    logging.info("Checking if the workflow should be halted for a connection...")
 
-  if not _is_truthy_env_var("INTERACTIVE_CI"):
-    logging.info("INTERACTIVE_CI env var is not "
-                 "set, or is set to a falsy value in the workflow")
+    if not _is_truthy_env_var("INTERACTIVE_CI"):
+        logging.info(
+            "INTERACTIVE_CI env var is not "
+            "set, or is set to a falsy value in the workflow"
+        )
+        return False
+
+    explicit_halt_requested = _is_truthy_env_var("HALT_DISPATCH_INPUT")
+    if explicit_halt_requested:
+        logging.info(
+            "Halt for connection requested via " "explicit `halt-dispatch-input` input"
+        )
+        return True
+
+    # Check if any of the relevant labels are present
+    labels = retrieve_labels(print_to_stdout=False)
+
+    # TODO(belitskiy): Add the ability to halt on CI error.
+
+    if ALWAYS_HALT_LABEL in labels:
+        logging.info(
+            f"Halt for connection requested via presence "
+            f"of the {ALWAYS_HALT_LABEL!r} label"
+        )
+        return True
+
+    attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
+    if attempt > 1 and HALT_ON_RETRY_LABEL in labels:
+        logging.info(
+            f"Halt for connection requested via presence "
+            f"of the {HALT_ON_RETRY_LABEL!r} label, "
+            f"due to workflow run attempt being 2+ ({attempt})"
+        )
+        return True
+
     return False
-
-  explicit_halt_requested = _is_truthy_env_var("HALT_DISPATCH_INPUT")
-  if explicit_halt_requested:
-    logging.info("Halt for connection requested via "
-                 "explicit `halt-dispatch-input` input")
-    return True
-
-  # Check if any of the relevant labels are present
-  labels = retrieve_labels(print_to_stdout=False)
-
-  # TODO(belitskiy): Add the ability to halt on CI error.
-
-  if ALWAYS_HALT_LABEL in labels:
-    logging.info(f"Halt for connection requested via presence "
-                 f"of the {ALWAYS_HALT_LABEL!r} label")
-    return True
-
-  attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
-  if attempt > 1 and HALT_ON_RETRY_LABEL in labels:
-    logging.info(f"Halt for connection requested via presence "
-                 f"of the {HALT_ON_RETRY_LABEL!r} label, "
-                 f"due to workflow run attempt being 2+ ({attempt})")
-    return True
-
-  return False
 
 
 def wait_for_notification(address):
-  """Waits for connection notification from the listener."""
-  # TODO(belitskiy): Get rid of globals?
-  global last_time, timeout
-  while True:
-    with Listener(address) as listener:
-      logging.info("Waiting for connection...")
-      with listener.accept() as conn:
-        while True:
-          try:
-            message = conn.recv()
-          except EOFError as e:
-            logging.error("EOFError occurred:", e)
-            break
-          logging.info("Received message")
-          if message == "keep_alive":
-            logging.info("Keep-alive received")
-            last_time = time.time()
-            continue  # Keep-alive received, continue waiting
-          elif message == "closed":
-            logging.info("Connection closed by the other process.")
-            return  # Graceful exit
-          elif message == "connected":
-            last_time = time.time()
-            timeout = keep_alive_timeout
-            logging.info("Connected")
-          else:
-            logging.warning("Unknown message received:", message)
-            continue
+    """Waits for connection notification from the listener."""
+    # TODO(belitskiy): Get rid of globals?
+    global last_time, timeout
+    while True:
+        with Listener(address) as listener:
+            logging.info("Waiting for connection...")
+            with listener.accept() as conn:
+                while True:
+                    try:
+                        message = conn.recv()
+                    except EOFError as e:
+                        logging.error("EOFError occurred:", e)
+                        break
+                    logging.info("Received message")
+                    if message == "keep_alive":
+                        logging.info("Keep-alive received")
+                        last_time = time.time()
+                        continue  # Keep-alive received, continue waiting
+                    elif message == "closed":
+                        logging.info("Connection closed by the other process.")
+                        return  # Graceful exit
+                    elif message == "connected":
+                        last_time = time.time()
+                        timeout = keep_alive_timeout
+                        logging.info("Connected")
+                    else:
+                        logging.warning("Unknown message received:", message)
+                        continue
 
 
 def timer():
-  while True:
-    logging.info("Checking status")
-    time_elapsed = time.time() - last_time
-    if time_elapsed < timeout:
-      logging.info(f"Time since last keep-alive: {int(time_elapsed)}s")
-    else:
-      logging.info("Timeout reached, exiting")
-      os.kill(os.getpid(), signal.SIGTERM)
-    time.sleep(60)
+    while True:
+        logging.info("Checking status")
+        time_elapsed = time.time() - last_time
+        if time_elapsed < timeout:
+            logging.info(f"Time since last keep-alive: {int(time_elapsed)}s")
+        else:
+            logging.info("Timeout reached, exiting")
+            os.kill(os.getpid(), signal.SIGTERM)
+        time.sleep(60)
 
 
 def wait_for_connection():
-  address = ("localhost", 12455)  # Address and port to listen on
+    address = ("localhost", 12455)  # Address and port to listen on
 
-  # Print out the data required to connect to this VM
-  host = os.getenv("HOSTNAME")
-  cluster = os.getenv("CONNECTION_CLUSTER")
-  location = os.getenv("CONNECTION_LOCATION")
-  ns = os.getenv("CONNECTION_NS")
-  actions_path = os.getenv("GITHUB_ACTION_PATH")
+    # Print out the data required to connect to this VM
+    host = os.getenv("HOSTNAME")
+    cluster = os.getenv("CONNECTION_CLUSTER")
+    location = os.getenv("CONNECTION_LOCATION")
+    ns = os.getenv("CONNECTION_NS")
+    actions_path = os.getenv("GITHUB_ACTION_PATH")
 
-  logging.info("Googler connection only\n"
-               "See go/ml-github-actions:ssh for details")
-  logging.info(
-    f"Connection string: ml-actions-connect "
-    f"--runner={host} "
-    f"--ns={ns} "
-    f"--loc={location} "
-    f"--cluster={cluster} "
-    f"--halt_directory={actions_path}"
-  )
+    logging.info("Googler connection only\n" "See go/ml-github-actions:ssh for details")
+    logging.info(
+        f"Connection string: ml-actions-connect "
+        f"--runner={host} "
+        f"--ns={ns} "
+        f"--loc={location} "
+        f"--cluster={cluster} "
+        f"--halt_directory={actions_path}"
+    )
 
-  # Thread is running as a daemon, so it will quit when the
-  # main thread terminates.
-  timer_thread = threading.Thread(target=timer, daemon=True)
-  timer_thread.start()
+    # Thread is running as a daemon, so it will quit when the
+    # main thread terminates.
+    timer_thread = threading.Thread(target=timer, daemon=True)
+    timer_thread.start()
 
-  # Wait for connection and get the connection object
-  wait_for_notification(address)
+    # Wait for connection and get the connection object
+    wait_for_notification(address)
 
-  logging.info("Exiting connection wait loop.")
-  # Force a flush so we don't miss messages
-  sys.stdout.flush()
+    logging.info("Exiting connection wait loop.")
+    # Force a flush so we don't miss messages
+    sys.stdout.flush()
 
 
 if __name__ == "__main__":
-  if not should_halt_for_connection():
-    logging.info("No conditions for halting the workflow"
-                 "for connection were met")
-    exit()
+    if not should_halt_for_connection():
+        logging.info("No conditions for halting the workflow" "for connection were met")
+        exit()
 
-  wait_for_connection()
+    wait_for_connection()
