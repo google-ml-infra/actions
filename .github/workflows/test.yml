@@ -1,0 +1,21 @@
+name: Test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  Explore-GitHub-Actions:
+    runs-on: linux-x86-n2-64
+    container:
+      image: ubuntu:24.10
+    steps:
+    - run: echo "🎉 This job uses runner scale set runners!"
+  
