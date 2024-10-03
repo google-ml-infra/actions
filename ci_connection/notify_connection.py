@@ -40,7 +40,8 @@ def send_message(message: str):
             except ConnectionRefusedError:
                 logging.error(
                     f"Could not connect to server at {HOST}:{PORT}. "
-                    f"Is the server running?")
+                    f"Is the server running?"
+                )
             except Exception as e:
                 logging.error(f"An error occurred: {e}")
 

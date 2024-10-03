@@ -97,7 +97,8 @@ def retrieve_labels(print_to_stdout: bool = True) -> list[str]:
     # Fall back on labels from the event's payload, if API failed (unlikely)
     event_payload_path = os.getenv("GITHUB_EVENT_PATH")
     with open(event_payload_path, "r", encoding="utf-8") as event_payload:
-      data_json = json.load(event_payload).get("pull_request", {}).get("labels", [])
+      data_json = (json.load(event_payload).get("pull_request", {})
+                   .get("labels", []))
       logging.info("Using fallback labels")
       logging.info(f"Fallback labels: \n" f"{data_json}")
 
