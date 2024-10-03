@@ -30,42 +30,40 @@ KEEP_ALIVE_INTERVAL = 30
 
 
 def send_message(message: str):
-    with _LOCK:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            # Append a newline to split the messages on the backend,
-            # in case multiple ones are received together
-            try:
-                sock.connect((HOST, PORT))
-                sock.sendall(f"{message}\n".encode("utf-8"))
-            except ConnectionRefusedError:
-                logging.error(
-                    f"Could not connect to server at {HOST}:{PORT}. "
-                    f"Is the server running?"
-                )
-            except Exception as e:
-                logging.error(f"An error occurred: {e}")
+  with _LOCK:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+      # Append a newline to split the messages on the backend,
+      # in case multiple ones are received together
+      try:
+        sock.connect((HOST, PORT))
+        sock.sendall(f"{message}\n".encode("utf-8"))
+      except ConnectionRefusedError:
+        logging.error(
+          f"Could not connect to server at {HOST}:{PORT}. Is the server running?"
+        )
+      except Exception as e:
+        logging.error(f"An error occurred: {e}")
 
 
 def keep_alive():
-    while True:
-        time.sleep(KEEP_ALIVE_INTERVAL)
-        send_message("keep_alive")
+  while True:
+    time.sleep(KEEP_ALIVE_INTERVAL)
+    send_message("keep_alive")
 
 
 def main():
-    send_message("connection_established")
+  send_message("connection_established")
 
-    # Thread is running as a daemon so it will quit
-    # when the main thread terminates
-    timer_thread = threading.Thread(target=keep_alive,
-                                    daemon=True)
-    timer_thread.start()
+  # Thread is running as a daemon so it will quit
+  # when the main thread terminates
+  timer_thread = threading.Thread(target=keep_alive, daemon=True)
+  timer_thread.start()
 
-    # Enter an interactive Bash session
-    subprocess.run(["bash", "-i"])
+  # Enter an interactive Bash session
+  subprocess.run(["bash", "-i"])
 
-    send_message("connection_closed")
+  send_message("connection_closed")
 
 
 if __name__ == "__main__":
-    main()
+  main()

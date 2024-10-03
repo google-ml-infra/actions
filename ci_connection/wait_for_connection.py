@@ -43,8 +43,8 @@ def should_halt_for_connection() -> bool:
 
   if not _is_true_like_env_var("INTERACTIVE_CI"):
     logging.info(
-        "INTERACTIVE_CI env var is not "
-        "set, or is set to a false-like value in the workflow"
+      "INTERACTIVE_CI env var is not "
+      "set, or is set to a false-like value in the workflow"
     )
     return False
 
@@ -113,8 +113,7 @@ async def process_messages(reader, writer):
   writer.close()
 
 
-async def wait_for_connection(host: str = 'localhost',
-                              port: int = 12455):
+async def wait_for_connection(host: str = "localhost", port: int = 12455):
   # Print out the data required to connect to this VM
   runner_name = os.getenv("HOSTNAME")
   cluster = os.getenv("CONNECTION_CLUSTER")
@@ -122,19 +121,14 @@ async def wait_for_connection(host: str = 'localhost',
   ns = os.getenv("CONNECTION_NS")
   actions_path = os.getenv("GITHUB_ACTION_PATH")
 
+  logging.info("Googler connection only\nSee go/ml-github-actions:ssh for details")
   logging.info(
-      (
-          "Googler connection only\n"
-          "See go/ml-github-actions:ssh for details"
-      )
-  )
-  logging.info(
-      f"Connection string: ml-actions-connect "
-      f"--runner={runner_name} "
-      f"--ns={ns} "
-      f"--loc={location} "
-      f"--cluster={cluster} "
-      f"--halt_directory={actions_path}"
+    f"Connection string: ml-actions-connect "
+    f"--runner={runner_name} "
+    f"--ns={ns} "
+    f"--loc={location} "
+    f"--cluster={cluster} "
+    f"--halt_directory={actions_path}"
   )
 
   server = await asyncio.start_server(process_messages, host, port)
@@ -145,9 +139,11 @@ async def wait_for_connection(host: str = 'localhost',
     while not WaitInfo.stop_event.is_set():
       # Send a status msg every 60 seconds, unless a stop message is received
       # from the companion script
-      await asyncio.wait([asyncio.create_task(WaitInfo.stop_event.wait())],
-                         timeout=60,
-                         return_when=asyncio.FIRST_COMPLETED)
+      await asyncio.wait(
+        [asyncio.create_task(WaitInfo.stop_event.wait())],
+        timeout=60,
+        return_when=asyncio.FIRST_COMPLETED,
+      )
 
       elapsed_seconds = int(time.time() - WaitInfo.last_time)
       if WaitInfo.waiting_for_close:
@@ -170,7 +166,6 @@ async def wait_for_connection(host: str = 'localhost',
 
 if __name__ == "__main__":
   if not should_halt_for_connection():
-    logging.info("No conditions for halting the workflow "
-                 "for connection were met")
+    logging.info("No conditions for halting the workflow for connection were met")
     exit()
   asyncio.run(wait_for_connection())

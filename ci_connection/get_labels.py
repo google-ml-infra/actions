@@ -56,11 +56,8 @@ def retrieve_labels(print_to_stdout: bool = True) -> list[str]:
   # to safeguard this regex
   gh_issue = re.search(r"refs/pull/(\d+)/merge", github_ref).group(1)
   gh_repo = os.getenv("GITHUB_REPOSITORY")
-  labels_url = (
-      f"https://api.github.com/repos/{gh_repo}/issues/{gh_issue}/labels"
-  )
-  logging.debug(f"{gh_issue=!r}\n"
-                f"{gh_repo=!r}")
+  labels_url = f"https://api.github.com/repos/{gh_repo}/issues/{gh_issue}/labels"
+  logging.debug(f"{gh_issue=!r}\n{gh_repo=!r}")
 
   wait_time = 3
   total_attempts = 3
@@ -81,7 +78,7 @@ def retrieve_labels(print_to_stdout: bool = True) -> list[str]:
 
     if response.status == 200:
       data = response.read().decode("utf-8")
-      logging.debug("API labels data: \n" f"{data}")
+      logging.debug("API labels data: \n{data}")
       break
     else:
       logging.error(f"Request failed with status code: {response.status}")
@@ -97,13 +94,12 @@ def retrieve_labels(print_to_stdout: bool = True) -> list[str]:
     # Fall back on labels from the event's payload, if API failed (unlikely)
     event_payload_path = os.getenv("GITHUB_EVENT_PATH")
     with open(event_payload_path, "r", encoding="utf-8") as event_payload:
-      data_json = (json.load(event_payload).get("pull_request", {})
-                   .get("labels", []))
+      data_json = json.load(event_payload).get("pull_request", {}).get("labels", [])
       logging.info("Using fallback labels")
-      logging.info(f"Fallback labels: \n" f"{data_json}")
+      logging.info(f"Fallback labels: \n{data_json}")
 
   labels = [label["name"] for label in data_json]
-  logging.debug(f"Final labels: \n" f"{labels}")
+  logging.debug(f"Final labels: \n{labels}")
 
   # Output the labels to stdout for further use elsewhere
   if print_to_stdout:
