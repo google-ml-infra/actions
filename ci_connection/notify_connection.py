@@ -12,15 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import logging
+import os
 import socket
+import tempfile
 import time
 import threading
 import subprocess
 
-from logging_setup import setup_logging
+import preserve_run_state
+import utils
 
-setup_logging()
+
+utils.setup_logging()
 
 _LOCK = threading.Lock()
 
@@ -51,6 +56,20 @@ def keep_alive():
     send_message("keep_alive")
 
 
+def get_execution_state():
+  """Returns execution state available from the workflow, if any."""
+  if not os.path.exists(utils.STATE_INFO_PATH):
+    return None
+  with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
+    data: preserve_run_state.StateInfo = json.load(f)
+
+  shell_command = data.get("shell_command")
+  directory = data.get("directory")
+  env = data.get("env")
+
+  return shell_command, directory, env
+
+
 def main():
   send_message("connection_established")
 
@@ -59,8 +78,44 @@ def main():
   timer_thread = threading.Thread(target=keep_alive, daemon=True)
   timer_thread.start()
 
-  # Enter an interactive Bash session
-  subprocess.run(["bash", "-i"])
+  execution_state = get_execution_state()
+  if execution_state is not None:
+    shell_command, directory, env = execution_state
+  else:
+    shell_command, directory, env = None, None, None
+
+  # Set environment variables for the Bash session
+  if env is not None:
+    bash_env = os.environ.copy()
+    bash_env.update(env)
+  else:
+    bash_env = None
+
+  # Change directory if provided
+  if directory is not None:
+    os.chdir(directory)
+
+  # Prepare the rcfile content
+  rcfile_content = """
+if [ -f ~/.bashrc ]; then
+    source ~/.bashrc
+fi
+"""
+
+  if shell_command:
+    escaped_shell_command = shell_command.replace('"', '\\"')
+    rcfile_content += f'\necho "Failed command was:\n{escaped_shell_command}"\n'
+
+  # Create a temporary rcfile
+  with tempfile.NamedTemporaryFile("w", delete=False) as temp_rc:
+    rcfile = temp_rc.name
+    temp_rc.write(rcfile_content)
+
+  # Start an interactive Bash session
+  subprocess.run(["bash", "--rcfile", rcfile, "-i"], env=bash_env)
+
+  # Clean up the temporary rcfile
+  os.remove(rcfile)
 
   send_message("connection_closed")
 
