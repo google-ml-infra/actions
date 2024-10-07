@@ -32,7 +32,7 @@ jobs:
       # TODO: Needs newer, light weight image
       image: index.docker.io/tensorflow/build@sha256:7fb38f0319bda36393cad7f40670aa22352b44421bb906f5cf34d543acd8e1d2 # ratchet:tensorflow/build:latest-python3.11
     steps:
-      - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # ratchet:actions/checkout@v4
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # ratchet:actions/checkout@v4
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
       - name: Wait For Connection
         uses: ./ci_connection/
