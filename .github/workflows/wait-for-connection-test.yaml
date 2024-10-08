@@ -33,16 +33,13 @@ jobs:
       image: index.docker.io/tensorflow/build@sha256:7fb38f0319bda36393cad7f40670aa22352b44421bb906f5cf34d543acd8e1d2 # ratchet:tensorflow/build:latest-python3.11
     steps:
       - uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # ratchet:actions/checkout@v4
-      # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
-      - name: Wait For Connection
-        uses: ./ci_connection/
-        with:
-          halt-dispatch-input: ${{ inputs.halt-for-connection }}
       - name: Echo
         run: |
+          set -x
           trap 'python cool_actions/ci_connection/preserve_run_state.py' ERR
           echo "Real job here..."
           ls fake_directory_that_does_not_exist_most_certainly_yes_sir
+      # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
       - name: Wait For Connection
         uses: google-ml-infra/actions/ci_connection@main
         with:
