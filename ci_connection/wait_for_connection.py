@@ -55,6 +55,8 @@ def should_halt_for_connection() -> bool:
       "Halt for connection requested via explicit `halt-dispatch-input` input"
     )
     return True
+  else:
+    logging.debug("No `halt-dispatch-input` detected")
 
   # Check if any of the relevant labels are present
   labels = retrieve_labels(print_to_stdout=False)
@@ -68,12 +70,23 @@ def should_halt_for_connection() -> bool:
       f"of the {HALT_ON_ERROR_LABEL!r} label.\n"
       f"Found a file with the execution state info for a previous command..."
     )
+  else:
+    if not HALT_ON_ERROR_LABEL:
+      logging.debug(f"No {HALT_ON_ERROR_LABEL!r} label found on the PR")
+    else:
+      logging.debug(
+          f"Found the {HALT_ON_ERROR_LABEL!r} label, but no execution state "
+          f"file found at {utils.STATE_INFO_PATH} path"
+      )
+
   if HALT_ALWAYS_LABEL in labels:
     logging.info(
       f"Halt for connection requested via presence "
       f"of the {HALT_ALWAYS_LABEL!r} label"
     )
     return True
+  else:
+    logging.debug(f"No {HALT_ALWAYS_LABEL!r} label found on the PR")
 
   attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
   if attempt > 1 and HALT_ON_RETRY_LABEL in labels:
@@ -83,6 +96,13 @@ def should_halt_for_connection() -> bool:
       f"due to workflow run attempt being 2+ ({attempt})"
     )
     return True
+  else:
+    if not HALT_ON_RETRY_LABEL:
+      logging.debug(f"No {HALT_ON_RETRY_LABEL!r} label found on the PR")
+    else:
+      logging.debug(
+          f"Found the {HALT_ON_RETRY_LABEL!r} label, but this is the first attempt"
+      )
 
   return False
 
