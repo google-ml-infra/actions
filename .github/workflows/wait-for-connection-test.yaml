@@ -34,11 +34,11 @@ jobs:
     steps:
       - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # ratchet:actions/checkout@v4
       - name: Echo
-        shell: bash  # The shell is important as the default `sh` doesn't support ERR status for trapping
+        shell: bash  # required as the default `sh` doesn't have the ERR status
         continue-on-error: true
         run: |
           set -x
-          trap 'python cool_actions/ci_connection/preserve_run_state.py; exit "$?"' ERR
+          trap 'python ci_connection/preserve_run_state.py --shell-command "$BASH_COMMAND"; exit "$?"' ERR
           echo "Real job here..."
           ls fake_directory_that_does_not_exist_most_certainly_yes_sir
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry

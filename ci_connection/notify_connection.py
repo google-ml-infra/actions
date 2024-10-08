@@ -104,7 +104,7 @@ fi
 
   if shell_command:
     escaped_shell_command = shell_command.replace('"', '\\"')
-    rcfile_content += f'\necho "Failed command was:\n{escaped_shell_command}"\n'
+    rcfile_content += f'echo "Failed command was:\n{escaped_shell_command}"\n'
 
   # Create a temporary rcfile
   with tempfile.NamedTemporaryFile("w", delete=False) as temp_rc:
