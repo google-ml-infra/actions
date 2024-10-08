@@ -35,6 +35,7 @@ jobs:
       - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # ratchet:actions/checkout@v4
       - name: Echo
         shell: bash  # The shell is important as the default `sh` doesn't support ERR status for trapping
+        continue-on-error: true
         run: |
           set -x
           trap 'python cool_actions/ci_connection/preserve_run_state.py; exit "$?"' ERR
