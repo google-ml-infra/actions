@@ -59,7 +59,9 @@ def keep_alive():
 def get_execution_state():
   """Returns execution state available from the workflow, if any."""
   if not os.path.exists(utils.STATE_INFO_PATH):
+    logging.debug(f"Did not find the execution state file at {utils.STATE_INFO_PATH}")
     return None
+  logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
   with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
     data: preserve_run_state.StateInfo = json.load(f)
 
