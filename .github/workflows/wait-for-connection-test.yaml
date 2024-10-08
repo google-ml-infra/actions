@@ -39,4 +39,11 @@ jobs:
         with:
           halt-dispatch-input: ${{ inputs.halt-for-connection }}
       - name: Echo
-        run: echo "Real job here..."
+        run: |
+          trap 'python cool_actions/ci_connection/preserve_run_state.py' ERR
+          echo "Real job here..."
+          ls fake_directory_that_does_not_exist_most_certainly_yes_sir
+      - name: Wait For Connection
+        uses: google-ml-infra/actions/ci_connection@main
+        with:
+          halt-dispatch-input: ${{ inputs.halt-for-connection }}
