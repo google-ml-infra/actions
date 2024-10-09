@@ -13,7 +13,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  wait-test-on-error:
+  wait-on-error-test:
     strategy:
       fail-fast: false
       matrix:
@@ -31,4 +31,4 @@ jobs:
           set -x
           trap 'PYTHONUNBUFFERED=1 python ci_connection/wait_on_error.py --shell-command "$BASH_COMMAND"' ERR
           echo "Real job here..."
-          ls fake_directory_that_does_not_exist_most
+          ls fake_directory_that_does_not_exist

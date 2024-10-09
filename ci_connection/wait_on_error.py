@@ -26,16 +26,7 @@ When a command errors out, and the script is called, it will:
 For more details, see the code.
 
 Examples:
-  steps:
-    - uses: ...
-    - name: My step
-      shell: bash  # required as the default `sh` doesn't have the ERR status
-      run: |
-        set -x
-        trap 'PYTHONUNBUFFERED=1 python ci_connection/wait_on_error.py --shell-command "$BASH_COMMAND"' ERR
-        echo "Real job here..."
-        ls fake_directory_that_does_not_exist
-
+    See the wait-for-connection-on-error-test.yaml workflow in this repo.
 """
 
 import preserve_run_state
@@ -44,4 +35,4 @@ import wait_for_connection
 
 if __name__ == "__main__":
   preserve_run_state.save_all_info()
-  wait_for_connection.main()
+  wait_for_connection.main(wait_regardless=True)

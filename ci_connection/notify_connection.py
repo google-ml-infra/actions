@@ -12,6 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+"""Establish a connection, and keep it alive.
+
+If provided, will reproduce execution state (directory, failed command, env)
+in the established SSH session.
+"""
+
 import json
 import logging
 import os
