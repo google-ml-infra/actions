@@ -138,7 +138,7 @@ async def wait_for_connection(host: str = "localhost", port: int = 12455):
   cluster = os.getenv("CONNECTION_CLUSTER")
   location = os.getenv("CONNECTION_LOCATION")
   ns = os.getenv("CONNECTION_NS")
-  actions_path = os.path.basename(__file__)
+  actions_path = os.path.dirname(__file__)
 
   logging.info("Googler connection only\nSee go/ml-github-actions:ssh for details")
   logging.info(
