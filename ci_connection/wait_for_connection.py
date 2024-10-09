@@ -69,8 +69,8 @@ def should_halt_for_connection() -> bool:
       logging.debug(f"No {HALT_ON_ERROR_LABEL!r} label found on the PR")
     else:
       logging.debug(
-          f"Found the {HALT_ON_ERROR_LABEL!r} label, but no execution state "
-          f"file found at {utils.STATE_INFO_PATH} path"
+        f"Found the {HALT_ON_ERROR_LABEL!r} label, but no execution state "
+        f"file found at {utils.STATE_INFO_PATH} path"
       )
 
   if HALT_ALWAYS_LABEL in labels:
@@ -95,7 +95,7 @@ def should_halt_for_connection() -> bool:
       logging.debug(f"No {HALT_ON_RETRY_LABEL!r} label found on the PR")
     else:
       logging.debug(
-          f"Found the {HALT_ON_RETRY_LABEL!r} label, but this is the first attempt"
+        f"Found the {HALT_ON_RETRY_LABEL!r} label, but this is the first attempt"
       )
 
   return False
@@ -138,7 +138,7 @@ async def wait_for_connection(host: str = "localhost", port: int = 12455):
   cluster = os.getenv("CONNECTION_CLUSTER")
   location = os.getenv("CONNECTION_LOCATION")
   ns = os.getenv("CONNECTION_NS")
-  actions_path = os.getenv("GITHUB_ACTION_PATH")
+  actions_path = os.path.basename(os.getcwd())
 
   logging.info("Googler connection only\nSee go/ml-github-actions:ssh for details")
   logging.info(

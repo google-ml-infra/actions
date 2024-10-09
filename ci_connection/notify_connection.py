@@ -67,8 +67,8 @@ def get_execution_state():
       data: preserve_run_state.StateInfo = json.load(f)
     except json.JSONDecodeError as e:
       logging.error(
-          f'Could not parse the execution state file:\n{e.msg}\n'
-          f'Continuing without reproducing the environment...'
+        f"Could not parse the execution state file:\n{e.msg}\n"
+        f"Continuing without reproducing the environment..."
       )
 
   shell_command = data.get("shell_command")

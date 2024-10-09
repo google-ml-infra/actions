@@ -42,6 +42,6 @@ import preserve_run_state
 import wait_for_connection
 
 
-if __name__ == '__main__':
-    preserve_run_state.save_all_info()
-    wait_for_connection.main()
+if __name__ == "__main__":
+  preserve_run_state.save_all_info()
+  wait_for_connection.main()

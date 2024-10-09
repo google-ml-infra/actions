@@ -13,7 +13,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  wait-test:
+  wait-test-on-error:
     strategy:
       fail-fast: false
       matrix:
