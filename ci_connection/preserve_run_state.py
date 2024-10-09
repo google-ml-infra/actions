@@ -196,10 +196,3 @@ def save_all_info():
 
 if __name__ == "__main__":
   save_all_info()
-
-"""
-Trigger on error, without an explicit wait-for-connection step.
- - requires 
-
-
-"""
