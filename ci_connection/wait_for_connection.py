@@ -42,13 +42,6 @@ def should_halt_for_connection() -> bool:
 
   logging.info("Checking if the workflow should be halted for a connection...")
 
-  if not _is_true_like_env_var("INTERACTIVE_CI"):
-    logging.info(
-      "INTERACTIVE_CI env var is not "
-      "set, or is set to a false-like value in the workflow"
-    )
-    return False
-
   explicit_halt_requested = _is_true_like_env_var("HALT_DISPATCH_INPUT")
   if explicit_halt_requested:
     logging.info(

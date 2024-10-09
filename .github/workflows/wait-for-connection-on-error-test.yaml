@@ -1,23 +1,13 @@
-# A workflow to test waiting for SSH connections to the runner.
-name: Connection Test
-# Run on pull_request that is labeled as "optional_ci_tpu" or workflow dispatch
+# A workflow to test waiting for SSH connections to the runner, when an error occurs.
+name: Connection Test - On Error
 on:
   pull_request:
     paths:
     - ci_connection
-    - .github/workflows/wait-for-connection-test.yaml
+    - .github/workflows/wait-for-connection-on-error-test.yaml
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      halt-for-connection:
-        description: 'Should this workflow run wait for a remote connection?'
-        type: choice
-        required: true
-        default: 'no'
-        options:
-        - 'yes'
-        - 'no'
+      - wait_connect_on_error
 # Cancel any previous iterations if a new commit is pushed
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,11 +26,9 @@ jobs:
     steps:
       - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # ratchet:actions/checkout@v4
       - name: Echo
+        shell: bash  # required as the default `sh` doesn't have the ERR status
         run: |
           set -x
+          trap 'PYTHONUNBUFFERED=1 python ci_connection/wait_on_error.py --shell-command "$BASH_COMMAND"' ERR
           echo "Real job here..."
-      # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
-      - name: Wait For Connection
-        uses: google-ml-infra/actions/ci_connection@wait_connect_on_error
-        with:
-          halt-dispatch-input: ${{ inputs.halt-for-connection }}
+          ls fake_directory_that_does_not_exist_most

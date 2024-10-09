@@ -32,18 +32,16 @@ Examples:
       shell: bash  # required as the default `sh` doesn't have the ERR status
       run: |
         set -x
-        trap 'python ci_connection/wait_on_error.py --shell-command "$BASH_COMMAND"; exit "$?"' ERR
+        trap 'PYTHONUNBUFFERED=1 python ci_connection/wait_on_error.py --shell-command "$BASH_COMMAND"' ERR
         echo "Real job here..."
         ls fake_directory_that_does_not_exist
-"""
 
-import os
+"""
 
 import preserve_run_state
 import wait_for_connection
 
 
 if __name__ == '__main__':
-    os.environ["INTERACTIVE_CI"] = "1"
     preserve_run_state.save_all_info()
     wait_for_connection.main()
