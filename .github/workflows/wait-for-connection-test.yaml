@@ -38,7 +38,7 @@ jobs:
         continue-on-error: true
         run: |
           set -x
-          trap 'python ci_connection/preserve_run_state.py --shell-command "$BASH_COMMAND"; exit "$?"' ERR
+          trap 'python ci_connection/wait_on_error.py --shell-command "$BASH_COMMAND"; exit "$?"' ERR
           echo "Real job here..."
           ls fake_directory_that_does_not_exist_most_certainly_yes_sir
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry

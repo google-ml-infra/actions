@@ -63,7 +63,13 @@ def get_execution_state():
     return None
   logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
   with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
-    data: preserve_run_state.StateInfo = json.load(f)
+    try:
+      data: preserve_run_state.StateInfo = json.load(f)
+    except json.JSONDecodeError as e:
+      logging.error(
+          f'Could not parse the execution state file:\n{e.msg}\n'
+          f'Continuing without reproducing the environment...'
+      )
 
   shell_command = data.get("shell_command")
   directory = data.get("directory")
@@ -93,7 +99,7 @@ def main():
   else:
     bash_env = None
 
-  # Change directory if provided
+  # Change directory, if provided
   if directory is not None:
     os.chdir(directory)
 
@@ -102,13 +108,14 @@ def main():
 if [ -f ~/.bashrc ]; then
     source ~/.bashrc
 fi
+
 """
 
   if shell_command:
     escaped_shell_command = shell_command.replace('"', '\\"')
-    rcfile_content += f'echo "Failed command was:\n{escaped_shell_command}"\n'
+    rcfile_content += f'printf "Failed command was:\n{escaped_shell_command}\n\n"\n'
 
-  # Create a temporary rcfile
+  # Create a temporary rcfile, with the preserved execution info, if any
   with tempfile.NamedTemporaryFile("w", delete=False) as temp_rc:
     rcfile = temp_rc.name
     temp_rc.write(rcfile_content)

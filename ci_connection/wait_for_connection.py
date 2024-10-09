@@ -64,14 +64,21 @@ def should_halt_for_connection() -> bool:
   # Note: there's always a small possibility these labels may change on the
   # repo/org level, in which case, they'd need to be updated below as well.
 
-  if HALT_ON_ERROR_LABEL:
+  if HALT_ON_ERROR_LABEL and os.path.exists(utils.STATE_INFO_PATH):
     logging.info(
       f"Halt for connection requested via presence "
       f"of the {HALT_ON_ERROR_LABEL!r} label.\n"
+      f"Found a file with the execution state info for a previous command..."
     )
     return True
   else:
-    logging.debug(f"No {HALT_ON_ERROR_LABEL!r} label found on the PR")
+    if not HALT_ON_ERROR_LABEL:
+      logging.debug(f"No {HALT_ON_ERROR_LABEL!r} label found on the PR")
+    else:
+      logging.debug(
+          f"Found the {HALT_ON_ERROR_LABEL!r} label, but no execution state "
+          f"file found at {utils.STATE_INFO_PATH} path"
+      )
 
   if HALT_ALWAYS_LABEL in labels:
     logging.info(
@@ -183,8 +190,12 @@ async def wait_for_connection(host: str = "localhost", port: int = 12455):
     logging.info("Waiting process terminated.")
 
 
-if __name__ == "__main__":
+def main():
   if not should_halt_for_connection():
     logging.info("No conditions for halting the workflow for connection were met")
     exit()
   asyncio.run(wait_for_connection())
+
+
+if __name__ == "__main__":
+  main()
