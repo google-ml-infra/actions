@@ -78,7 +78,7 @@ def retrieve_labels(print_to_stdout: bool = True) -> list[str]:
 
     if response.status == 200:
       data = response.read().decode("utf-8")
-      logging.debug("API labels data: \n{data}")
+      logging.debug(f"API labels data: \n{data}")
       break
     else:
       logging.error(f"Request failed with status code: {response.status}")

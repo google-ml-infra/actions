@@ -19,13 +19,16 @@ import logging
 import os
 import time
 
+import utils
 from get_labels import retrieve_labels
-from logging_setup import setup_logging
 
-setup_logging()
+utils.setup_logging()
 
-ALWAYS_HALT_LABEL = "CI Connection Halt - Always"
+# Note: there's always a small possibility these labels may change on the
+# repo/org level, in which case, they'd need to be updated below as well.
+HALT_ALWAYS_LABEL = "CI Connection Halt - Always"
 HALT_ON_RETRY_LABEL = "CI Connection Halt - On Retry"
+HALT_ON_ERROR_LABEL = "CI Connection Halt - On Error"
 
 
 def _is_true_like_env_var(var_name: str) -> bool:
@@ -36,17 +39,14 @@ def _is_true_like_env_var(var_name: str) -> bool:
   return False
 
 
-def should_halt_for_connection() -> bool:
+def should_halt_for_connection(wait_regardless: bool = False) -> bool:
   """Check if the workflow should wait, due to inputs, vars, and labels."""
 
   logging.info("Checking if the workflow should be halted for a connection...")
 
-  if not _is_true_like_env_var("INTERACTIVE_CI"):
-    logging.info(
-      "INTERACTIVE_CI env var is not "
-      "set, or is set to a false-like value in the workflow"
-    )
-    return False
+  if wait_regardless:
+    logging.info("Wait for connection requested explicitly via code")
+    return True
 
   explicit_halt_requested = _is_true_like_env_var("HALT_DISPATCH_INPUT")
   if explicit_halt_requested:
@@ -54,21 +54,36 @@ def should_halt_for_connection() -> bool:
       "Halt for connection requested via explicit `halt-dispatch-input` input"
     )
     return True
+  else:
+    logging.debug("No `halt-dispatch-input` detected")
 
   # Check if any of the relevant labels are present
   labels = retrieve_labels(print_to_stdout=False)
 
-  # Note: there's always a small possibility these labels may change on the
-  # repo/org level, in which case, they'd need to be updated below as well.
-
-  # TODO(belitskiy): Add the ability to halt on CI error.
-
-  if ALWAYS_HALT_LABEL in labels:
+  if HALT_ON_ERROR_LABEL and os.path.exists(utils.STATE_INFO_PATH):
     logging.info(
       f"Halt for connection requested via presence "
-      f"of the {ALWAYS_HALT_LABEL!r} label"
+      f"of the {HALT_ON_ERROR_LABEL!r} label.\n"
+      f"Found a file with the execution state info for a previous command..."
     )
     return True
+  else:
+    if not HALT_ON_ERROR_LABEL:
+      logging.debug(f"No {HALT_ON_ERROR_LABEL!r} label found on the PR")
+    else:
+      logging.debug(
+        f"Found the {HALT_ON_ERROR_LABEL!r} label, but no execution state "
+        f"file found at {utils.STATE_INFO_PATH} path"
+      )
+
+  if HALT_ALWAYS_LABEL in labels:
+    logging.info(
+      f"Halt for connection requested via presence "
+      f"of the {HALT_ALWAYS_LABEL!r} label"
+    )
+    return True
+  else:
+    logging.debug(f"No {HALT_ALWAYS_LABEL!r} label found on the PR")
 
   attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
   if attempt > 1 and HALT_ON_RETRY_LABEL in labels:
@@ -78,6 +93,13 @@ def should_halt_for_connection() -> bool:
       f"due to workflow run attempt being 2+ ({attempt})"
     )
     return True
+  else:
+    if not HALT_ON_RETRY_LABEL:
+      logging.debug(f"No {HALT_ON_RETRY_LABEL!r} label found on the PR")
+    else:
+      logging.debug(
+        f"Found the {HALT_ON_RETRY_LABEL!r} label, but this is the first attempt"
+      )
 
   return False
 
@@ -119,7 +141,7 @@ async def wait_for_connection(host: str = "localhost", port: int = 12455):
   cluster = os.getenv("CONNECTION_CLUSTER")
   location = os.getenv("CONNECTION_LOCATION")
   ns = os.getenv("CONNECTION_NS")
-  actions_path = os.getenv("GITHUB_ACTION_PATH")
+  actions_path = os.path.dirname(__file__)
 
   logging.info("Googler connection only\nSee go/ml-github-actions:ssh for details")
   logging.info(
@@ -164,8 +186,12 @@ async def wait_for_connection(host: str = "localhost", port: int = 12455):
     logging.info("Waiting process terminated.")
 
 
-if __name__ == "__main__":
-  if not should_halt_for_connection():
+def main(wait_regardless: bool = False):
+  if not should_halt_for_connection(wait_regardless=wait_regardless):
     logging.info("No conditions for halting the workflow for connection were met")
     exit()
   asyncio.run(wait_for_connection())
+
+
+if __name__ == "__main__":
+  main()

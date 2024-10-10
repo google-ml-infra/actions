@@ -12,15 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+"""Establish a connection, and keep it alive.
+
+If provided, will reproduce execution state (directory, failed command, env)
+in the established SSH session.
+"""
+
+import json
 import logging
+import os
 import socket
 import time
 import threading
 import subprocess
 
-from logging_setup import setup_logging
+import preserve_run_state
+import utils
 
-setup_logging()
+
+utils.setup_logging()
 
 _LOCK = threading.Lock()
 
@@ -51,6 +62,28 @@ def keep_alive():
     send_message("keep_alive")
 
 
+def get_execution_state():
+  """Returns execution state available from the workflow, if any."""
+  if not os.path.exists(utils.STATE_INFO_PATH):
+    logging.debug(f"Did not find the execution state file at {utils.STATE_INFO_PATH}")
+    return None
+  logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
+  with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
+    try:
+      data: preserve_run_state.StateInfo = json.load(f)
+    except json.JSONDecodeError as e:
+      logging.error(
+        f"Could not parse the execution state file:\n{e.msg}\n"
+        f"Continuing without reproducing the environment..."
+      )
+
+  shell_command = data.get("shell_command")
+  directory = data.get("directory")
+  env = data.get("env")
+
+  return shell_command, directory, env
+
+
 def main():
   send_message("connection_established")
 
@@ -59,8 +92,28 @@ def main():
   timer_thread = threading.Thread(target=keep_alive, daemon=True)
   timer_thread.start()
 
-  # Enter an interactive Bash session
-  subprocess.run(["bash", "-i"])
+  execution_state = get_execution_state()
+  if execution_state is not None:
+    shell_command, directory, env = execution_state
+  else:
+    shell_command, directory, env = None, None, None
+
+  # Set environment variables for the Bash session
+  if env is not None:
+    bash_env = os.environ.copy()
+    bash_env.update(env)
+  else:
+    bash_env = None
+
+  # Change directory, if provided
+  if directory is not None:
+    os.chdir(directory)
+
+  if shell_command:
+    print(f"Failed command was:\n{shell_command}\n\n")
+
+  # Start an interactive Bash session
+  subprocess.run(["bash", "-i"], env=bash_env)
 
   send_message("connection_closed")
 

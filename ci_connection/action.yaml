@@ -24,10 +24,6 @@ runs:
   - name: Wait for connection (conditionally)
     shell: bash
     env:
-      # This variable is on by default, but can be overridden for convenience,
-      # in case the workflow calling this action should not be halted, despite
-      # other labels/inputs.
-      INTERACTIVE_CI: 1
       PYTHONUNBUFFERED: 1
       HALT_DISPATCH_INPUT: ${{ inputs.halt-dispatch-input }}
     # The calling workflow shouldn't fail in case this step does
