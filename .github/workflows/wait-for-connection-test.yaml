@@ -18,6 +18,9 @@ on:
         options:
         - 'yes'
         - 'no'
+defaults:
+  run:
+    shell: bash
 # Cancel any previous iterations if a new commit is pushed
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
