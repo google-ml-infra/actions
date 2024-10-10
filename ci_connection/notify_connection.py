@@ -23,7 +23,6 @@ import json
 import logging
 import os
 import socket
-import tempfile
 import time
 import threading
 import subprocess
@@ -110,28 +109,11 @@ def main():
   if directory is not None:
     os.chdir(directory)
 
-  # Prepare the rcfile content
-  rcfile_content = """
-if [ -f ~/.bashrc ]; then
-    source ~/.bashrc
-fi
-
-"""
-
   if shell_command:
-    escaped_shell_command = shell_command.replace('"', '\\"')
-    rcfile_content += f'printf "Failed command was:\n{escaped_shell_command}\n\n"\n'
-
-  # Create a temporary rcfile, with the preserved execution info, if any
-  with tempfile.NamedTemporaryFile("w", delete=False) as temp_rc:
-    rcfile = temp_rc.name
-    temp_rc.write(rcfile_content)
+    print(f"Failed command was:\n{shell_command}\n\n")
 
   # Start an interactive Bash session
-  subprocess.run(["bash", "--rcfile", rcfile, "-i"], env=bash_env)
-
-  # Clean up the temporary rcfile
-  os.remove(rcfile)
+  subprocess.run(["bash", "-i"], env=bash_env)
 
   send_message("connection_closed")
 

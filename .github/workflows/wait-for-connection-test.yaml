@@ -41,6 +41,6 @@ jobs:
           echo "Real job here..."
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
       - name: Wait For Connection
-        uses: google-ml-infra/actions/ci_connection@wait_connect_on_error
+        uses: ./ci_connection/
         with:
           halt-dispatch-input: ${{ inputs.halt-for-connection }}

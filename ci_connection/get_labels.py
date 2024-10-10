@@ -32,14 +32,7 @@ import time
 import urllib.request
 
 
-class _LabelsCache:
-  is_cached: bool = False
-  cache: list[str] | None = None
-
-
-def retrieve_labels(
-  print_to_stdout: bool = True, read_from_cache: bool = True, save_to_cache: bool = True
-) -> list[str]:
+def retrieve_labels(print_to_stdout: bool = True) -> list[str]:
   """Get the most up-to-date labels.
 
   In case this is not a PR, return an empty list.
@@ -51,16 +44,11 @@ def retrieve_labels(
       "GITHUB_REF is not defined. Is this being run outside of GitHub Actions?"
     )
 
-  if read_from_cache and _LabelsCache.is_cached:
-    return _LabelsCache.cache
-
   # Outside a PR context - no labels to be found
   if not github_ref.startswith("refs/pull/"):
     logging.debug("Not a PR workflow run, returning an empty label list")
     if print_to_stdout:
       print([])
-    if save_to_cache:
-      _LabelsCache.cache = []
     return []
 
   # Get the PR number
@@ -116,8 +104,6 @@ def retrieve_labels(
   # Output the labels to stdout for further use elsewhere
   if print_to_stdout:
     print(labels)
-  if save_to_cache:
-    _LabelsCache.cache = labels
   return labels
 
 

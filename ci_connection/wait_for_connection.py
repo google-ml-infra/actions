@@ -28,6 +28,7 @@ utils.setup_logging()
 # repo/org level, in which case, they'd need to be updated below as well.
 HALT_ALWAYS_LABEL = "CI Connection Halt - Always"
 HALT_ON_RETRY_LABEL = "CI Connection Halt - On Retry"
+HALT_ON_ERROR_LABEL = "CI Connection Halt - On Error"
 
 
 def _is_true_like_env_var(var_name: str) -> bool:
@@ -58,6 +59,22 @@ def should_halt_for_connection(wait_regardless: bool = False) -> bool:
 
   # Check if any of the relevant labels are present
   labels = retrieve_labels(print_to_stdout=False)
+
+  if HALT_ON_ERROR_LABEL and os.path.exists(utils.STATE_INFO_PATH):
+    logging.info(
+      f"Halt for connection requested via presence "
+      f"of the {HALT_ON_ERROR_LABEL!r} label.\n"
+      f"Found a file with the execution state info for a previous command..."
+    )
+    return True
+  else:
+    if not HALT_ON_ERROR_LABEL:
+      logging.debug(f"No {HALT_ON_ERROR_LABEL!r} label found on the PR")
+    else:
+      logging.debug(
+        f"Found the {HALT_ON_ERROR_LABEL!r} label, but no execution state "
+        f"file found at {utils.STATE_INFO_PATH} path"
+      )
 
   if HALT_ALWAYS_LABEL in labels:
     logging.info(

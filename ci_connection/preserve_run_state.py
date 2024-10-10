@@ -23,7 +23,7 @@ utils.setup_logging()
 
 VARS_BLACKLIST = ("GITHUB_TOKEN",)
 
-# This env var is, by default, checked for additional variables to blacklist.
+# This env var is, by default, checked for additional variables to denylist.
 # Vars must be comma-separated.
 ENV_BLACKLIST_VAR_NAME = "GML_ACTIONS_DEBUG_VARS_BLACKLIST"
 
@@ -75,8 +75,8 @@ def parse_cli_args() -> argparse.Namespace:
     help="Do not save the environment variables.",
   )
   parser.add_argument(
-    "--env-vars-blacklist",
-    dest="env_vars_blacklist",
+    "--env-vars-denylist",
+    dest="env_vars_denylist",
     help="A comma-separated list of additional environment variables " "to ignore.",
   )
   parser.add_argument(
@@ -115,7 +115,7 @@ def _get_names_from_env_vars_list(
   return parsed_env_names
 
 
-def add_blacklist_vars_from_env(
+def add_denylist_vars_from_env(
   env_list_var_name: str, var_list: Sequence[str]
 ) -> list[str]:
   final_list = [*(var_list or [])]
@@ -127,25 +127,23 @@ def add_blacklist_vars_from_env(
 
 def save_env_state(
   out_path: str = utils.STATE_ENV_OUT_PATH,
-  blacklist: Sequence[str] = VARS_BLACKLIST,
+  denylist: Sequence[str] = VARS_BLACKLIST,
   check_env_lists_for_additional_vars: bool = True,
 ) -> dict[str, str]:
   """
   Retrieves the current env var state in the form of the `env` command output.
 
-  Takes blacklist, and whitelist into consideration.
+  Takes denylist into consideration.
   Saved separately from other relevant information, so that it can be ingested
   via `source`.
   """
-  # Ingest potential additional blacklist variables from the env var, if needed.
-  final_blacklist = blacklist
+  # Ingest potential additional denylist variables from the env var, if needed.
+  final_denylist = denylist
   if check_env_lists_for_additional_vars:
-    final_blacklist = add_blacklist_vars_from_env(
-      ENV_BLACKLIST_VAR_NAME, final_blacklist
-    )
+    final_denylist = add_denylist_vars_from_env(ENV_BLACKLIST_VAR_NAME, final_denylist)
 
-  # Include env vars that are not in the blacklist
-  out_vars = {k: v for k, v in os.environ.items() if k not in final_blacklist}
+  # Include env vars that are not in the denylist
+  out_vars = {k: v for k, v in os.environ.items() if k not in final_denylist}
   out_str = "\n".join(f"{k}={v!r}" for k, v in out_vars.items())
 
   if out_path:
@@ -179,10 +177,10 @@ def save_all_info():
   out_dir = args.out_dir or utils.STATE_OUT_DIR
 
   if args.save_env:
-    blacklist_vars = list(VARS_BLACKLIST)
-    blacklist_vars.extend(args.env_vars_blacklist or [])
+    denylist_vars = list(VARS_BLACKLIST)
+    denylist_vars.extend(args.env_vars_denylist or [])
     env_state = save_env_state(
-      out_path=os.path.join(out_dir, utils.STATE_ENV_FILENAME), blacklist=blacklist_vars
+      out_path=os.path.join(out_dir, utils.STATE_ENV_FILENAME), denylist=denylist_vars
     )
   else:
     env_state = {}

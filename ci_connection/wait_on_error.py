@@ -35,4 +35,4 @@ import wait_for_connection
 
 if __name__ == "__main__":
   preserve_run_state.save_all_info()
-  wait_for_connection.main(wait_regardless=True)
+  wait_for_connection.main()

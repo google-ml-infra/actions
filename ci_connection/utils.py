@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-"""Miscellaneous config/utilities for SSH connection functionality."""
+"""Miscellaneous config/utilities for remote connection functionality."""
 
 import logging
 import os
