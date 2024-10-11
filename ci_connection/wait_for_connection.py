@@ -17,6 +17,7 @@
 import asyncio
 import logging
 import os
+import shutil
 import time
 
 import utils
@@ -191,6 +192,12 @@ def main(wait_regardless: bool = False):
     logging.info("No conditions for halting the workflow for connection were met")
     exit()
   asyncio.run(wait_for_connection())
+
+  logging.debug("Deleting execution state data...")
+  try:
+    shutil.rmtree(utils.STATE_OUT_DIR)
+  except FileNotFoundError:
+    logging.info("Did not find any execution state data to delete")
 
 
 if __name__ == "__main__":

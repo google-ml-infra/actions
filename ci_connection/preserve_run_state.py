@@ -34,11 +34,11 @@ import utils
 
 utils.setup_logging()
 
-VARS_BLACKLIST = ("GITHUB_TOKEN",)
+VARS_DENYLIST = ("GITHUB_TOKEN",)
 
 # This env var is, by default, checked for additional variables to denylist.
 # Vars must be comma-separated.
-ENV_BLACKLIST_VAR_NAME = "GML_ACTIONS_DEBUG_VARS_BLACKLIST"
+ENV_DENYLIST_VAR_NAME = "GML_ACTIONS_DEBUG_VARS_DENYLIST"
 
 
 class StateInfo(TypedDict):
@@ -140,7 +140,7 @@ def add_denylist_vars_from_env(
 
 def save_env_state(
   out_path: str = utils.STATE_ENV_OUT_PATH,
-  denylist: Sequence[str] = VARS_BLACKLIST,
+  denylist: Sequence[str] = VARS_DENYLIST,
   check_env_lists_for_additional_vars: bool = True,
 ) -> dict[str, str]:
   """
@@ -153,7 +153,7 @@ def save_env_state(
   # Ingest potential additional denylist variables from the env var, if needed.
   final_denylist = denylist
   if check_env_lists_for_additional_vars:
-    final_denylist = add_denylist_vars_from_env(ENV_BLACKLIST_VAR_NAME, final_denylist)
+    final_denylist = add_denylist_vars_from_env(ENV_DENYLIST_VAR_NAME, final_denylist)
 
   # Include env vars that are not in the denylist
   out_vars = {k: v for k, v in os.environ.items() if k not in final_denylist}
@@ -190,7 +190,7 @@ def save_all_info():
   out_dir = args.out_dir or utils.STATE_OUT_DIR
 
   if args.save_env:
-    denylist_vars = list(VARS_BLACKLIST)
+    denylist_vars = list(VARS_DENYLIST)
     denylist_vars.extend(args.env_vars_denylist or [])
     env_state = save_env_state(
       out_path=os.path.join(out_dir, utils.STATE_ENV_FILENAME), denylist=denylist_vars

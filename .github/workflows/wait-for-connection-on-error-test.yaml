@@ -10,7 +10,8 @@ on:
       - wait_connect_on_error
 defaults:
   run:
-    shell: bash # required as the default `sh` doesn't have the ERR status
+    # The default `sh` shell doesn't have the ERR trap status
+    shell: bash
 # Cancel any previous iterations if a new commit is pushed
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
