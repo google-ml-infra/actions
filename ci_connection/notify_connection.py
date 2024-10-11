@@ -56,6 +56,37 @@ def send_message(message: str):
         logging.error(f"An error occurred: {e}")
 
 
+def request_env_state() -> dict[str, str] | None:
+  """Request the env data from the server-side session.
+
+  Unlike the last command, and directory, this is not written out to a file,
+  out of concerns for potential sensitive data within the env vars.
+
+  Returns: environment (os.environ) data in the form of a dict.
+
+  """
+  with _LOCK:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+      try:
+        sock.connect((HOST, PORT))
+        # Send the request message
+        sock.sendall("env_state_requested\n".encode("utf-8"))
+        # Read the response until the connection is closed
+        data = b""
+        while True:
+          chunk = sock.recv(4096)
+          if not chunk:
+            # Connection closed by server
+            break
+          data += chunk
+        json_data = data.decode("utf-8").strip()
+        env_data = json.loads(json_data)
+        return env_data
+      except Exception as e:
+        logging.error(f"An error occurred while requesting env state: {e}")
+        return None
+
+
 def keep_alive():
   while True:
     time.sleep(KEEP_ALIVE_INTERVAL)
@@ -79,7 +110,7 @@ def get_execution_state():
 
   shell_command = data.get("shell_command")
   directory = data.get("directory")
-  env = data.get("env")
+  env = request_env_state()
 
   return shell_command, directory, env
 

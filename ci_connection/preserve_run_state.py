@@ -139,7 +139,7 @@ def add_denylist_vars_from_env(
 
 
 def save_env_state(
-  out_path: str = utils.STATE_ENV_OUT_PATH,
+  out_path: str | None = utils.STATE_ENV_OUT_PATH,
   denylist: Sequence[str] = VARS_DENYLIST,
   check_env_lists_for_additional_vars: bool = True,
 ) -> dict[str, str]:

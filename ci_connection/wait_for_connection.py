@@ -15,11 +15,13 @@
 """Wait for a remote connection from a user, if a wait was requested."""
 
 import asyncio
+import json
 import logging
 import os
 import shutil
 import time
 
+import preserve_run_state
 import utils
 from get_labels import retrieve_labels
 
@@ -131,6 +133,16 @@ async def process_messages(reader, writer):
       WaitInfo.last_time = time.time()
       WaitInfo.timeout = WaitInfo.re_connect_timeout
       logging.info("Remote connection detected.")
+      logging.info("SSH connection detected.")
+    elif message == "env_state_requested":
+      logging.info("Environment state requested")
+      # Send the JSON dump of os.environ
+      env_data = preserve_run_state.save_env_state(out_path=None)
+      json_data = json.dumps(env_data)
+      # Send the data back to the client
+      writer.write((json_data + '\n').encode())
+      await writer.drain()
+      logging.info("Environment state sent to the client")
     else:
       logging.warning(f"Unknown message received: {message!r}")
   writer.close()
