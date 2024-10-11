@@ -20,7 +20,7 @@ to add a separate wait-for-connection step to a workflow.
 When a command errors out, and the script is called, it will:
 1. Save the environment state at the moment of error.
 2. Begin waiting for connection.
-3. If/when an SSH connection is established, load in the env state from earlier,
+3. If/when a remote connection is established, load in the env state from earlier,
    to closely approximate the state of the workflow at the moment of failure.
 
 For more details, see the code.

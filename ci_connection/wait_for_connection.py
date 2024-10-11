@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Wait for an SSH connection from a user, if a wait was requested."""
+"""Wait for a remote connection from a user, if a wait was requested."""
 
 import asyncio
 import logging
@@ -130,7 +130,7 @@ async def process_messages(reader, writer):
     elif message == "connection_established":
       WaitInfo.last_time = time.time()
       WaitInfo.timeout = WaitInfo.re_connect_timeout
-      logging.info("SSH connection detected.")
+      logging.info("Remote connection detected.")
     else:
       logging.warning(f"Unknown message received: {message!r}")
   writer.close()

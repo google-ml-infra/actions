@@ -16,7 +16,7 @@
 """Establish a connection, and keep it alive.
 
 If provided, will reproduce execution state (directory, failed command, env)
-in the established SSH session.
+in the established remote session.
 """
 
 import json

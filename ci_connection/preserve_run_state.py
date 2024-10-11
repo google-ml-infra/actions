@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Utilities for saving environment/execution state for use in SSH sessions.
+"""Utilities for saving environment/execution state for use in remote sessions.
 
 The setup/environment of a workflow can be saved, and later reproduced within
-an SSH session to the runner that is running the workflow in question.
+a remote session to the runner that is running the workflow in question.
 
 This is generally meant for debugging errors in CI.
 
@@ -51,7 +51,7 @@ def parse_cli_args() -> argparse.Namespace:
   parser = argparse.ArgumentParser(
     description="Preserve the current execution state of a shell script. "
     "Useful for saving the current state of a workflow, so that "
-    "it can be later reproduced within an SSH session, on the "
+    "it can be later reproduced within a remote session, on the "
     "same runner that is running the workflow in question.",
     usage="python preserve_run_state.py "
     "--shell-command=<relevant-command> "
@@ -90,13 +90,13 @@ def parse_cli_args() -> argparse.Namespace:
   parser.add_argument(
     "--env-vars-denylist",
     dest="env_vars_denylist",
-    help="A comma-separated list of additional environment variables " "to ignore.",
+    help="A comma-separated list of additional environment variables to ignore.",
   )
   parser.add_argument(
     "--out-dir",
     dest="out_dir",
     required=False,
-    help="The directory to which to save the info. Optional. " "Uses $HOME by default.",
+    help="The directory to which to save the info. Optional. Uses $HOME by default.",
   )
   args = parser.parse_args()
   return args
