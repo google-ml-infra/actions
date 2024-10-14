@@ -121,7 +121,7 @@ def _get_names_from_env_vars_list(
     if raise_on_invalid_value:
       raise ValueError(err_msg)
     else:
-      err_msg = f"{err_msg}\n" f"Ignoring contents of this variable."
+      err_msg = f"{err_msg}\nIgnoring contents of this variable."
       logging.error(err_msg)
 
   parsed_env_names = [n.strip() for n in env_vars_list.split(",")]

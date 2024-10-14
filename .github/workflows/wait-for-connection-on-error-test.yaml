@@ -1,4 +1,4 @@
-# A workflow to test waiting for SSH connections to the runner, when an error occurs.
+# A workflow to test waiting for remote connections to the runner, when an error occurs.
 name: Connection Test - On Error
 on:
   pull_request:
