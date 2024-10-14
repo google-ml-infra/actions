@@ -133,7 +133,6 @@ async def process_messages(reader, writer):
       WaitInfo.last_time = time.time()
       WaitInfo.timeout = WaitInfo.re_connect_timeout
       logging.info("Remote connection detected.")
-      logging.info("SSH connection detected.")
     elif message == "env_state_requested":
       logging.info("Environment state requested")
       # Send the JSON dump of os.environ
