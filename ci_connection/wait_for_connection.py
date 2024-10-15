@@ -139,7 +139,7 @@ async def process_messages(reader, writer):
       env_data = preserve_run_state.save_env_state(out_path=None)
       json_data = json.dumps(env_data)
       # Send the data back to the client
-      writer.write((json_data + '\n').encode())
+      writer.write((json_data + "\n").encode())
       await writer.drain()
       logging.info("Environment state sent to the client")
     else:
@@ -208,7 +208,7 @@ def main(wait_regardless: bool = False):
   try:
     shutil.rmtree(utils.STATE_OUT_DIR)
   except FileNotFoundError:
-    logging.info("Did not find any execution state data to delete")
+    logging.debug("Did not find any execution state data to delete")
 
 
 if __name__ == "__main__":
