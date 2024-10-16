@@ -199,16 +199,18 @@ async def wait_for_connection(host: str = "localhost", port: int = 12455):
 
 
 def main(wait_regardless: bool = False):
-  if not should_halt_for_connection(wait_regardless=wait_regardless):
-    logging.info("No conditions for halting the workflow for connection were met")
-    exit()
-  asyncio.run(wait_for_connection())
-
-  logging.debug("Deleting execution state data...")
   try:
-    shutil.rmtree(utils.STATE_OUT_DIR)
-  except FileNotFoundError:
-    logging.debug("Did not find any execution state data to delete")
+    if should_halt_for_connection(wait_regardless=wait_regardless):
+      asyncio.run(wait_for_connection())
+    else:
+      logging.info("No conditions for halting the workflow for connection were met")
+
+  finally:
+    logging.debug("Deleting execution state data...")
+    try:
+      shutil.rmtree(utils.STATE_OUT_DIR)
+    except FileNotFoundError:
+      logging.debug("Did not find any execution state data to delete")
 
 
 if __name__ == "__main__":
