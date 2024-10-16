@@ -1,8 +1,11 @@
-# A workflow to test waiting for SSH connections to the runner.
+# A workflow to test waiting for remote connections to the runner.
 name: Connection Test
 # Run on pull_request that is labeled as "optional_ci_tpu" or workflow dispatch
 on:
   pull_request:
+    paths:
+    - ci_connection
+    - .github/workflows/wait-for-connection-test.yaml
     branches:
       - main
   workflow_dispatch:
@@ -15,6 +18,9 @@ on:
         options:
         - 'yes'
         - 'no'
+defaults:
+  run:
+    shell: bash
 # Cancel any previous iterations if a new commit is pushed
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,10 +38,12 @@ jobs:
       image: us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build@sha256:cec01011e627c0fd101c521a8af7c09ce4557ab6dcc9f8678aeb67a3182ed821 # ratchet:tensorflow/ml-build:latest
     steps:
       - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # ratchet:actions/checkout@v4
+      - name: Echo
+        run: |
+          set -x
+          echo "Real job here..."
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
       - name: Wait For Connection
         uses: ./ci_connection/
         with:
           halt-dispatch-input: ${{ inputs.halt-for-connection }}
-      - name: Echo
-        run: echo "Real job here..."

@@ -1,0 +1,34 @@
+# A workflow to test waiting for remote connections to the runner, when an error occurs.
+name: Connection Test - On Error
+on:
+  pull_request:
+    paths:
+    - ci_connection
+    - .github/workflows/wait-for-connection-on-error-test.yaml
+    branches:
+      - main
+      - wait_connect_on_error
+defaults:
+  run:
+    # The default `sh` shell doesn't have the ERR trap status
+    shell: bash
+# Cancel any previous iterations if a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  wait-on-error-test:
+    runs-on: "linux-x86-n2-16"
+    timeout-minutes: 60
+    container:
+      image: us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build@sha256:cec01011e627c0fd101c521a8af7c09ce4557ab6dcc9f8678aeb67a3182ed821 # ratchet:tensorflow/ml-build:latest
+    steps:
+      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # ratchet:actions/checkout@v4
+      - name: Fail on purpose
+        run: |
+          set -x
+          # For the sake of the job staying green when working properly, the trap
+          # exits with the status of the script, but that's not needed for normal usage
+          trap 'PYTHONUNBUFFERED=1 python ci_connection/wait_on_error.py --shell-command "$BASH_COMMAND"; exit $?' ERR
+          echo "Real job here..."
+          ls fake_directory_that_does_not_exist
