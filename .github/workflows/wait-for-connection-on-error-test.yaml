@@ -27,6 +27,8 @@ jobs:
       - name: Fail on purpose
         run: |
           set -x
-          trap 'PYTHONUNBUFFERED=1 python ci_connection/wait_on_error.py --shell-command "$BASH_COMMAND"' ERR
+          # For the sake of the job staying green when working properly, the trap
+          # exits with the status of the script, but that's not needed for normal usage
+          trap 'PYTHONUNBUFFERED=1 python ci_connection/wait_on_error.py --shell-command "$BASH_COMMAND"; exit $?' ERR
           echo "Real job here..."
           ls fake_directory_that_does_not_exist
