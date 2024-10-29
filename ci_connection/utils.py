@@ -21,7 +21,7 @@ import sys
 
 
 # Default path constants for saving/reading execution state
-STATE_OUT_DIR = os.path.join(os.path.expandvars("$HOME"), "workflow_state")
+STATE_OUT_DIR = os.path.join(os.path.expandvars("$HOME"), ".workflow_state")
 # Path for info for last command, current directory, env vars, etc.
 STATE_EXEC_INFO_FILENAME = "execution_state.json"
 STATE_INFO_PATH = os.path.join(STATE_OUT_DIR, STATE_EXEC_INFO_FILENAME)
