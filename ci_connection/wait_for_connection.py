@@ -81,8 +81,7 @@ def should_halt_for_connection(wait_regardless: bool = False) -> bool:
 
   if HALT_ALWAYS_LABEL in labels:
     logging.info(
-      f"Halt for connection requested via presence "
-      f"of the {HALT_ALWAYS_LABEL!r} label"
+      f"Halt for connection requested via presence of the {HALT_ALWAYS_LABEL!r} label"
     )
     return True
   else:
