@@ -44,7 +44,7 @@ ENV_DENYLIST_VAR_NAME = "GML_ACTIONS_DEBUG_VARS_DENYLIST"
 class StateInfo(TypedDict):
   shell_command: str | None
   directory: str | None
-  env: str | None
+  env: dict[str, str] | None
 
 
 def parse_cli_args() -> argparse.Namespace:
