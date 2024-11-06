@@ -27,7 +27,7 @@ import json
 import logging
 import os
 import re
-from typing import NotRequired, Sequence, TypedDict
+from typing import Sequence, TypedDict
 
 import utils
 
@@ -42,9 +42,9 @@ ENV_DENYLIST_VAR_NAME = "GML_ACTIONS_DEBUG_VARS_DENYLIST"
 
 
 class StateInfo(TypedDict):
-  shell_command: NotRequired[str | None]
-  directory: NotRequired[str | None]
-  env: NotRequired[dict[str, str] | None]
+  shell_command: str | None
+  directory: str | None
+  env: str | None
 
 
 def parse_cli_args() -> argparse.Namespace:
