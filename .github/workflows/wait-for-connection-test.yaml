@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: ["linux-x86-n2-16"]
+        runner: ["linux-x86-g2-48-l4-4gpu"]
         instances: ["1"]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
@@ -41,7 +41,9 @@ jobs:
       - name: Echo
         run: |
           set -x
-          echo "Real job here..."
+          echo "ipv6 enabled"
+          cat /proc/sys/net/ipv6/conf/all/disable_ipv6
+          echo "------------------------------- DONE -------------------------------"
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
       - name: Wait For Connection
         uses: ./ci_connection/
