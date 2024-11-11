@@ -146,7 +146,7 @@ async def process_messages(reader, writer):
   writer.close()
 
 
-async def wait_for_connection(host: str = "localhost", port: int = 12455):
+async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
   # Print out the data required to connect to this VM
   runner_name = os.getenv("HOSTNAME")
   cluster = os.getenv("CONNECTION_CLUSTER")

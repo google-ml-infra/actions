@@ -37,7 +37,7 @@ utils.setup_logging()
 _LOCK = threading.Lock()
 
 # Configuration (same as wait_for_connection.py)
-HOST, PORT = "localhost", 12455
+HOST, PORT = "127.0.0.1", 12455
 KEEP_ALIVE_INTERVAL = 30
 
 
