@@ -30,20 +30,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: ["linux-x86-g2-48-l4-4gpu"]
+        runner: ["linux-x86-n2-16"]
         instances: ["1"]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     container:
-      image: "gcr.io/tensorflow-testing/nosla-cuda12.3-cudnn9.1-ubuntu20.04-manylinux2014-multipython:latest"
+      image: us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build@sha256:cec01011e627c0fd101c521a8af7c09ce4557ab6dcc9f8678aeb67a3182ed821 # ratchet:tensorflow/ml-build:latest
     steps:
       - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # ratchet:actions/checkout@v4
       - name: Echo
         run: |
           set -x
-          echo "ipv6 enabled"
-          cat /proc/sys/net/ipv6/conf/all/disable_ipv6
-          echo "------------------------------- DONE -------------------------------"
+          echo "Real job here..."
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
       - name: Wait For Connection
         uses: ./ci_connection/
