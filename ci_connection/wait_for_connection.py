@@ -134,7 +134,7 @@ async def process_messages(reader, writer):
       WaitInfo.timeout = WaitInfo.re_connect_timeout
       logging.info("Remote connection detected.")
     elif message == "env_state_requested":
-      logging.info("Environment state requested")
+      logging.info("Environment state requested (to disable on next time, add `--no-env` to command")
       # Send the JSON dump of os.environ
       env_data = preserve_run_state.save_env_state(out_path=None)
       json_data = json.dumps(env_data)
