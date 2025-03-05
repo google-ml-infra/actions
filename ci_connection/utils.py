@@ -17,6 +17,7 @@
 
 import logging
 import os
+import platform
 import sys
 from datetime import datetime
 
@@ -26,6 +27,8 @@ STATE_OUT_DIR = os.path.join(os.path.expandvars("$HOME"), ".workflow_state")
 # Path for info for last command, current directory, env vars, etc.
 STATE_EXEC_INFO_FILENAME = "execution_state.json"
 STATE_INFO_PATH = os.path.join(STATE_OUT_DIR, STATE_EXEC_INFO_FILENAME)
+PYTHON_BOOTSTRAP_FILENAME = "python_bootstrap.env"
+PYTHON_BOOTSTRAP_PATH = os.path.join(STATE_OUT_DIR, PYTHON_BOOTSTRAP_FILENAME)
 # Environment variables standalone file path, for being ingested via `source`,
 STATE_ENV_FILENAME = "env.txt"
 STATE_ENV_OUT_PATH = os.path.join(STATE_OUT_DIR, STATE_ENV_FILENAME)
@@ -101,3 +104,24 @@ def setup_logging():
   handler.setLevel(level)
   logger.addHandler(handler)
   return logger
+
+
+def is_linux_or_linux_like_shell():
+  """
+  Returns True if Python is running on an actual Linux system
+  or in a Linux-like shell (MSYS2, Git Bash, Cygwin, etc.).
+  """
+  # Check if the operating system is Linux
+  if platform.system() == "Linux":
+    return True
+
+  # Check for common environment variables used by MSYS2, Git Bash, Cygwin, etc.
+  ostype = os.environ.get("OSTYPE", "").lower()
+  msystem = os.environ.get("MSYSTEM", "").lower()
+
+  if any(token in ostype for token in {"linux-gnu", "msys", "cygwin"}):
+    return True
+  if any(token in msystem for token in {"mingw", "msys"}):
+    return True
+
+  return False
