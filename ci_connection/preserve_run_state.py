@@ -272,6 +272,7 @@ def save_setup_python_installed_python_env() -> str | None:
       env_vars[key] = value
 
   out_str = "\n".join(f"{k}={v!r}" for k, v in env_vars.items())
+  os.makedirs(utils.STATE_OUT_DIR, exist_ok=True)
   with open(utils.PYTHON_BOOTSTRAP_PATH, "w", encoding="utf-8") as f:
     f.write(out_str)
   return utils.PYTHON_BOOTSTRAP_PATH
