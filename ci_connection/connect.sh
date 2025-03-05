@@ -4,6 +4,8 @@ set -ex
 
 # Bootstraps Python setup
 FILE_PATH="$1"
+cd "$(dirname "$FILE_PATH")"
+
 if [ -f "$FILE_PATH" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     # Skip empty lines and lines starting with a #
