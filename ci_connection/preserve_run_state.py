@@ -261,6 +261,7 @@ def save_setup_python_installed_python_env() -> str | None:
   ]
 
   system = platform.system()
+  logging.info(f'{system=}!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
   if system == "Linux":
     keys.append("LD_LIBRARY_PATH")
   elif system == "Windows":

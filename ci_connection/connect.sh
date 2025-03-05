@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Bootstraps Python setup
-FILE_PATH="python"
+FILE_PATH="$1"
 if [ -f "$FILE_PATH" ]; then
   source "$FILE_PATH"
 fi

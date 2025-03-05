@@ -210,9 +210,9 @@ def construct_connection_command(setup_python_env_path: str) -> str:
     # Assumptions are made here that Bash and Powershell respectively
     # are available on the machine
     if utils.is_linux_or_linux_like_shell():
-      script_to_run = f'--entrypoint="bash connect.sh {setup_python_env_path}'
+      script_to_run = f'--entrypoint="bash connect.sh {actions_path}/{setup_python_env_path}"'
     else:
-      script_to_run = f"--entrypoint=powershell connect.ps1 {setup_python_env_path}"
+      script_to_run = f'--entrypoint="powershell connect.ps1 {setup_python_env_path}"'
 
   connect_command = (
     f"CONNECTION COMMAND\n"
