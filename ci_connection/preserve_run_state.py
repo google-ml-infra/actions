@@ -244,6 +244,8 @@ def save_setup_python_installed_python_env() -> str | None:
   if not os.environ.get("pythonLocation"):
     return  # setup-python was not run
 
+  logging.debug("setup-python installation found, creating an env file for bootstrapping...")
+
   env_vars = {}
 
   # These are the variables set by `setup-python` so that its .so/.dll files
@@ -268,6 +270,7 @@ def save_setup_python_installed_python_env() -> str | None:
     keys.append("APPDATA")
 
   for key in keys:
+    logging.debug(f'Retrieving key {key}')
     value = os.environ.get(key)
     if value is not None:
       env_vars[key] = value
@@ -276,6 +279,8 @@ def save_setup_python_installed_python_env() -> str | None:
   os.makedirs(utils.STATE_OUT_DIR, exist_ok=True)
   with open(utils.PYTHON_BOOTSTRAP_PATH, "w", encoding="utf-8") as f:
     f.write(out_str)
+
+  logging.debug("Creation of env file for setup-python bootstrapping finished")
   return utils.PYTHON_BOOTSTRAP_PATH
 
 
