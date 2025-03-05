@@ -9,7 +9,7 @@ if [ -f "$FILE_PATH" ]; then
     # Skip empty lines and lines starting with a #
     [[ -z "$line" || "$line" =~ ^# ]] && continue
     # Export the variable (the line should be in the form KEY='value')
-    export "${line}"
+    export $line
   done < "$FILE_PATH"
 
 fi
