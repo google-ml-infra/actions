@@ -50,7 +50,9 @@ def parse_args():
     help=(
       "Whether to use the env variables from the CI shell, in the shell spawned "
       "for the user. True by default. If `wait_on_error.py` was used with an "
-      "explicit request to save the env, the script can retrieve them from that time."
+      "explicit request to save the env, the script can retrieve them from that time. "
+      "Otherwise, the `env` information is retrieved from "
+      "`wait_for_connection.py`, dynamically."
     ),
     action="store_true",
   )
@@ -58,9 +60,6 @@ def parse_args():
 
 
 def send_message(message: str):
-  """
-  Send a single message to the waiting server (wait_for_connection).
-  """
   with _LOCK:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
       try:
@@ -75,11 +74,6 @@ def send_message(message: str):
 
 
 def request_env_state() -> dict[str, str] | None:
-  """
-  Request environment data from the server side (the waiting script).
-  Returns:
-      A dict of environment vars (if available), or None on error.
-  """
   with _LOCK:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
       try:
@@ -189,7 +183,7 @@ def main():
     logging.info("Launching interactive Bash session...")
     subprocess.run(["bash", "-i"], env=env_data)
   else:
-    logging.info("Launching interactive PowerShell session on Windows...")
+    logging.info("Launching interactive PowerShell session...")
     # -NoExit keeps the shell open after running any profile scripts
     subprocess.run(["powershell.exe", "-NoExit"], env=env_data)
 
