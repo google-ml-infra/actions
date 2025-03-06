@@ -64,7 +64,7 @@ def should_halt_for_connection(wait_regardless: bool = False) -> bool:
   # Check if any of the relevant labels are present
   labels = retrieve_labels(print_to_stdout=False)
 
-  if HALT_ON_ERROR_LABEL and os.path.exists(utils.STATE_INFO_PATH):
+  if HALT_ON_ERROR_LABEL in labels and os.path.exists(utils.STATE_INFO_PATH):
     logging.info(
       f"Halt for connection requested via presence "
       f"of the {HALT_ON_ERROR_LABEL!r} label.\n"
@@ -134,7 +134,9 @@ async def process_messages(reader, writer):
       WaitInfo.timeout = WaitInfo.re_connect_timeout
       logging.info("Remote connection detected.")
     elif message == "env_state_requested":
-      logging.info("Environment state requested")
+      logging.info(
+        "Environment state requested (to disable on next time, add `--no-env` to command"
+      )
       # Send the JSON dump of os.environ
       env_data = preserve_run_state.save_env_state(out_path=None)
       json_data = json.dumps(env_data)
@@ -148,27 +150,16 @@ async def process_messages(reader, writer):
 
 
 async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
-  # Print out the data required to connect to this VM
-  runner_name = os.getenv("CONNECTION_POD_NAME")
-  cluster = os.getenv("CONNECTION_CLUSTER")
-  location = os.getenv("CONNECTION_LOCATION")
-  ns = os.getenv("CONNECTION_NS")
-  actions_path = os.path.dirname(__file__)
+  # If Python was installed via setup-python,
+  # some additional bootstrapping is done to have it work
+  # in the connection session, so `notify_connection.py` can be run
+  setup_python_env_path = preserve_run_state.save_setup_python_installed_python_env()
 
-  if platform.system() == "Windows":
-    actions_path = actions_path.replace("\\", "\\\\")
+  # Print out the data required to connect to this VM
+  connect_command = construct_connection_command(setup_python_env_path)
 
   logging.info("Googler connection only")
   logging.info("See go/ml-github-actions:connect for details")
-  connect_command = (
-    f"CONNECTION COMMAND\n"
-    f"ml-actions-connect "
-    f"--runner={runner_name} "
-    f"--ns={ns} "
-    f"--loc={location} "
-    f"--cluster={cluster} "
-    f"--halt_directory={actions_path}"
-  )
   logging.info(connect_command, extra={"bold": True, "underline": True})
 
   server = await asyncio.start_server(process_messages, host, port)
@@ -204,6 +195,45 @@ async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
     logging.info("Waiting process terminated.")
 
 
+def construct_connection_command(setup_python_env_path: str) -> str:
+  runner_name = os.getenv("CONNECTION_POD_NAME")
+  cluster = os.getenv("CONNECTION_CLUSTER")
+  location = os.getenv("CONNECTION_LOCATION")
+  ns = os.getenv("CONNECTION_NS")
+
+  actions_path = os.path.dirname(__file__)
+
+  is_windows = platform.system() == "Windows"
+  if is_windows:
+    actions_path = actions_path.replace("\\", "\\\\")
+
+  script_to_run = ""
+  if setup_python_env_path:
+    # Assumptions are made here that Bash and Powershell respectively
+    # are available on the machine
+    if utils.is_linux_or_linux_like_shell():
+      script_to_run = (
+        f'--entrypoint="bash {actions_path}/connect.sh {setup_python_env_path}"'
+      )
+    else:
+      setup_python_env_path = setup_python_env_path.replace("\\", "\\\\")
+      script_to_run = (
+        f'--entrypoint="powershell {actions_path}\\connect.ps1 {setup_python_env_path}"'
+      )
+
+  connect_command = (
+    f"CONNECTION COMMAND\n"
+    f"ml-actions-connect "
+    f"--runner={runner_name} "
+    f"--ns={ns} "
+    f"--loc={location} "
+    f"--cluster={cluster} "
+    f"--halt_directory={actions_path} "
+    f"{script_to_run}"
+  )
+  return connect_command
+
+
 def main(wait_regardless: bool = False):
   try:
     if should_halt_for_connection(wait_regardless=wait_regardless):
@@ -220,4 +250,4 @@ def main(wait_regardless: bool = False):
 
 
 if __name__ == "__main__":
-  main()
+  main(wait_regardless=True)
