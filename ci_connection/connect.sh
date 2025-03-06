@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -ex
-
 # Bootstraps Python setup
 FILE_PATH="$1"
 
