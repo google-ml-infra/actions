@@ -173,9 +173,9 @@ def main():
     os.chdir(directory)
 
   if shell_command:
-    print(f"=" * 100)
+    print("=" * 100)
     print(f"Failed command was:\n{shell_command}\n")
-    print(f"=" * 100)
+    print("=" * 100)
 
   if utils.is_linux_or_linux_like_shell():
     logging.info("Launching interactive Bash session...")
