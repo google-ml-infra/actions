@@ -94,7 +94,7 @@ class _ColoredFormatter(logging.Formatter):
 
 
 def setup_logging():
-  level = logging.DEBUG if not _SHOW_DEBUG else logging.DEBUG
+  level = logging.INFO if not _SHOW_DEBUG else logging.DEBUG
   logger = logging.getLogger()
   logger.setLevel(level)
   logger.handlers.clear()

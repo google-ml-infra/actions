@@ -64,7 +64,7 @@ def should_halt_for_connection(wait_regardless: bool = False) -> bool:
   # Check if any of the relevant labels are present
   labels = retrieve_labels(print_to_stdout=False)
 
-  if HALT_ON_ERROR_LABEL and os.path.exists(utils.STATE_INFO_PATH):
+  if HALT_ON_ERROR_LABEL in labels and os.path.exists(utils.STATE_INFO_PATH):
     logging.info(
       f"Halt for connection requested via presence "
       f"of the {HALT_ON_ERROR_LABEL!r} label.\n"
