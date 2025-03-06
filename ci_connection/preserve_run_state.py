@@ -121,8 +121,7 @@ def parse_cli_args() -> argparse.Namespace:
 
 
 def _get_names_from_env_vars_list(
-        env_var_list: str,
-        raise_on_invalid_value: bool = False
+  env_var_list: str, raise_on_invalid_value: bool = False
 ) -> list[str]:
   """Best-effort attempt to validate and parse env var names from a comma-separated string."""
   env_vars_list = env_var_list.strip()
@@ -158,10 +157,10 @@ def add_vars_from_env(env_list_var_name: str, var_list: Sequence[str]) -> list[s
 
 
 def save_env_state(
-        out_path: str | None = utils.STATE_ENV_OUT_PATH,
-        denylist: Sequence[str] = VARS_DENYLIST,
-        allowlist: Sequence[str] | None = None,
-        check_env_lists_for_additional_vars: bool = True,
+  out_path: str | None = utils.STATE_ENV_OUT_PATH,
+  denylist: Sequence[str] = VARS_DENYLIST,
+  allowlist: Sequence[str] | None = None,
+  check_env_lists_for_additional_vars: bool = True,
 ) -> dict[str, str]:
   """
   Retrieves the current env var state in the form of KEY='VALUE' lines,
@@ -209,10 +208,10 @@ def save_env_state(
 
 
 def save_current_execution_info(
-        shell_command: str | None = None,
-        directory: str | None = None,
-        env_state: dict[str, str] = None,
-        out_path: str = utils.STATE_INFO_PATH,
+  shell_command: str | None = None,
+  directory: str | None = None,
+  env_state: dict[str, str] = None,
+  out_path: str = utils.STATE_INFO_PATH,
 ):
   """Writes info such as the last command, current directory, and env, to a file."""
   with open(out_path, "w", encoding="utf-8") as f:
@@ -228,23 +227,25 @@ def save_current_execution_info(
 def save_setup_python_installed_python_env() -> str | None:
   """Add setup-python installed Python to path, so connections can use it.
 
-    Some workflows that use stock Docker images for speed install Python
-    via setup-python.
-    This installation adds Python to PATH.
-    The connection script, on connection, attempts to execute
-    `python notify_connection.py`, which doesn't work because the PATH
-    in the connection's terminal session does not contain
-    the freshly-installed Python's location.
+  Some workflows that use stock Docker images for speed install Python
+  via setup-python.
+  This installation adds Python to PATH.
+  The connection script, on connection, attempts to execute
+  `python notify_connection.py`, which doesn't work because the PATH
+  in the connection's terminal session does not contain
+  the freshly-installed Python's location.
 
-    This function saves the necessary variables added/updated by setup-python.
-    Its output is then used by OS-specific scripts to add Python to PATH, so
-    that it can then be used to run notify_connection.py.
+  This function saves the necessary variables added/updated by setup-python.
+  Its output is then used by OS-specific scripts to add Python to PATH, so
+  that it can then be used to run notify_connection.py.
   """
 
   if not os.environ.get("pythonLocation"):
     return  # setup-python was not run
 
-  logging.debug("setup-python installation found, creating an env file for bootstrapping...")
+  logging.debug(
+    "setup-python installation found, creating an env file for bootstrapping..."
+  )
 
   env_vars = {}
 
@@ -269,7 +270,7 @@ def save_setup_python_installed_python_env() -> str | None:
     keys.append("APPDATA")
 
   for key in keys:
-    logging.debug(f'Retrieving key {key}')
+    logging.debug(f"Retrieving key {key}")
     value = os.environ.get(key)
     if value is not None:
       env_vars[key] = value
@@ -291,9 +292,7 @@ def save_all_info():
   # Convert CLI arguments for allow/deny lists to lists
   cli_denylist = []
   if args.env_vars_denylist:
-    cli_denylist.extend(
-      _get_names_from_env_vars_list(args.env_vars_denylist)
-    )
+    cli_denylist.extend(_get_names_from_env_vars_list(args.env_vars_denylist))
   cli_allowlist = []
   if args.env_vars_allowlist:
     cli_allowlist = _get_names_from_env_vars_list(args.env_vars_allowlist)

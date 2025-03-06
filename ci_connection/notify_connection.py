@@ -112,9 +112,7 @@ def get_execution_state(no_env: bool = True):
   to retrieve the environment from the remote waiting server.
   """
   if not os.path.exists(utils.STATE_INFO_PATH):
-    logging.debug(
-      f"Did not find the execution state file at {utils.STATE_INFO_PATH}"
-    )
+    logging.debug(f"Did not find the execution state file at {utils.STATE_INFO_PATH}")
     return None, None, None
 
   logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
@@ -175,9 +173,9 @@ def main():
     os.chdir(directory)
 
   if shell_command:
-    print(f"="*100)
+    print(f"=" * 100)
     print(f"Failed command was:\n{shell_command}\n")
-    print(f"="*100)
+    print(f"=" * 100)
 
   if utils.is_linux_or_linux_like_shell():
     logging.info("Launching interactive Bash session...")

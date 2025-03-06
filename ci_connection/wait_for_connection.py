@@ -134,7 +134,9 @@ async def process_messages(reader, writer):
       WaitInfo.timeout = WaitInfo.re_connect_timeout
       logging.info("Remote connection detected.")
     elif message == "env_state_requested":
-      logging.info("Environment state requested (to disable on next time, add `--no-env` to command")
+      logging.info(
+        "Environment state requested (to disable on next time, add `--no-env` to command"
+      )
       # Send the JSON dump of os.environ
       env_data = preserve_run_state.save_env_state(out_path=None)
       json_data = json.dumps(env_data)
@@ -210,10 +212,14 @@ def construct_connection_command(setup_python_env_path: str) -> str:
     # Assumptions are made here that Bash and Powershell respectively
     # are available on the machine
     if utils.is_linux_or_linux_like_shell():
-      script_to_run = f'--entrypoint="bash {actions_path}/connect.sh {setup_python_env_path}"'
+      script_to_run = (
+        f'--entrypoint="bash {actions_path}/connect.sh {setup_python_env_path}"'
+      )
     else:
       setup_python_env_path = setup_python_env_path.replace("\\", "\\\\")
-      script_to_run = f'--entrypoint="powershell {actions_path}\\connect.ps1 {setup_python_env_path}"'
+      script_to_run = (
+        f'--entrypoint="powershell {actions_path}\\connect.ps1 {setup_python_env_path}"'
+      )
 
   connect_command = (
     f"CONNECTION COMMAND\n"
