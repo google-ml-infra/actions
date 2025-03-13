@@ -1,8 +1,9 @@
 # Workflow to continuously regenerate the data for the ci dashboard
 name: Generate dashboard data
 on:
-  schedule:
-    - cron: '*/10 * * * *'
+  push:
+    branches:
+      - main
   pull_request:
     paths:
       - ci_dashboard/data_query/**
@@ -38,10 +39,6 @@ jobs:
         run: |
           cd ci_dashboard/data_query
           go run main.go
-      - uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # ratchet:actions/upload-artifact@v4
-        with:
-          name: workflow-run-main
-          path: ci_dashboard/data_query/workflow_runs.json
   generate-angular:
     runs-on: ubuntu-latest
 
@@ -71,7 +68,7 @@ jobs:
         name: frontend
         path: ci_dashboard/frontend/dist/ci-dashboard/browser
   upload-site:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'push'
     needs: generate-json
     # Grant GITHUB_TOKEN the permissions required to make a Pages deployment
     permissions:
@@ -84,12 +81,6 @@ jobs:
     # Specify runner + deployment step
     runs-on: ubuntu-latest
     steps:
-      - name: Download workflow files
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # ratchet:actions/download-artifact@v4
-        with:
-          path: data
-          pattern: workflow-run-*
-          merge-multiple: true
       - name: Download frontend files
         uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # ratchet:actions/download-artifact@v4
         with:
@@ -99,8 +90,6 @@ jobs:
         run: |
           ls -la
           mkdir final_site
-          mkdir final_site/data
-          cp data/* final_site/data/
           cp frontend/* final_site
           ls -la final_site/
           ls -la final_site/data/
