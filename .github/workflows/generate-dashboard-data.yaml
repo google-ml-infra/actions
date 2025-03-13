@@ -92,7 +92,6 @@ jobs:
           mkdir final_site
           cp frontend/* final_site
           ls -la final_site/
-          ls -la final_site/data/
       - name: Upload static files as artifact
         id: upload
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # or specific "vX.X.X" version tag for this action ratchet:actions/upload-pages-artifact@v3
