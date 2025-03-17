@@ -187,7 +187,7 @@ def save_env_state(
 
   out_vars = []
   for k, v in os.environ.items():
-    # If we have an allowlist and the variable is not in it, skip it
+    # If the allowlist is not empty, and the variable is not in it, skip it
     if final_allowlist and k not in final_allowlist:
       continue
     # If the variable is in the denylist, skip it
@@ -222,66 +222,6 @@ def save_current_execution_info(
     }
     json.dump(output, f, indent=4)
   return output
-
-
-def save_setup_python_installed_python_env() -> str | None:
-  """Add setup-python installed Python to path, so connections can use it.
-
-  Some workflows that use stock Docker images for speed install Python
-  via setup-python.
-  This installation adds Python to PATH.
-  The connection script, on connection, attempts to execute
-  `python notify_connection.py`, which doesn't work because the PATH
-  in the connection's terminal session does not contain
-  the freshly-installed Python's location.
-
-  This function saves the necessary variables added/updated by setup-python.
-  Its output is then used by OS-specific scripts to add Python to PATH, so
-  that it can then be used to run notify_connection.py.
-  """
-
-  if not os.environ.get("pythonLocation"):
-    return  # setup-python was not run
-
-  logging.debug(
-    "setup-python installation found, creating an env file for bootstrapping..."
-  )
-
-  env_vars = {}
-
-  # These are the variables set by `setup-python` so that its .so/.dll files
-  # are in path, and so that it can be invoked via `python`:
-  # https://github.com/actions/setup-python/blob/6ca8e8598faa206f7140a65ba31b899bebe16f58/src/find-python.ts#L111-L153
-  # Should that section change, this function may also have to be.
-  # Some variables server some other function (Cmake), but it"s fine to use those as well.
-  keys = [
-    "PATH",
-    "PKG_CONFIG_PATH",
-    "Python_ROOT_DIR",
-    "Python2_ROOT_DIR",
-    "Python3_ROOT_DIR",
-    "pythonLocation",
-  ]
-
-  system = platform.system()
-  if system == "Linux":
-    keys.append("LD_LIBRARY_PATH")
-  elif system == "Windows":
-    keys.append("APPDATA")
-
-  for key in keys:
-    logging.debug(f"Retrieving key {key}")
-    value = os.environ.get(key)
-    if value is not None:
-      env_vars[key] = value
-
-  out_str = "\n".join(f"{k}={v}" for k, v in env_vars.items())
-  os.makedirs(utils.STATE_OUT_DIR, exist_ok=True)
-  with open(utils.PYTHON_BOOTSTRAP_PATH, "w", encoding="utf-8") as f:
-    f.write(out_str)
-
-  logging.debug("Creation of env file for setup-python bootstrapping finished")
-  return utils.PYTHON_BOOTSTRAP_PATH
 
 
 def save_all_info():

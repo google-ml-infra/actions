@@ -22,13 +22,18 @@ import sys
 from datetime import datetime
 
 
+class ConnectionSignals:
+  CONNECTION_ESTABLISHED: str = "connection_established"
+  CONNECTION_CLOSED: str = "connection_closed"
+  KEEP_ALIVE: str = "keep_alive"
+  ENV_STATE_REQUESTED: str = "env_state_requested"
+
+
 # Default path constants for saving/reading execution state
 STATE_OUT_DIR = os.path.join(os.path.expandvars("$HOME"), ".workflow_state")
 # Path for info for last command, current directory, env vars, etc.
 STATE_EXEC_INFO_FILENAME = "execution_state.json"
 STATE_INFO_PATH = os.path.join(STATE_OUT_DIR, STATE_EXEC_INFO_FILENAME)
-PYTHON_BOOTSTRAP_FILENAME = "python_bootstrap.env"
-PYTHON_BOOTSTRAP_PATH = os.path.join(STATE_OUT_DIR, PYTHON_BOOTSTRAP_FILENAME)
 # Environment variables standalone file path, for being ingested via `source`,
 STATE_ENV_FILENAME = "env.txt"
 STATE_ENV_OUT_PATH = os.path.join(STATE_OUT_DIR, STATE_ENV_FILENAME)

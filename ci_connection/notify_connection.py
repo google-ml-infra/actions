@@ -31,6 +31,7 @@ import subprocess
 
 import preserve_run_state
 import utils
+from utils import ConnectionSignals
 
 
 utils.setup_logging()
@@ -59,50 +60,61 @@ def parse_args():
   return parser.parse_args()
 
 
-def send_message(message: str):
+def send_message(message: str, expect_response: bool = False) -> bytes | None:
+  """
+  Communicates with the server by sending a message and optionally receiving a response.
+
+  Args:
+      message: The message to send
+      expect_response: Whether to wait for and return a response
+
+  Returns:
+      The raw response data if expect_response is True, otherwise None
+  """
   with _LOCK:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
       try:
         sock.connect((HOST, PORT))
         sock.sendall(f"{message}\n".encode("utf-8"))
+
+        if expect_response:
+          data = b""
+          while True:
+            chunk = sock.recv(4096)
+            if not chunk:
+              # Connection closed by server
+              break
+            data += chunk
+          return data
+        return None
       except ConnectionRefusedError:
         logging.error(
           f"Could not connect to server at {HOST}:{PORT}. Is the server running?"
         )
       except Exception as e:
         logging.error(f"An error occurred: {e}")
+      return None
 
 
 def request_env_state() -> dict[str, str] | None:
-  with _LOCK:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-      try:
-        sock.connect((HOST, PORT))
-        # Send the request message
-        sock.sendall("env_state_requested\n".encode("utf-8"))
-        # Read the response until the connection is closed
-        data = b""
-        while True:
-          chunk = sock.recv(4096)
-          if not chunk:
-            # Connection closed by server
-            break
-          data += chunk
-        json_data = data.decode("utf-8").strip()
-        env_data = json.loads(json_data)
-        return env_data
-      except Exception as e:
-        logging.error(f"An error occurred while requesting env state: {e}")
-        return None
+  data = send_message(ConnectionSignals.ENV_STATE_REQUESTED, expect_response=True)
+  if not data:
+    return None
+  try:
+    json_data = data.decode("utf-8").strip()
+    env_data = json.loads(json_data)
+    return env_data
+  except Exception as e:
+    logging.error(f"An error occurred while parsing env state response: {e}")
 
 
 def keep_alive():
   while True:
     time.sleep(KEEP_ALIVE_INTERVAL)
-    send_message("keep_alive")
+    send_message(ConnectionSignals.KEEP_ALIVE)
 
 
-def get_execution_state(no_env: bool = True):
+def get_execution_state(no_env: bool = False):
   """
   Returns the shell command, directory, and environment to replicate.
 
@@ -113,25 +125,25 @@ def get_execution_state(no_env: bool = True):
   """
   if not os.path.exists(utils.STATE_INFO_PATH):
     logging.debug(f"Did not find the execution state file at {utils.STATE_INFO_PATH}")
-    return None, None, None
-
-  logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
-  with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
-    try:
-      data: preserve_run_state.StateInfo = json.load(f)
-    except json.JSONDecodeError as e:
-      logging.error(
-        f"Could not parse the execution state file:\n{e.msg}\n"
-        "Continuing without reproducing the environment..."
-      )
-      return None, None, None
+    data = {}
+  else:
+    logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
+    with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
+      try:
+        data: preserve_run_state.StateInfo = json.load(f)
+      except json.JSONDecodeError as e:
+        logging.error(
+          f"Could not parse the execution state file:\n{e.msg}\n"
+          "Continuing without reproducing the environment..."
+        )
+        data = {}
 
   shell_command = data.get("shell_command")
   directory = data.get("directory")
 
   if no_env:
     env = None
-  # Prefer `env` data from file over the one available via server,
+  # Prefer `env` data from file over the data available via server,
   # since its presence there means its was explicitly requested by the user
   elif "env" in data:
     env = data.get("env")
@@ -143,17 +155,14 @@ def get_execution_state(no_env: bool = True):
 
 def main():
   """
-  Main entry point:
-    1. Parse CLI args.
-    2. Signal to the waiting script that we have 'connection_established'.
-    3. Start a keep-alive thread to maintain the connection.
-    4. Load the previous environment/directory/command if available
-       and desired, then spawn an interactive shell in that context.
-    5. After the shell exit, signal the waiting script that the connection is closed.
+  1. Signal to the waiting script that we have 'connection_established'.
+  2. Start a keep-alive thread to maintain the connection.
+  3. Load the previous environment/directory/command if available
+     and desired, then spawn an interactive shell in that context.
   """
   args = parse_args()
 
-  send_message("connection_established")
+  send_message(ConnectionSignals.CONNECTION_ESTABLISHED)
 
   # Start keep-alive pings on a background thread
   timer_thread = threading.Thread(target=keep_alive, daemon=True)
@@ -185,7 +194,7 @@ def main():
     # -NoExit keeps the shell open after running any profile scripts
     subprocess.run(["powershell.exe", "-NoExit"], env=env_data)
 
-  send_message("connection_closed")
+  send_message(ConnectionSignals.CONNECTION_CLOSED)
 
 
 if __name__ == "__main__":
