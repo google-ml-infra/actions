@@ -155,8 +155,10 @@ async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
   # Print out the data required to connect to this VM
   connect_command = construct_connection_command()
 
+
   logging.info("Googler connection only")
   logging.info("See go/ml-github-actions:connect for details")
+
   logging.info(connect_command, extra={"bold": True, "underline": True})
 
   server = await asyncio.start_server(process_messages, host, port)
