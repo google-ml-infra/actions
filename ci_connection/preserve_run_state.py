@@ -26,7 +26,6 @@ import argparse
 import json
 import logging
 import os
-import platform
 import re
 from typing import Sequence, TypedDict
 
