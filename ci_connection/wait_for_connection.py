@@ -158,15 +158,18 @@ async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
   if platform.system() == "Windows":
     actions_path = actions_path.replace("\\", "\\\\")
 
-  logging.info("Googler connection only\nSee go/ml-github-actions:connect for details")
-  logging.info(
-    f"Connection string: ml-actions-connect "
+  logging.info("Googler connection only")
+  logging.info("See go/ml-github-actions:connect for details")
+  connect_command = (
+    f"CONNECTION COMMAND\n"
+    f"ml-actions-connect "
     f"--runner={runner_name} "
     f"--ns={ns} "
     f"--loc={location} "
     f"--cluster={cluster} "
     f"--halt_directory={actions_path}"
   )
+  logging.info(connect_command, extra={"bold": True, "underline": True})
 
   server = await asyncio.start_server(process_messages, host, port)
   terminate = False

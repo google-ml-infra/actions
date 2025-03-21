@@ -18,6 +18,7 @@
 import logging
 import os
 import sys
+from datetime import datetime
 
 
 # Default path constants for saving/reading execution state
@@ -45,9 +46,58 @@ _SHOW_DEBUG = bool(
 )
 
 
+_ANSI = {
+  # Colors
+  "DEBUG": "\033[94m",  # Light Blue
+  "INFO": "\033[92m",  # Light Green
+  "WARNING": "\033[93m",  # Light Yellow
+  "CRITICAL": "\033[91m",  # Red
+  "ERROR": "\033[91m",  # Red
+  # Styles
+  "BOLD": "\033[1m",
+  "UNDERLINE": "\033[4m",
+  # Reset the style/coloring
+  "RESET": "\033[0m",
+}
+
+
+class _ColoredFormatter(logging.Formatter):
+  def format(self, record):
+    super().format(record)
+    colored_text = self.style_text(f"{record.levelname}: {record.msg}", record)
+    record.msg = self.style_text(record.msg, record)
+    file_name = record.filename.removesuffix(".py")
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    out = f"[{file_name}] " if record.levelno <= logging.DEBUG else ""
+    out += f"{timestamp} {colored_text}"
+    if record.exc_text:
+      out += f"\n{self.style_text(record.exc_text, record)}"
+    return out
+
+  @staticmethod
+  def style_text(text: str, record: logging.LogRecord) -> str:
+    # Get ANSI Escape codes
+    color = _ANSI.get(record.levelname, "")
+    styles = [color]
+    if hasattr(record, "bold"):
+      styles.append(_ANSI["BOLD"])
+    if hasattr(record, "underline"):
+      styles.append(_ANSI["UNDERLINE"])
+    styles = "".join(styles)
+
+    lines = text.split("\n")
+    out = [f"{styles}{line}{_ANSI['RESET']}" for line in lines]
+    return "\n".join(out)
+
+
 def setup_logging():
-  logging.basicConfig(
-    level=logging.INFO if not _SHOW_DEBUG else logging.DEBUG,
-    format="%(levelname)s: %(message)s",
-    stream=sys.stderr,
-  )
+  level = logging.INFO if not _SHOW_DEBUG else logging.DEBUG
+  logger = logging.getLogger()
+  logger.setLevel(level)
+  logger.handlers.clear()
+
+  handler = logging.StreamHandler(sys.stdout)
+  handler.setFormatter(_ColoredFormatter())
+  handler.setLevel(level)
+  logger.addHandler(handler)
+  return logger
