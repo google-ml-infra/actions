@@ -17,12 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
-      - uses: astral-sh/ruff-action@39f75e526a505e26a302f8796977b50c13720edf # ratchet:astral-sh/ruff-action@v3.2.1
+      - uses: astral-sh/ruff-action@9828f49eb4cadf267b40eaa330295c412c68c1f9 # ratchet:astral-sh/ruff-action@v3.2.2
   format:
     name: Ruff Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
-      - uses: astral-sh/ruff-action@39f75e526a505e26a302f8796977b50c13720edf # ratchet:astral-sh/ruff-action@v3.2.1
+      - uses: astral-sh/ruff-action@9828f49eb4cadf267b40eaa330295c412c68c1f9 # ratchet:astral-sh/ruff-action@v3.2.2
         with:
           args: "format --check --diff"
