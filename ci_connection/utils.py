@@ -17,8 +17,16 @@
 
 import logging
 import os
+import platform
 import sys
 from datetime import datetime
+
+
+class ConnectionSignals:
+  CONNECTION_ESTABLISHED: str = "connection_established"
+  CONNECTION_CLOSED: str = "connection_closed"
+  KEEP_ALIVE: str = "keep_alive"
+  ENV_STATE_REQUESTED: str = "env_state_requested"
 
 
 # Default path constants for saving/reading execution state
@@ -101,3 +109,24 @@ def setup_logging():
   handler.setLevel(level)
   logger.addHandler(handler)
   return logger
+
+
+def is_linux_or_linux_like_shell():
+  """
+  Returns True if Python is running on an actual Linux system
+  or in a Linux-like shell (MSYS2, Git Bash, Cygwin, etc.).
+  """
+  # Check if the operating system is Linux
+  if platform.system() == "Linux":
+    return True
+
+  # Check for common environment variables used by MSYS2, Git Bash, Cygwin, etc.
+  ostype = os.environ.get("OSTYPE", "").lower()
+  msystem = os.environ.get("MSYSTEM", "").lower()
+
+  if any(token in ostype for token in {"linux-gnu", "msys", "cygwin"}):
+    return True
+  if any(token in msystem for token in {"mingw", "msys"}):
+    return True
+
+  return False

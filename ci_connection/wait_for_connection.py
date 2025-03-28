@@ -24,7 +24,9 @@ import platform
 
 import preserve_run_state
 import utils
+
 from get_labels import retrieve_labels
+from utils import ConnectionSignals
 
 utils.setup_logging()
 
@@ -64,7 +66,7 @@ def should_halt_for_connection(wait_regardless: bool = False) -> bool:
   # Check if any of the relevant labels are present
   labels = retrieve_labels(print_to_stdout=False)
 
-  if HALT_ON_ERROR_LABEL and os.path.exists(utils.STATE_INFO_PATH):
+  if HALT_ON_ERROR_LABEL in labels and os.path.exists(utils.STATE_INFO_PATH):
     logging.info(
       f"Halt for connection requested via presence "
       f"of the {HALT_ON_ERROR_LABEL!r} label.\n"
@@ -123,18 +125,20 @@ async def process_messages(reader, writer):
   # Since this is a stream, multiple messages could come in at once
   messages = [m for m in data.decode().strip().splitlines() if m]
   for message in messages:
-    if message == "keep_alive":
+    if message == ConnectionSignals.KEEP_ALIVE:
       logging.info("Keep-alive received")
       WaitInfo.last_time = time.time()
-    elif message == "connection_closed":
+    elif message == ConnectionSignals.CONNECTION_CLOSED:
       WaitInfo.waiting_for_close = True
       WaitInfo.stop_event.set()
-    elif message == "connection_established":
+    elif message == ConnectionSignals.CONNECTION_ESTABLISHED:
       WaitInfo.last_time = time.time()
       WaitInfo.timeout = WaitInfo.re_connect_timeout
       logging.info("Remote connection detected.")
-    elif message == "env_state_requested":
-      logging.info("Environment state requested")
+    elif message == ConnectionSignals.ENV_STATE_REQUESTED:
+      logging.info(
+        "Environment state requested (to disable on next time, add `--no-env` to command)"
+      )
       # Send the JSON dump of os.environ
       env_data = preserve_run_state.save_env_state(out_path=None)
       json_data = json.dumps(env_data)
@@ -149,26 +153,10 @@ async def process_messages(reader, writer):
 
 async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
   # Print out the data required to connect to this VM
-  runner_name = os.getenv("CONNECTION_POD_NAME")
-  cluster = os.getenv("CONNECTION_CLUSTER")
-  location = os.getenv("CONNECTION_LOCATION")
-  ns = os.getenv("CONNECTION_NS")
-  actions_path = os.path.dirname(__file__)
-
-  if platform.system() == "Windows":
-    actions_path = actions_path.replace("\\", "\\\\")
+  connect_command = construct_connection_command()
 
   logging.info("Googler connection only")
   logging.info("See go/ml-github-actions:connect for details")
-  connect_command = (
-    f"CONNECTION COMMAND\n"
-    f"ml-actions-connect "
-    f"--runner={runner_name} "
-    f"--ns={ns} "
-    f"--loc={location} "
-    f"--cluster={cluster} "
-    f"--halt_directory={actions_path}"
-  )
   logging.info(connect_command, extra={"bold": True, "underline": True})
 
   server = await asyncio.start_server(process_messages, host, port)
@@ -202,6 +190,30 @@ async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
       logging.info(f"Time since last keep-alive: {elapsed_seconds}s")
 
     logging.info("Waiting process terminated.")
+
+
+def construct_connection_command() -> str:
+  runner_name = os.getenv("CONNECTION_POD_NAME")
+  cluster = os.getenv("CONNECTION_CLUSTER")
+  location = os.getenv("CONNECTION_LOCATION")
+  ns = os.getenv("CONNECTION_NS")
+
+  actions_path = os.path.dirname(__file__)
+
+  is_windows = platform.system() == "Windows"
+  if is_windows:
+    actions_path = actions_path.replace("\\", "\\\\")
+
+  connect_command = (
+    f"CONNECTION COMMAND\n"
+    f"ml-actions-connect "
+    f"--runner={runner_name} "
+    f"--ns={ns} "
+    f"--loc={location} "
+    f"--cluster={cluster} "
+    f"--halt_directory={actions_path} "
+  )
+  return connect_command
 
 
 def main(wait_regardless: bool = False):
