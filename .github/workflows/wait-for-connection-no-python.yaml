@@ -1,11 +1,13 @@
 # A workflow to test waiting for remote connections to the runner.
-name: Connection Test
-# Run on pull_request that is labeled as "optional_ci_tpu" or workflow dispatch
+name: Connection Test without pre-installed Python
+# This is a copy of the wait-for-connection-test.yaml,
+# but with a Python-less container.
+# The connection step should seamlessly find, or install, and use a suitable one.
 on:
   pull_request:
     paths:
     - ci_connection
-    - .github/workflows/wait-for-connection-test.yaml
+    - .github/workflows/wait-for-connection-no-python.yaml
     branches:
       - main
   workflow_dispatch:
@@ -40,10 +42,17 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
       - name: Echo
-        run: |
-          echo "Real job here..."
+        run: echo "Real job here..."
+
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
       - name: Wait For Connection
         uses: ./ci_connection/
+        env:
+          # Hide any Python present under python/python3 for full execution of the
+          # Python finding part of wait_for_connection.sh
+          MLCI_HIDE_PYTHON: 1
+          # Allow installing the packages necessary to install `uv`
+          # via the default package manager e.g., curl, unzip
+          MLCI_INSTALL_MISSING_PACKAGES: 1
         with:
           halt-dispatch-input: ${{ inputs.halt-for-connection }}
