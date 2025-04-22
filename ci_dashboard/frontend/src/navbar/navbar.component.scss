@@ -12,17 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-.mat-toolbar{
-    background-color: rgba(65, 1, 138, 0.783);
-    color: white;
-  }
-  .mat-button{
-     color: white;
-  }
-  .spacer{
-    flex: 1 1 auto;
-  }
-
-  .loading-text {
-    font-size: small;
+.mat-toolbar {
+  background-color: rgba(65, 1, 138, 0.783);
+  color: white;
 }
+
+.mat-button {
+  color: white;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.loading-text {
+  font-size: small;
+}
+
+// .mat-mdc-button {
+//   color: white;
+// }
