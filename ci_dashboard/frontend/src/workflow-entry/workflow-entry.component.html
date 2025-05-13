@@ -26,14 +26,14 @@ limitations under the License. -->
                     }}</a>
             </mat-panel-title>
         </mat-expansion-panel-header>
-        <mat-grid-list cols="15" rowHeight="40px">
+        <mat-grid-list cols="21" rowHeight="40px" gutterSize="15">
             @for (info of workData().statusInfo; track info) {
 
             @if (info.isTitle) {
-            <mat-grid-tile [colspan]="5">
+            <mat-grid-tile [colspan]="6">
                 <div class="left-align-forced">
                     @if (info.url.length > 0) {
-                    <a href="{{info.url}}" class="status-text" target="_blank">{{info.name}}</a>
+                    <a href="{{info.url}}" class="status-text" title="{{info.name}}"  target="_blank">{{info.name | truncate : 125}}</a>
                     }
                     @else {
                     {{info.name}}
@@ -46,7 +46,7 @@ limitations under the License. -->
                 <!-- {{info.conclusion}} -->
                 @if (info.url.length > 0){
                 <a href="{{info.url}}" target="_blank">
-                    <mat-icon matTooltip="Job ran on {{info.date}} with status {{info.status}}" class="{{info.status}}"
+                    <mat-icon matTooltip="Job ran on {{info.date | date:'medium'}} with status {{info.status}}" class="{{info.status}}"
                         fontIcon="{{info.icon}}"></mat-icon>
                 </a>
                 } @else {

@@ -33,7 +33,7 @@ import (
 
 const (
 	defaultBranch      = "main"
-	maxRunsPerWorkflow = 15
+	maxRunsPerWorkflow = 20
 	dataFile           = "workflow_runs.json"
 	daysToConsider     = 14
 	channelLimiting    = 10

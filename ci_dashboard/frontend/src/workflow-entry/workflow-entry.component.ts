@@ -16,6 +16,7 @@ import { Component, input } from '@angular/core';
 import { WorkflowData } from '../workflow-data/workflow-data';
 import { CommonModule } from '@angular/common';
 
+import { TruncatePipe } from '../app/truncate.pipe';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatGridListModule } from '@angular/material/grid-list';
 import { MatIconModule } from '@angular/material/icon';
@@ -27,7 +28,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
     MatExpansionModule,
     MatGridListModule,
     MatIconModule,
-    MatTooltipModule
+    MatTooltipModule,
+    TruncatePipe
   ],
   templateUrl: './workflow-entry.component.html',
   styleUrl: './workflow-entry.component.scss'

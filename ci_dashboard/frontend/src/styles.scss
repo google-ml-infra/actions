@@ -1,15 +1,23 @@
 /* You can add global styles to this file, and also import other style files */
 @use '@angular/material' as mat;
 
+$primary-palette: mat.$violet-palette;
+
+
 html {
   color-scheme: light dark;
   @include mat.theme((
-    color: mat.$violet-palette,
+    color: (
+      primary: $primary-palette,
+      tertiary: $primary-palette,
+    ),
     typography: Roboto,
     density: 0
+  ), $overrides: (
+    mat-sys-surface: #ffffff
   ));
 }
-
+// 151316
 body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 
 
@@ -19,4 +27,5 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 .material-icons.skipped {color:light-dark(rgba(154, 160, 166),rgba(154, 160, 166))}
 .material-icons.running {color:light-dark(#e37400,rgb(241, 248, 48))}
 .material-icons.pending {color:light-dark(#5f6368,rgb(110, 0, 130))}
+.material-icons.unknown {color:light-dark(#202124,rgb(176, 176, 176))}
 .material-icons.unknown {color:light-dark(#202124,rgb(176, 176, 176))}

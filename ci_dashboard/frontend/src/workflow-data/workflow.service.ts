@@ -53,6 +53,11 @@ export class WorkflowService implements OnDestroy {
           });
 
           const workData = value as WorkflowData
+          // Replace the url to go to the runs if it fits the correct format
+          if (workData.workflow_url.includes("blob/main/.github")){
+            workData.workflow_url = workData.workflow_url.replace("blob/main/.github","actions")
+          }
+
           if (workData.runs != null) {
             let wd = value as WorkflowData; // Type assertion to Workflow
             wd.statusInfo = this.statusInfoForWorkflow(wd);
@@ -169,7 +174,7 @@ export class WorkflowService implements OnDestroy {
   // Flatten into how we structure columns
   statusInfoForWorkflow(workflowData: WorkflowData): Array<StatusInfo> {
     let statusInfo = Array<StatusInfo>()
-    const numberPerRow = 11
+    const numberPerRow = 15
 
     // Grab the names
     let names = Array<string>()
@@ -190,7 +195,7 @@ export class WorkflowService implements OnDestroy {
     const firstRun = workflowData.runs![0]
 
     // Note: The api gatherer will omit any result that does not have at least a single run
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < numberPerRow; i++) {
       // If there are not enough runs we will need to pad out
       if (workflowData.runs!.length <= i) {
         statusInfo.push(this.makeEmptyStatus())
@@ -232,8 +237,8 @@ export class WorkflowService implements OnDestroy {
       statusInfo.push(jobStatus)
 
 
-      // Now iterate all 10 results
-      for (let i = 0; i < 10; i++) {
+      // Now iterate all results to show
+      for (let i = 0; i < numberPerRow; i++) {
         // If there are not enough runs we will need to pad out
         if (workflowData.runs!.length <= i) {
           statusInfo.push(this.makeEmptyStatus())
