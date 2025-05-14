@@ -26,7 +26,7 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  wait-test:
+  ml-build-wait-test:
     strategy:
       fail-fast: false
       matrix:
@@ -43,6 +43,31 @@ jobs:
           set -x
           echo "Real job here..."
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
+      - name: Wait For Connection
+        uses: ./ci_connection/
+        with:
+          halt-dispatch-input: ${{ inputs.halt-for-connection }}
+  uv-wait-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ["linux-x86-n2-16"]
+        python-version: ["3.10.14", "3.13"]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    container:
+      image: ubuntu:22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
+      - name: Echo
+        run: |
+          set -x
+          echo "Real job here..."
+      # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        run: uv python install 3.10 --default --preview --native-tls
       - name: Wait For Connection
         uses: ./ci_connection/
         with:
