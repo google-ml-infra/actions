@@ -8,6 +8,7 @@ on:
     branches:
       - main
       - wait_connect_on_error
+permissions: {}
 defaults:
   run:
     # The default `sh` shell doesn't have the ERR trap status

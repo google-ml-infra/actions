@@ -19,8 +19,11 @@ import json
 import logging
 import os
 import shutil
+import sys
 import time
 import platform
+
+from typing import Optional
 
 import preserve_run_state
 import utils
@@ -45,26 +48,40 @@ def _is_true_like_env_var(var_name: str) -> bool:
   return False
 
 
-def should_halt_for_connection(wait_regardless: bool = False) -> bool:
-  """Check if the workflow should wait, due to inputs, vars, and labels."""
+def check_if_debug_logging_enabled_and_job_type_is_scheduled() -> bool:
+  """
+  Checks if GitHub Actions debug logging is enabled AND the workflow
+  was triggered by a 'schedule' event.
 
-  logging.info("Checking if the workflow should be halted for a connection...")
+  This is useful, or even necessary, as it currently appears to be the sole way
+  of marking a continuous/nightly job to wait for connection.
+  """
+  actions_runner_debug_enabled = _is_true_like_env_var("ACTIONS_RUNNER_DEBUG")
 
-  if wait_regardless:
-    logging.info("Wait for connection requested explicitly via code")
-    return True
+  event_name = os.getenv("GITHUB_EVENT_NAME")
+  is_scheduled_job = event_name == "schedule"
 
-  explicit_halt_requested = _is_true_like_env_var("HALT_DISPATCH_INPUT")
-  if explicit_halt_requested:
-    logging.info(
-      "Halt for connection requested via explicit `halt-dispatch-input` input"
-    )
-    return True
+  result = actions_runner_debug_enabled and is_scheduled_job
+  if result:
+    logging.info("Job is of the 'schedule' type, and runner debugging is enabled")
   else:
-    logging.debug("No `halt-dispatch-input` detected")
+    if not is_scheduled_job:
+      logging.debug(f"Job type is {event_name}, not 'schedule'")
+    if not actions_runner_debug_enabled:
+      logging.debug(
+        f"Job does not have logging enabled: "
+        f"ACTIONS_RUNNER_DEBUG={actions_runner_debug_enabled}"
+      )
+  return result
+
+
+def check_if_labels_require_connection_halting() -> Optional[bool]:
+  """Check whether the necessary conditions, involving labels, are met."""
 
   # Check if any of the relevant labels are present
   labels = retrieve_labels(print_to_stdout=False)
+  if labels is None:
+    return None
 
   if HALT_ON_ERROR_LABEL in labels and os.path.exists(utils.STATE_INFO_PATH):
     logging.info(
@@ -74,7 +91,7 @@ def should_halt_for_connection(wait_regardless: bool = False) -> bool:
     )
     return True
   else:
-    if not HALT_ON_ERROR_LABEL:
+    if HALT_ON_ERROR_LABEL not in labels:
       logging.debug(f"No {HALT_ON_ERROR_LABEL!r} label found on the PR")
     else:
       logging.debug(
@@ -105,6 +122,43 @@ def should_halt_for_connection(wait_regardless: bool = False) -> bool:
       logging.debug(
         f"Found the {HALT_ON_RETRY_LABEL!r} label, but this is the first attempt"
       )
+
+  return False
+
+
+def should_halt_for_connection(wait_regardless: bool = False) -> bool:
+  """Check if the workflow should wait, due to inputs, vars, and labels."""
+
+  logging.info("Checking if the workflow should be halted for a connection...")
+
+  if wait_regardless:
+    logging.info("Wait for connection requested explicitly via code")
+    return True
+
+  explicit_halt_requested = _is_true_like_env_var("HALT_DISPATCH_INPUT")
+  if explicit_halt_requested:
+    logging.info(
+      "Halt for connection requested via explicit `halt-dispatch-input` input"
+    )
+    return True
+  else:
+    logging.debug("No `halt-dispatch-input` detected")
+
+  if check_if_debug_logging_enabled_and_job_type_is_scheduled():
+    return True
+
+  # NOTE: If other methods are added for checking whether a connection should be
+  # waited for, they MUST go above this check, or this check must be changed to
+  # not be fatal
+  labels_require_halting = check_if_labels_require_connection_halting()
+  if labels_require_halting:
+    return True
+  if labels_require_halting is None:
+    logging.critical(
+      "Exiting due to inability to retrieve PR labels, and no "
+      "other halting conditions being met"
+    )
+    sys.exit(1)
 
   return False
 
@@ -151,13 +205,57 @@ async def process_messages(reader, writer):
   writer.close()
 
 
+def construct_connection_command() -> tuple[str, str]:
+  runner_name = os.getenv("CONNECTION_POD_NAME")
+  cluster = os.getenv("CONNECTION_CLUSTER")
+  location = os.getenv("CONNECTION_LOCATION")
+  ns = os.getenv("CONNECTION_NS")
+
+  actions_path = os.path.dirname(__file__)
+
+  is_windows = platform.system() == "Windows"
+  if is_windows:
+    actions_path = actions_path.replace("\\", "\\\\")
+
+  connect_command = (
+    f"ml-actions-connect "
+    f"--runner={runner_name} "
+    f"--ns={ns} "
+    f"--loc={location} "
+    f"--cluster={cluster}"
+  )
+  python_bin = sys.executable
+  main_connect_command = (
+    f"CONNECTION COMMAND (MAIN):\n"
+    f'{connect_command} --entrypoint="{python_bin} {actions_path}/notify_connection.py"'
+  )
+  fallback_connect_command = (
+    f'CONNECTION COMMAND (FALLBACK):\n{connect_command} --entrypoint="bash -i"'
+  )
+
+  return main_connect_command, fallback_connect_command
+
+
 async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
   # Print out the data required to connect to this VM
-  connect_command = construct_connection_command()
+  connect_command, fallback_connect_command = construct_connection_command()
 
   logging.info("Googler connection only")
-  logging.info("See go/ml-github-actions:connect for details")
-  logging.info(connect_command, extra={"bold": True, "underline": True})
+  logging.info("See go/ml-github-actions:connect for details\n")
+  _sep = "-" * 100
+  logging.info(
+    f"\n{_sep}\n{connect_command}\n{_sep}\n", extra={"bold": True, "underline": True}
+  )
+
+  logging.info(f"{fallback_connect_command}\n")
+  logging.info(
+    "If the Python-based command doesn't work, use the Bash fallback above.\n"
+    "Using this fallback will not let the runner know a connection "
+    "was made, and will not cause the runner to wait automatically.\n"
+    "For the fallback, add a wait/sleep somewhere after the "
+    "'Wait for Connection' in your workflow manually, or use a different "
+    "image/container/Python so the main command can run successfully.\n"
+  )
 
   server = await asyncio.start_server(process_messages, host, port)
   terminate = False
@@ -190,30 +288,6 @@ async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
       logging.info(f"Time since last keep-alive: {elapsed_seconds}s")
 
     logging.info("Waiting process terminated.")
-
-
-def construct_connection_command() -> str:
-  runner_name = os.getenv("CONNECTION_POD_NAME")
-  cluster = os.getenv("CONNECTION_CLUSTER")
-  location = os.getenv("CONNECTION_LOCATION")
-  ns = os.getenv("CONNECTION_NS")
-
-  actions_path = os.path.dirname(__file__)
-
-  is_windows = platform.system() == "Windows"
-  if is_windows:
-    actions_path = actions_path.replace("\\", "\\\\")
-
-  connect_command = (
-    f"CONNECTION COMMAND\n"
-    f"ml-actions-connect "
-    f"--runner={runner_name} "
-    f"--ns={ns} "
-    f"--loc={location} "
-    f"--cluster={cluster} "
-    f"--halt_directory={actions_path} "
-  )
-  return connect_command
 
 
 def main(wait_regardless: bool = False):
