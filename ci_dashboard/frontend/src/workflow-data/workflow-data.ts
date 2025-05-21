@@ -103,6 +103,7 @@ export interface WorkflowData {
     expanded: boolean | null;
 }
 
+
 export interface WorkflowRuns {
     [workflowId: string]: WorkflowData;
 }

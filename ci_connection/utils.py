@@ -39,8 +39,20 @@ STATE_ENV_FILENAME = "env.txt"
 STATE_ENV_OUT_PATH = os.path.join(STATE_OUT_DIR, STATE_ENV_FILENAME)
 
 
-# Check if debug logging should be enabled for the scripts.
-_SHOW_DEBUG = bool(os.getenv("MLCI_CONNECTION_DEBUG_LOGGING"))
+# Check if debug logging should be enabled for the scripts:
+# WAIT_FOR_CONNECTION_DEBUG is a custom variable.
+# RUNNER_DEBUG is a GH env var, which can be set
+# in various ways, one of them - enabling debug logging from the UI, when
+# triggering a run:
+# https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
+# https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/troubleshooting-workflows/enabling-debug-logging#enabling-runner-diagnostic-logging
+# Note that the above mentions ACTIONS_RUNNER_DEBUG, but it doesn't appear to get set - perhaps it is set via secrets
+_SHOW_DEBUG = bool(
+  os.getenv(
+    "WAIT_FOR_CONNECTION_DEBUG",
+    os.getenv("RUNNER_DEBUG"),
+  )
+)
 
 
 _ANSI = {

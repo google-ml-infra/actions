@@ -1,22 +1,31 @@
 /* You can add global styles to this file, and also import other style files */
 @use '@angular/material' as mat;
 
+$primary-palette: mat.$violet-palette;
+
+
 html {
   color-scheme: light dark;
   @include mat.theme((
-    color: mat.$violet-palette,
+    color: (
+      primary: $primary-palette,
+      tertiary: $primary-palette,
+    ),
     typography: Roboto,
     density: 0
+  ), $overrides: (
+    mat-sys-surface: #ffffff
   ));
 }
 
 body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 
 
-.material-icons.success {color:rgb(91, 103, 196)}
-.material-icons.failure {color:rgba(221, 87, 87, 0.717)}
-.material-icons.cancelled {color:rgb(176, 176, 176)}
-.material-icons.skipped {color:rgba(184, 178, 178, 0.992)}
-.material-icons.running {color:rgb(185, 189, 81)}
-.material-icons.pending {color:rgb(110, 0, 130)}
-.material-icons.unknown {color:rgb(176, 176, 176)}
+.material-icons.success {color:light-dark(#188038, rgb(129, 201, 149))}
+.material-icons.failure {color:light-dark(#d93025,rgba(242, 139, 130))} 
+.material-icons.cancelled {color:light-dark(#202124,rgb(176, 176, 176))}
+.material-icons.skipped {color:light-dark(rgba(154, 160, 166),rgba(154, 160, 166))}
+.material-icons.running {color:light-dark(#e37400,rgb(241, 248, 48))}
+.material-icons.pending {color:light-dark(#5f6368,rgb(110, 0, 130))}
+.material-icons.unknown {color:light-dark(#202124,rgb(176, 176, 176))}
+.material-icons.unknown {color:light-dark(#202124,rgb(176, 176, 176))}

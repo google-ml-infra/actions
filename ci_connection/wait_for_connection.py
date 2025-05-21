@@ -40,6 +40,18 @@ HALT_ON_RETRY_LABEL = "CI Connection Halt - On Retry"
 HALT_ON_ERROR_LABEL = "CI Connection Halt - On Error"
 
 
+def _get_run_attempt_num() -> int | None:
+  try:
+    attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
+    return attempt
+  except ValueError:  # shouldn't be possible in GitHub Actions, but to be safe
+    logging.error("Could not retrieve GITHUB_RUN_ATTEMPT, assuming first attempt...")
+    return 1
+
+
+_RUN_ATTEMPT = _get_run_attempt_num()  # The workflow (re-)run number
+
+
 def _is_true_like_env_var(var_name: str) -> bool:
   var_val = os.getenv(var_name, "").lower()
   negative_choices = {"0", "false", "n", "no", "none", "null", "n/a"}
@@ -48,29 +60,30 @@ def _is_true_like_env_var(var_name: str) -> bool:
   return False
 
 
-def check_if_debug_logging_enabled_and_job_type_is_scheduled() -> bool:
+def is_debug_logging_enabled_and_job_type_is_schedule_or_workflow_dispatch() -> bool:
   """
-  Checks if GitHub Actions debug logging is enabled AND the workflow
-  was triggered by a 'schedule' event.
+  Check if GitHub Actions debug logging is enabled AND the workflow
+  was triggered by a schedule/workflow_dispatch event.
 
   This is useful, or even necessary, as it currently appears to be the sole way
-  of marking a continuous/nightly job to wait for connection.
+  of marking a continuous job, or a re-run of a nightly job to wait for connection.
   """
-  actions_runner_debug_enabled = _is_true_like_env_var("ACTIONS_RUNNER_DEBUG")
+  actions_debug_enabled = _is_true_like_env_var("RUNNER_DEBUG")
 
   event_name = os.getenv("GITHUB_EVENT_NAME")
-  is_scheduled_job = event_name == "schedule"
+  is_schedule_or_workflow_dispatch = event_name in {"schedule", "workflow_dispatch"}
 
-  result = actions_runner_debug_enabled and is_scheduled_job
+  result = actions_debug_enabled and is_schedule_or_workflow_dispatch
   if result:
-    logging.info("Job is of the 'schedule' type, and runner debugging is enabled")
+    logging.info(
+      "Job is of the 'schedule/workflow_dispatch' type, and runner debugging is enabled"
+    )
   else:
-    if not is_scheduled_job:
-      logging.debug(f"Job type is {event_name}, not 'schedule'")
-    if not actions_runner_debug_enabled:
+    if not is_schedule_or_workflow_dispatch:
+      logging.debug(f"Job type is {event_name}, not 'schedule' or 'workflow_dispatch'")
+    if not actions_debug_enabled:
       logging.debug(
-        f"Job does not have logging enabled: "
-        f"ACTIONS_RUNNER_DEBUG={actions_runner_debug_enabled}"
+        f"Job does not have logging enabled: RUNNER_DEBUG={actions_debug_enabled}"
       )
   return result
 
@@ -107,12 +120,11 @@ def check_if_labels_require_connection_halting() -> Optional[bool]:
   else:
     logging.debug(f"No {HALT_ALWAYS_LABEL!r} label found on the PR")
 
-  attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
-  if attempt > 1 and HALT_ON_RETRY_LABEL in labels:
+  if _RUN_ATTEMPT > 1 and HALT_ON_RETRY_LABEL in labels:
     logging.info(
       f"Halt for connection requested via presence "
       f"of the {HALT_ON_RETRY_LABEL!r} label, "
-      f"due to workflow run attempt being 2+ ({attempt})"
+      f"due to workflow run attempt being 2+ ({_RUN_ATTEMPT})"
     )
     return True
   else:
@@ -126,12 +138,19 @@ def check_if_labels_require_connection_halting() -> Optional[bool]:
   return False
 
 
-def should_halt_for_connection(wait_regardless: bool = False) -> bool:
+def should_halt_for_connection(
+  wait_regardless: bool = False, wait_after_conditions_check: bool = False
+) -> bool:
   """Check if the workflow should wait, due to inputs, vars, and labels."""
 
   logging.info("Checking if the workflow should be halted for a connection...")
 
-  if wait_regardless:
+  _wait_after_halt_check_var_name = "MLCI_WAIT_AFTER_HALT_CHECK"
+  if not wait_after_conditions_check:
+    # Useful for debugging why halting conditions were/were not triggered
+    wait_after_conditions_check = _is_true_like_env_var(_wait_after_halt_check_var_name)
+
+  if not wait_after_conditions_check and wait_regardless:
     logging.info("Wait for connection requested explicitly via code")
     return True
 
@@ -144,7 +163,7 @@ def should_halt_for_connection(wait_regardless: bool = False) -> bool:
   else:
     logging.debug("No `halt-dispatch-input` detected")
 
-  if check_if_debug_logging_enabled_and_job_type_is_scheduled():
+  if is_debug_logging_enabled_and_job_type_is_schedule_or_workflow_dispatch():
     return True
 
   # NOTE: If other methods are added for checking whether a connection should be
@@ -154,11 +173,19 @@ def should_halt_for_connection(wait_regardless: bool = False) -> bool:
   if labels_require_halting:
     return True
   if labels_require_halting is None:
-    logging.critical(
-      "Exiting due to inability to retrieve PR labels, and no "
-      "other halting conditions being met"
+    if not wait_after_conditions_check:
+      logging.critical(
+        "Exiting due to inability to retrieve PR labels, and no "
+        "other halting conditions being met"
+      )
+      sys.exit(1)
+
+  if wait_after_conditions_check:
+    logging.info(
+      "Wait for connection requested explicitly via code, "
+      f"or {_wait_after_halt_check_var_name}"
     )
-    sys.exit(1)
+    return True
 
   return False
 
@@ -290,9 +317,12 @@ async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
     logging.info("Waiting process terminated.")
 
 
-def main(wait_regardless: bool = False):
+def main(wait_regardless: bool = False, wait_after_conditions_check: bool = False):
   try:
-    if should_halt_for_connection(wait_regardless=wait_regardless):
+    if should_halt_for_connection(
+      wait_regardless=wait_regardless,
+      wait_after_conditions_check=wait_after_conditions_check,
+    ):
       asyncio.run(wait_for_connection())
     else:
       logging.info("No conditions for halting the workflow for connection were met")

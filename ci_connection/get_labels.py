@@ -163,8 +163,9 @@ def retrieve_labels(print_to_stdout: bool = True) -> list[str] | None:
 
   # Try retrieving the labels info via API
   label_data = _get_label_data_via_api(gh_issue)
+
+  # Fall back on labels from the event's payload, if API failed (unlikely)
   if label_data is None:
-    # Fall back on labels from the event's payload, if API failed (unlikely)
     logging.info("Attempting to retrieve labels from the event file")
     label_data = _get_label_data_from_event_file()
 
