@@ -42,6 +42,31 @@ case "$(uname -s)" in
   *)                    _IS_WINDOWS=0 ;;
 esac
 
+is_true_like_env() {
+  local var_name var_val var_val_lower
+
+  for var_name in "$@"; do
+    # ! = indirect expansion - treat value of the variable as the variable name
+    var_val="${!var_name:-}"
+
+    [[ -z "$var_val" ]] && continue # Skip if raw value is empty
+
+    var_val_lower="${var_val,,}" # lowercase
+    case "$var_val_lower" in
+      "0"|"false"|"n"|"no"|"none"|"null"|"n/a") ;; # negative value, continue to next
+      *) return 0 ;;
+    esac
+  done
+
+  return 1 # no true-like variables found
+}
+
+if is_true_like_env RUNNER_DEBUG HALT_DISPATCH_INPUT MLCI_ALLOW_PYTHON_INSTALL; then
+  _WAIT_CHECK_ELIGIBLE=1
+else
+  _WAIT_CHECK_ELIGIBLE=0
+fi
+
 _normalize_path() {
   local input_path="$1"
   if (( _IS_WINDOWS )); then local output_type="${2:-windows}"
@@ -73,7 +98,7 @@ detect_pm() {
 }
 
 ensure_packages_installed() {
-  local missing=() pm cmd install_flag_val install_flag_lower
+  local missing=() pm cmd
   local pkg
 
   for pkg in "$@"; do
@@ -81,19 +106,6 @@ ensure_packages_installed() {
   done
 
   [[ ${#missing[@]} -eq 0 ]] && return 0
-
-  install_flag_val="${MLCI_INSTALL_MISSING_PACKAGES:-}"
-  install_flag_lower="${install_flag_val,,}" # lowercase
-
-  if [[ -z "$install_flag_val" || \
-        "$install_flag_val" == "0" || \
-        "$install_flag_lower" == "false" ]]; then
-    printf "ERR: Missing required packages: '%s'. Automatic installation is disabled.\n" "${missing[*]}" >&2
-    echo "To resolve this:" >&2
-    echo "1. Enable automatic installation: Set the 'MLCI_INSTALL_MISSING_PACKAGES' environment variable." >&2
-    echo "2. Ensure a suitable Python (3.10+, not installed via setup-python) is present under python/python3 on the VM/Docker container, prior to the waiting for connection step." >&2
-    return 1
-  fi
 
   pm=$(detect_pm)
   if [[ -z "$pm" ]]; then
@@ -164,6 +176,8 @@ download_and_verify_uv() {
 
   local download_cmd_array=()
   local attempt=1 max_attempts=3
+  local sleep_seconds=1
+
   if [[ "$download_tool" == "curl" ]]; then
     download_cmd_array=(curl --proto '=https' --tlsv1.2 -sSfL -o "${tmp_file}" "${url}")
   else
@@ -177,8 +191,10 @@ download_and_verify_uv() {
       rm -f "${tmp_file}" # Clean up potential partial/empty file
       return 1
     fi
-    echo "WARN: Retry ${attempt}/${max_attempts} for ${url} using ${download_tool}" >&2
-    sleep 1
+    echo "WARN: Retry ${attempt}/${max_attempts} for ${url} using ${download_tool}. Retrying in ${sleep_seconds}s..." >&2
+    sleep "${sleep_seconds}"
+    sleep_seconds=$(( sleep_seconds * 2 ))
+
   done
 
   calculated_checksum=$(sha256sum < "${tmp_file}" | awk '{print $1}')
@@ -282,14 +298,27 @@ suitable_python_exists() {
 }
 
 ensure_suitable_python_is_available() {
-  local -n python_bin_path="$1" # nameref for output variable
+  local -n python_bin_path="$1" # nameref for output variable, used by caller
   local suitable_python_path
   if suitable_python_path=$(suitable_python_exists); then
     python_bin_path="${suitable_python_path}"
     return 0
   fi
 
-  echo "INFO: Suitable Python not found, installing via uv." >&2
+  echo "INFO: Suitable Python not found..." >&2
+
+  if (( ! _WAIT_CHECK_ELIGIBLE )); then
+    echo >&2
+    echo "INFO: No conditions were met to install Python at runtime." >&2
+    echo "To allow installation, do one of:" >&2
+    echo "1. Enable debug logging." >&2
+    echo "2. Set MLCI_ALLOW_PYTHON_INSTALL or HALT_DISPATCH_INPUT somewhere in the workflow." >&2
+    echo >&2
+
+    return
+  fi
+
+  echo "INFO: Installing a standalone Python via uv." >&2
 
   local pkgs_to_ensure=()
   local download_tool="" # Specify which tool to use to download uv
@@ -365,7 +394,7 @@ hide_existing_pythons() {
 # This is just a quick fallback, the intended way is to have Python handle all the
 # necessary checks.
 print_basic_connection_command_if_requested() {
-  if [[ -z "${ACTIONS_RUNNER_DEBUG:-}" && -z "${HALT_DISPATCH_INPUT:-}" ]]; then
+  if (( ! _WAIT_CHECK_ELIGIBLE )); then
     return
   fi
 
@@ -384,10 +413,10 @@ print_basic_connection_command_if_requested() {
   echo "Python-based connection failed. The Bash fallback command is printed below." >&2
   echo "Using this fallback will not let the runner know a connection " >&2
   echo "was made, and will not cause the runner to wait automatically." >&2
-  echo "For the fallback, add a wait/sleep somewhere after the " >&2
-  echo "'Wait for Connection' in the workflow manually, or use a different " >&2
-  echo "image/container/Python so the primary connection logic can run successfully." >&2
-  echo >&2
+  echo "To fix this, do one of:" >&2
+  echo "1. Ensure a suitable Python (3.10+, not installed via setup-python) is present under python/python3 on the VM/Docker container, prior to the waiting for connection step." >&2
+  echo "2. Add a wait/sleep somewhere after the 'Wait for Connection' step in the workflow." >&2
+  echo "For details, see go/ml-github-actions:connect." >&2
 
   echo -e "${bold_green}CONNECTION COMMAND (FALLBACK):${reset_color}" >&2
   echo -e "${bold_green}${fallback_command}${reset_color}" >&2
