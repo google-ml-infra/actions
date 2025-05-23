@@ -15,7 +15,8 @@
 # limitations under the License.
 
 
-# Requires Bash. Other shells likely will not work.
+# Requires Bash 4.3+ (out in February 2014). Other shells likely will not work.
+#
 # These utils are focused on making sure a suitable Python is available, and
 # used, for the ML CI connection backend and frontend.
 

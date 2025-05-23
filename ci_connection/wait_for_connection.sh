@@ -14,25 +14,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+# Requires Bash 4.3+ (out in February 2014). Other shells likely will not work.
+#
 # Wrapper that attempts to ensure a suitable Python is available before invoking
 # wait_for_connection.py.
 # Bash x-trace is logged to a file, which is shown on error, for easier inspection.
+
+set -euo pipefail
 
 source "$(dirname "$0")/utils.sh"
 
 # X-trace setup — write set -x output only to $TRACE_FILE
 TRACE_FILE="$(_normalize_path "${HOME}/connection_trace_$(date +%s).log")"
-exec 19> "${TRACE_FILE}"           # FD 19 opened for the trace
-export BASH_XTRACEFD=19            # Bash will write x-trace to FD 19
+# Automatically find an available FD (>=10) and store its number in trace_fd
+exec {trace_fd}>"${TRACE_FILE}"
+export BASH_XTRACEFD="$trace_fd"   # Bash will write x-trace to this FD
 
-set -exuo pipefail
+set -x
 
 # Cleanup trap — always runs, even on SIGINT
 cleanup() {
   local status=$?
   if [[ $status -ne 0 ]]; then
     # Show the trace in the GitHub Actions log, foldable as a group
+    echo >&2
+    echo ">>>> Script execution trace (set -x output) to help diagnose failures:" >&2
     echo "::group::connection-debug-trace"
     cat "${TRACE_FILE}"
     echo "::endgroup::"
@@ -41,7 +47,7 @@ cleanup() {
   fi
 
   rm -f "${TRACE_FILE}"
-  exec 19>&-                       # close FD 19
+  exec {trace_fd}>&-               # close the FD opened for X-trace
   exit "$status"
 }
 trap cleanup EXIT
