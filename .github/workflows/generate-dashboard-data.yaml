@@ -41,8 +41,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          cd ci_dashboard/data_query
-          go run main.go
+          cd "ci_dashboard/data_query"
+          go run "main.go"
   generate-angular:
     runs-on: ubuntu-latest
     steps:
