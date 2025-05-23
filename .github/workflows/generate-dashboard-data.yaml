@@ -24,8 +24,8 @@ jobs:
       # Get values for cache paths t∏o be used in later steps
       - id: cache-paths
         run: |
-          echo "go-cache=$(go env GOCACHE)" >> $GITHUB_OUTPUT
-          echo "go-mod-cache=$(go env GOMODCACHE)" >> $GITHUB_OUTPUT
+          echo "go-cache=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "go-mod-cache=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
       - name: Cache go modules
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
@@ -41,8 +41,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          cd "ci_dashboard/data_query"
-          go run "main.go"
+          cd ci_dashboard/data_query
+          go run main.go
   generate-angular:
     runs-on: ubuntu-latest
     steps:
