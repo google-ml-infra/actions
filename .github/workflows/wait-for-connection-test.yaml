@@ -4,8 +4,8 @@ name: Connection Test
 on:
   pull_request:
     paths:
-    - ci_connection
-    - .github/workflows/wait-for-connection-test.yaml
+      - ci_connection
+      - .github/workflows/wait-for-connection-test.yaml
     branches:
       - main
   workflow_dispatch:
@@ -16,8 +16,8 @@ on:
         required: true
         default: 'no'
         options:
-        - 'yes'
-        - 'no'
+          - 'yes'
+          - 'no'
 defaults:
   run:
     shell: bash
@@ -25,6 +25,7 @@ defaults:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+permissions: {}
 jobs:
   wait-test:
     strategy:
@@ -38,6 +39,8 @@ jobs:
       image: us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build@sha256:cec01011e627c0fd101c521a8af7c09ce4557ab6dcc9f8678aeb67a3182ed821 # ratchet:tensorflow/ml-build:latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Echo
         run: |
           set -x
