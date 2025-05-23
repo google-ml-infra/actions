@@ -1,0 +1,5 @@
+# Configuration related to self-hosted runner.
+self-hosted-runner:
+  labels:
+    - "windows-x86-n2-16"
+    - "linux-x86-n2-16"

@@ -46,5 +46,3 @@ jobs:
           # Allow installing Python, and the packages necessary to install
           # it e.g., uv, curl, unzip
           MLCI_ALLOW_PYTHON_INSTALL: 1
-        with:
-          halt-dispatch-input: ${{ inputs.halt-for-connection }}
