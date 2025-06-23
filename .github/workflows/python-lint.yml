@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: astral-sh/ruff-action@84f83ecf9e1e15d26b7984c7ec9cf73d39ffc946 # ratchet:astral-sh/ruff-action@v3.3.1
+      - uses: astral-sh/ruff-action@eaf0ecdd668ceea36159ff9d91882c9795d89b49 # ratchet:astral-sh/ruff-action@v3.4.0
   format:
     name: Ruff Format
     runs-on: ubuntu-latest
@@ -27,6 +27,6 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: astral-sh/ruff-action@84f83ecf9e1e15d26b7984c7ec9cf73d39ffc946 # ratchet:astral-sh/ruff-action@v3.3.1
+      - uses: astral-sh/ruff-action@eaf0ecdd668ceea36159ff9d91882c9795d89b49 # ratchet:astral-sh/ruff-action@v3.4.0
         with:
           args: "format --check --diff"
