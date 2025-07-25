@@ -280,7 +280,7 @@ def _get_required_dependencies_from_pyproject_toml(file_path="pyproject.toml"):
           .split("<")[0]
           .split(">")[0]
           .split("!=")[0]
-          .split("[")[0] # Get the package name without extra
+          .split("[")[0]  # Get the package name without extra
           .strip()
         )
         deps.append(package_name)
