@@ -139,8 +139,6 @@ uv pip install <path_to_generated_dependency_package.whl> --resolution=lowest
 
 To add a new seed project, refer to the [jax_seed.yaml](https://github.com/google-ml-infra/actions/blob/main/python_seed_env/src/seed_env/seeder_configs/jax_seed.yaml) file located in src/seed_env/seeder_configs. This folder stores seeder project configuration YAMLs for runtime data access (currently, only JAX is supported).
 
-To add a new seed project, refer to the [jax_seed.yaml](https://github.com/google-ml-infra/actions/blob/main/python_seed_env/src/seed_env/seeder_configs/jax_seed.yaml) file located in src/seed_env/seeder_configs. This folder stores seeder project configuration YAMLs for runtime data access (currently, only JAX is supported).
-
 Create a similar YAML file, updating the configuration values to match your seeder project. Then, invoke the seed-env CLI tool using the `--seed-config` flag, providing either a relative or absolute path to your new YAML file. The tool will first check its package data, then look for the file locally if not found.
 
 > [!WARNING]
