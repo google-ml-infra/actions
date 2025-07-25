@@ -8,7 +8,6 @@ It's designed to solve complex dependency management challenges, especially for 
 frameworks like JAX.
 
 ## What is seed-env tool?
-## What is seed-env tool?
 
 `seed-env` is a Python command-line tool that automates the creation of consistent development and production environments.
 The seed-env CLI tool's design centers around a methodology that bases (i.e. seeds) the Python environment on the thoroughly
@@ -29,7 +28,7 @@ The Host project depends on a foundational Seed project like JAX. The Host repos
 commit for reproducibility. For example, [MaxText](https://github.com/AI-Hypercomputer/maxtext/tree/main/MaxText) serves as a
 Host repository, built upon the [JAX](https://github.com/jax-ml/jax) Seed environment.
 
-### Key artifacts {#key-artifacts}
+### Key artifacts <a id="key-artifacts"></a>
 
 The tool generates several key artifacts:
 
@@ -71,13 +70,7 @@ pip install .
 ### Example commands
 
 Here are some common ways to use the seed-env tool:
-```
 
-### Example commands
-
-Here are some common ways to use the seed-env tool:
-
-```shell
 ```shell
 # See all the arguments of the tool
 seed-env --help
@@ -93,53 +86,6 @@ seed-env --host-repo=AI-Hypercomputer/maxtext --host-requirements=requirements.t
 
 # Run the following command build lock files and a pypi package based on a local host requirement file and use the latest release jax as seed.
 seed-env --local-requirements=<local path to a requirements.txt file> --build-pypi-package
-```
-
-### Utilize the generated artifacts to install host repo's environment
-
-After running the `seed-env` tool, a few [artifacts](#key-artifacts) will be generated in the `generated_env` directory.
-The typical structure looks like this:
-
-```
-generated_env
-├── build
-│   └── bdist
-├── dist
-│   └── <host-repo>-<version>.whl  # generated dependency PyPI package
-├── <host-repo>.egg-info
-│   ├── PKG-INFO
-│   ├── SOURCES.txt
-│   ├── dependency_links.txt
-│   ├── requires.txt
-│   └── top_level.txt
-├── <host-repo>_requirements_lock_<python-version>.txt  # generated requirements_lock.txt lock file
-├── pyproject.toml  # generated project definition file
-└── uv.lock  # generated uv.lock lock file
-```
-
-Before installing dependencies with these artifacts, it's **highly recommended** to start with a clean Python environment
-(e.g., a new virtual environment) to avoid conflicts and ensure a predictable installation.
-
-For example, you can create a virtual environment with the uv tool like so:
-
-```shell
-cd <path/to/your/project>
-uv venv --python <python-version> --seed <venv-name>
-source <venv-name>/bin/activate
-python --version
-```
-
-With these generated artifacts, you can set up the development environment for your host repository using either of the following approaches:
-
-#### Option A: Using Lock Files
-
-- For `uv` users: Move the generated `uv.lock` file to your project root and execute `uv sync`.
-- For `pip` users: Run `python -m pip install -r <path_to_the_project_requirements_lock_file>`.
-
-#### Option B: Using the Dependency PyPI Packages
-
-```shell
-uv pip install <path_to_generated_dependency_package.whl> --resolution=lowest
 ```
 
 ### Utilize the generated artifacts to install host repo's environment
