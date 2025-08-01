@@ -3,9 +3,6 @@
 This seed-env command-line tool creates stable, reproducible Python environments for Machine Learning projects.
 It's designed to solve complex dependency management challenges, especially for projects built on rapidly evolving
 frameworks like JAX.
-This seed-env command-line tool creates stable, reproducible Python environments for Machine Learning projects.
-It's designed to solve complex dependency management challenges, especially for projects built on rapidly evolving
-frameworks like JAX.
 
 ## What is seed-env tool?
 
