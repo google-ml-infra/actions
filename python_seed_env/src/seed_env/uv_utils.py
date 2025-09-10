@@ -491,6 +491,7 @@ def merge_project_toml_files(file_paths: list, output_dir: str, template_path: s
     3. Combines all dependencies, adding a Python version markers if needed.
     4. Writes a new pyproject.toml file in the output_dir, using the first input file as a template.
     5. Updates the new pyproject.toml using the the combined dependency list and the minimal Python version.
+    6. Returns the final deps
   """
   if not file_paths:
     raise ValueError("The list of file paths cannot be empty.")
@@ -508,3 +509,4 @@ def merge_project_toml_files(file_paths: list, output_dir: str, template_path: s
   min_py_version, final_deps = calculate_merged_deps(file_paths)
   replace_python_requirement_in_project_toml(min_py_version, pyproject_file)
   replace_dependencies_in_project_toml(final_deps, pyproject_file)
+  return final_deps

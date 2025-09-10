@@ -60,6 +60,7 @@ class EnvironmentSeeder:
     build_pypi_package: bool,
     output_dir: str,
     template_pyproject_toml: str = None,
+    requirements_txt: None | str = None
   ):
     self.host_name = host_name
     self.host_source_type = host_source_type
@@ -74,6 +75,7 @@ class EnvironmentSeeder:
     self.hardware = hardware
     self.build_pypi_package = build_pypi_package
     self.output_dir = output_dir
+    self.requirements_txt = "requirements.txt" if requirements_txt == "" else requirements_txt
 
     self._load_seed_config()
 
@@ -240,9 +242,15 @@ class EnvironmentSeeder:
 
     # Combine the individual pyproject.toml files from each python_version subdirectory
     # into a single pyproject.toml file at the output dir.
-    merge_project_toml_files(
+    final_deps = merge_project_toml_files(
       versioned_project_toml_files, self.output_dir, template_path
     )
+    if self.requirements_txt:
+        parent = os.path.dirname(self.requirements_txt)
+        if parent in ("", ".") or not os.path.isdir(parent):
+            self.requirements_txt = os.path.join(self.output_dir, self.requirements_txt)
+        with open(self.requirements_txt, "rt", encoding="utf8") as f:
+            f.write("\n".join(sorted(final_deps)))
 
     # 6. Build pypi package
     # TODO(kanglant): Assume where the seed-env cli is called is the project root
