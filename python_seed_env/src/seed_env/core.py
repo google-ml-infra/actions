@@ -16,8 +16,12 @@ limitations under the License.
 
 import os
 import logging
-import yaml
 from importlib.resources import files
+from random import randint
+from string import hexdigits
+
+import yaml
+
 from seed_env.seeder import Seeder
 from seed_env.utils import generate_minimal_pyproject_toml
 from seed_env.git_utils import download_remote_git_file
@@ -60,6 +64,7 @@ class EnvironmentSeeder:
     build_pypi_package: bool,
     output_dir: str,
     template_pyproject_toml: str = None,
+    requirements_txt: None | str = None,
   ):
     self.host_name = host_name
     self.host_source_type = host_source_type
@@ -74,6 +79,9 @@ class EnvironmentSeeder:
     self.hardware = hardware
     self.build_pypi_package = build_pypi_package
     self.output_dir = output_dir
+    self.requirements_txt = (
+      "requirements.txt" if requirements_txt == "" else requirements_txt
+    )
 
     self._load_seed_config()
 
@@ -240,9 +248,31 @@ class EnvironmentSeeder:
 
     # Combine the individual pyproject.toml files from each python_version subdirectory
     # into a single pyproject.toml file at the output dir.
-    merge_project_toml_files(
+    final_deps = merge_project_toml_files(
       versioned_project_toml_files, self.output_dir, template_path
     )
+    if self.requirements_txt:
+      parent = os.path.dirname(self.requirements_txt)
+      if parent in ("", ".") or not os.path.isdir(parent):
+        self.requirements_txt = os.path.join(self.output_dir, self.requirements_txt)
+
+      if self.requirements_txt == HOST_REQUIREMENTS_FILE:
+        alts = (
+          os.path.join(self.output_dir, "requirements.txt"),
+          os.path.join(self.output_dir, "requirements-gen.txt"),
+          os.path.join(
+            self.output_dir,
+            f"requirements-{''.join(map(lambda _: hexdigits[randint(0, 16)], range(5)))}.txt",
+          ),
+        )
+        raise FileNotFoundError(
+          f"Expected unique requirements.txt file found existing {HOST_REQUIREMENTS_FILE}. "
+          f"Try setting `--requirements-txt` to: "
+          f"{alts[0] if not os.path.isfile(alts[0]) else alts[1] if not os.path.isfile(alts[1]) else alts[2]}"
+        )
+
+      with open(self.requirements_txt, "rt", encoding="utf8") as f:
+        f.write("\n".join(sorted(final_deps)))
 
     # 6. Build pypi package
     # TODO(kanglant): Assume where the seed-env cli is called is the project root

@@ -90,6 +90,12 @@ def main():
     help="Path to a custom pyproject.toml file to use as a template.",
   )
   parser.add_argument(
+    "--requirements-txt",
+    type=str,
+    default=None,
+    help='Alternative to pyproject.toml alter/gen, this creates a "requirements.txt" file',
+  )
+  parser.add_argument(
     "--seed-config",
     type=str,
     default="jax_seed.yaml",
@@ -214,6 +220,7 @@ def main():
       build_pypi_package=args.build_pypi_package,
       output_dir=args.output_dir,
       template_pyproject_toml=args.template_pyproject_toml,
+      requirements_txt=args.requirements_txt,
     )
     # Core function
     host_env_seeder.seed_environment()
