@@ -36,7 +36,7 @@ GPU_SPECIFIC_DEPS = [
   "jax-cuda12-pjrt",
   "jax-cuda13-pjrt",
   "transformer-engine",
-] + TENSORFLOW_DEPS
+]
 
 TPU_SPECIFIC_DEPS = [
   "libtpu",
