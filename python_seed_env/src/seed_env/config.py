@@ -20,43 +20,47 @@ DEFAULT_SEED_CONFIG_FILE = "jax_seed.yaml"
 DEFAULT_PYTHON_VERSION = "3.12"
 DEFAULT_HARDWARE = "tpu"
 DEFAULT_BUILD_PROJECT = False
-SUPPORTED_HARDWARE = ["tpu", "gpu"]
+SUPPORTED_HARDWARE = ["tpu", "gpu", "cuda12", "cuda13"]
 
-# TODO(kanglant): Add a function to list deps following the pattern "nvidia-*"
+TENSORFLOW_DEPS = [
+  "tensorflow",
+  "wrapt",
+  "tensorboard",
+  "protobuf",
+]
+
 GPU_SPECIFIC_DEPS = [
-  "nvidia-cublas-cu12",
-  "nvidia-cuda-cupti-cu12",
-  "nvidia-cuda-nvcc-cu12",
-  "nvidia-cuda-nvrtc-cu12",  # Remove?
-  "nvidia-cuda-runtime-cu12",
-  "nvidia-cudnn-cu12",
-  "nvidia-cufft-cu12",
-  "nvidia-cusolver-cu12",
-  "nvidia-cusparse-cu12",
-  "nvidia-nccl-cu12",
-  "nvidia-nvjitlink-cu12",
-  "nvidia-nvshmem-cu12",
-  "nvidia-nvshmem-cu13",
+  "^nvidia-.*$",
+  "jax-cuda12-plugin",
+  "jax-cuda13-plugin",
+  "jax-cuda12-pjrt",
+  "jax-cuda13-pjrt",
+  "transformer-engine",
+] + TENSORFLOW_DEPS
+
+TPU_SPECIFIC_DEPS = [
+  "libtpu",
+]
+
+CUDA12_SPECIFIC_DEPS = [
+  "jax-cuda12-plugin",
+  "jax-cuda12-pjrt",
+  "^nvidia-.*-cu12$",
+]
+
+CUDA13_SPECIFIC_DEPS = [
+  "jax-cuda13-plugin",
+  "jax-cuda13-pjrt",
+  "^nvidia-.*-cu13$",
   "nvidia-cublas",
   "nvidia-cuda-crt",
   "nvidia-cuda-cupti",
   "nvidia-cuda-nvcc",
   "nvidia-cuda-nvrtc",
   "nvidia-cuda-runtime",
-  "nvidia-cudnn-cu13",
   "nvidia-cufft",
   "nvidia-cusolver",
   "nvidia-cusparse",
-  "nvidia-nccl-cu13",
   "nvidia-nvjitlink",
   "nvidia-nvvm",
-  "jax-cuda12-plugin",
-  "jax-cuda13-plugin",
-  "jax-cuda12-pjrt",
-  "jax-cuda13-pjrt",
-  "transformer-engine",
-]
-
-TPU_SPECIFIC_DEPS = [
-  "libtpu",
 ]

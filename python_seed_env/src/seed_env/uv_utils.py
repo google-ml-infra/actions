@@ -23,7 +23,13 @@ import shutil
 from collections import defaultdict
 from packaging.version import Version
 
-from seed_env.config import TPU_SPECIFIC_DEPS, GPU_SPECIFIC_DEPS
+from seed_env.config import (
+  TPU_SPECIFIC_DEPS,
+  GPU_SPECIFIC_DEPS,
+  CUDA12_SPECIFIC_DEPS,
+  CUDA13_SPECIFIC_DEPS,
+  TENSORFLOW_DEPS,
+)
 from seed_env.utils import run_command
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -365,18 +371,35 @@ def _get_required_dependencies_from_pyproject_toml(file_path="pyproject.toml"):
 def _remove_hardware_specific_deps(hardware: str, pyproject_file: str, output_dir: str):
   if hardware == "tpu":
     hardware_specific_deps_list = GPU_SPECIFIC_DEPS.copy()
-  elif hardware == "gpu":
+    hardware_specific_deps_list.extend(TENSORFLOW_DEPS)
+  elif hardware == "gpu" or hardware == "cuda12":
+    # For GPU, we assume cuda12 is the default and exclude TPU and cuda13 specific dependencies.
     hardware_specific_deps_list = TPU_SPECIFIC_DEPS.copy()
+    hardware_specific_deps_list.extend(CUDA13_SPECIFIC_DEPS)
+    hardware_specific_deps_list.extend(TENSORFLOW_DEPS)
+  elif hardware == "cuda13":
+    hardware_specific_deps_list = TPU_SPECIFIC_DEPS.copy()
+    hardware_specific_deps_list.extend(CUDA12_SPECIFIC_DEPS)
+    hardware_specific_deps_list.extend(TENSORFLOW_DEPS)
   else:
     logging.warning(f"Unknown hardware {hardware}. Please use tpu or gpu.")
     return
 
   project_deps = _get_required_dependencies_from_pyproject_toml(pyproject_file)
 
-  exclude_deps = []
-  for dep in hardware_specific_deps_list:
-    if dep in project_deps:
-      exclude_deps.append(dep)
+  exclude_deps = set()
+  for pattern in hardware_specific_deps_list:
+    # Check for literal matches first for efficiency
+    if pattern in project_deps:
+      exclude_deps.add(pattern)
+      continue
+
+    # If it's a pattern, use regex and match
+    if "*" in pattern:
+      regex = re.compile(pattern)
+      for proj_dep in project_deps:
+        if regex.match(proj_dep):
+          exclude_deps.add(proj_dep)
 
   if exclude_deps:
     command = [
@@ -387,7 +410,7 @@ def _remove_hardware_specific_deps(hardware: str, pyproject_file: str, output_di
       "--no-sync",
       "--directory",
       output_dir,
-      *exclude_deps,
+      *sorted(exclude_deps),
     ]
     run_command(command)
 
