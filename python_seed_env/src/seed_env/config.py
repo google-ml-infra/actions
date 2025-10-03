@@ -29,15 +29,6 @@ TENSORFLOW_DEPS = [
   "protobuf",
 ]
 
-GPU_SPECIFIC_DEPS = [
-  "^nvidia-.*$",
-  "jax-cuda12-plugin",
-  "jax-cuda13-plugin",
-  "jax-cuda12-pjrt",
-  "jax-cuda13-pjrt",
-  "transformer-engine",
-]
-
 TPU_SPECIFIC_DEPS = [
   "libtpu",
 ]

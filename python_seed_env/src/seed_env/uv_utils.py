@@ -25,7 +25,6 @@ from packaging.version import Version
 
 from seed_env.config import (
   TPU_SPECIFIC_DEPS,
-  GPU_SPECIFIC_DEPS,
   CUDA12_SPECIFIC_DEPS,
   CUDA13_SPECIFIC_DEPS,
   TENSORFLOW_DEPS,
@@ -370,7 +369,8 @@ def _get_required_dependencies_from_pyproject_toml(file_path="pyproject.toml"):
 
 def _remove_hardware_specific_deps(hardware: str, pyproject_file: str, output_dir: str):
   if hardware == "tpu":
-    hardware_specific_deps_list = GPU_SPECIFIC_DEPS.copy()
+    hardware_specific_deps_list = CUDA12_SPECIFIC_DEPS.copy()
+    hardware_specific_deps_list.extend(CUDA13_SPECIFIC_DEPS)
     hardware_specific_deps_list.extend(TENSORFLOW_DEPS)
   elif hardware == "gpu" or hardware == "cuda12":
     # For GPU, we assume cuda12 is the default and exclude TPU and cuda13 specific dependencies.
