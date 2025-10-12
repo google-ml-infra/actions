@@ -6,6 +6,12 @@ __pycache__/
 # C extensions
 *.so
 
+# Bazel directories
+bazel-*
+bazel-bin
+bazel-out
+bazel-testlogs
+
 # Distribution / packaging
 .Python
 build/

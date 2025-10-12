@@ -1,0 +1,169 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package xla;
+
+import "buf/validate/validate.proto";
+
+// Enum defining the target hardware platform category.
+enum HardwareCategory {
+  HARDWARE_CATEGORY_UNSPECIFIED = 0;
+
+  // -- CPUs --
+  CPU_X86 = 1;
+  CPU_ARM64 = 2;
+
+  // -- GPUs --
+  GPU_L4 = 3;
+  GPU_A100 = 4;
+  GPU_H100 = 5;
+  GPU_B200 = 6;
+
+  // -- TPUs --
+  TPU_V4 = 7;
+  TPU_V5E = 8;
+  TPU_V6E = 9;
+}
+
+// Enum for the operating system.
+enum OS {
+  UNSPECIFIED = 0;
+  LINUX = 1;
+  WINDOWS = 2;
+}
+
+
+// Message to specify the required hardware resources.
+message ResourceSpec {
+  // Optional: Operating system required.
+  OS os = 1;
+
+  // Optional: Minimum number of vCPUs required.
+  int32 min_vcpu_count = 2 [(buf.validate.field).int32.gte = 0];
+
+  // Optional: The exact number of GPUs required.
+  int32 gpu_count = 3 [(buf.validate.field).int32.gte = 0];
+
+  // Optional: The required TPU topology (e.g., "2x2", "1x1").
+  string tpu_topology = 4;
+}
+
+// Enum defining the workflow type.
+enum WorkflowType {
+  WORKFLOW_TYPE_UNSPECIFIED = 0;
+  PRESUBMIT = 1;   // Runs on pull requests before merging.
+  POSTSUBMIT = 2;  // Runs after commits are merged to the main branch.
+  SCHEDULED = 3;   // Runs on a regular schedule (e.g., nightly, weekly).
+  MANUAL = 4;      // Triggered manually (e.g., for bisecting).
+}
+
+// Defines the execution topology
+message ExecutionTopology {
+  int32 num_hosts = 1 [(buf.validate.field).int32.gt = 0];             // REQUIRED: Number of hosts.
+  int32 num_devices_per_host = 2 [(buf.validate.field).int32.gt = 0];  // REQUIRED: Number of devices per host.
+}
+
+// Enum defining how frequently the benchmark should be reviewed and/or updated 
+// for retention purposes.
+enum UpdateFrequency {
+  UPDATE_FREQUENCY_UNSPECIFIED = 0;
+  WEEKLY = 1;
+  MONTHLY = 2;
+  QUARTERLY = 3;
+}
+
+// Defines the configuration for a run on a specific hardware category.
+message HardwareConfig {
+  // REQUIRED: Specifies the primary hardware category needed, e.g., GPU_L4.
+  HardwareCategory hardware_category = 1 [(buf.validate.field).enum = { not_in: [0]}];
+
+  // REQUIRED: Defines the execution topology for the run.
+  ExecutionTopology topology = 2 [(buf.validate.field).required = true];
+
+  // REQUIRED: Specifies which workflows this config applies to.
+  repeated WorkflowType workflow_type = 3 [(buf.validate.field).repeated.min_items = 1];
+
+  // Optional: List of flags for the benchmark runner executable itself
+  // (e.g., --num_repeats).
+  repeated string runtime_flags = 4;
+
+  // Optional: Resource specification.
+  // If not provided, a default small runner for the category will be chosen.
+  ResourceSpec resource_spec = 5;
+}
+
+// Specifies the type of workload for the benchmark.
+enum WorkloadType {
+  WORKLOAD_TYPE_UNSPECIFIED = 0;
+  
+  // Represents an HLO text dump file (.hlo).
+  HLO_TEXT = 1;        
+  
+  // Represents a StableHLO MLIR text file (.mlir).
+  STABLEHLO_MLIR = 2; 
+  
+  // Executable target defined in a BUILD file (e.g., a py_binary, cc_test, etc.) that can be invoked with `bazel run` or `bazel test`.
+  BAZEL_TARGET = 3;    
+}
+
+// Specifies the workload for the benchmark, including its type and source location.
+message WorkloadSpec {
+  // REQUIRED: Specifies the type of workload for the benchmark.
+  WorkloadType workload_type = 1 [(buf.validate.field).enum = { not_in: [0]}];
+
+  // The location of the workload's source.
+  oneof source {
+    option (buf.validate.oneof).required = true;
+
+    // A relative path to a file within the source repository (e.g., "hlo/my_model.hlo").
+    string relative_path = 2;
+
+    // GCS path (gs://bucket/path/to/artifact) for larger artifacts.
+    string gcs_path = 3;
+    
+    // An executable Bazel target label (e.g., "//path/to:my_benchmark").
+    string bazel_target = 4;
+  }
+}
+
+// Defines a specific benchmark configuration.
+message BenchmarkConfig {
+  // REQUIRED: A unique name for the benchmark (e.g., "resnet50_jax_train").
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: A brief description of the benchmark's purpose.
+  string description = 2 [(buf.validate.field).string.min_len = 1];
+ 
+  // REQUIRED: The owner or team responsible for the benchmark.
+  string owner = 3 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: The workload specification.
+  WorkloadSpec workload = 4 [(buf.validate.field).required = true];
+
+  // REQUIRED: List of hardware configurations.
+  repeated HardwareConfig hardware_configs = 5 [(buf.validate.field).repeated.min_items = 1];
+
+  // REQUIRED: How often this benchmark definition should be reviewed.
+  UpdateFrequency update_frequency_policy = 6 [(buf.validate.field).enum = { not_in: [0]}];
+
+  // Optional: GitHub labels for filtering or triggering workflows.
+  repeated string github_labels = 7;
+}
+
+// Represents a collection of benchmark configurations.
+message BenchmarkSuite {
+  repeated BenchmarkConfig benchmarks = 1;
+}

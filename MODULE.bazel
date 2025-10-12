@@ -1,0 +1,40 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+module(
+    name = "ml_actions",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_python", version = "1.6.3")
+bazel_dep(name = "protobuf", version = "32.1")
+bazel_dep(name = "protovalidate", version = "1.0.0")
+
+# --- Python Toolchain Setup ---
+# Pinned to Python 3.11 since "bufbuild-protovalidate-protocolbuffers-python" 
+# does not yet have a pre-built wheel for Python 3.12.
+python = use_extension("@rules_python//python:extensions.bzl", "python")
+python.toolchain(
+    name = "python_3_11",
+    python_version = "3.11",
+)
+
+# --- Pip Dependencies Setup ---
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "pypi",
+    requirements_lock = "//benchmarking:requirements.lock",
+    python_version = "3.11",
+)
+use_repo(pip, "pypi")
