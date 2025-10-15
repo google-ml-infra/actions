@@ -28,6 +28,7 @@ RunnerMap = Dict[str, RunnerPool]
 ContainerMap = Dict[str, str]
 MatrixEntry = Dict[str, Any]
 
+
 def _format_validation_error(violation) -> str:
   """Formats a single protovalidate violation into a human-readable string."""
   field_path_str = ".".join(
@@ -64,6 +65,7 @@ def load_and_validate_suite_from_pbtxt(
     sys.exit(1)
 
   return suite
+
 
 class MatrixGenerator:
   """Generates a GitHub Actions matrix from a benchmark registry."""
