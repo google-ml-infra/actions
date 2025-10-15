@@ -8,9 +8,6 @@ __pycache__/
 
 # Bazel directories
 bazel-*
-bazel-bin
-bazel-out
-bazel-testlogs
 
 # Distribution / packaging
 .Python

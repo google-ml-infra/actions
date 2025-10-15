@@ -13,7 +13,7 @@
 # limitations under the License.
 
 module(
-    name = "ml_actions",
+    name = "google_ml_actions",
     version = "0.1.0",
 )
 
@@ -26,7 +26,6 @@ bazel_dep(name = "protovalidate", version = "1.0.0")
 # does not yet have a pre-built wheel for Python 3.12.
 python = use_extension("@rules_python//python:extensions.bzl", "python")
 python.toolchain(
-    name = "python_3_11",
     python_version = "3.11",
 )
 

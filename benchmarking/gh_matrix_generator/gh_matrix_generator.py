@@ -31,8 +31,8 @@ from benchmarking.gh_matrix_generator.gh_matrix_generator_lib import (
 
 # Global constants for the runfiles paths to the configuration files.
 # The path is the full path from the workspace root, prefixed with the workspace name.
-GHA_RUNNERS_CONFIG_PATH = "ml_actions/benchmarking/config/gha_runners.json"
-CONTAINERS_CONFIG_PATH = "ml_actions/benchmarking/config/containers.json"
+GHA_RUNNERS_CONFIG_PATH = "google_ml_actions/benchmarking/config/gha_runners.json"
+CONTAINERS_CONFIG_PATH = "google_ml_actions/benchmarking/config/containers.json"
 
 
 def load_json_from_runfiles(rfiles: Runfiles, path: str) -> dict:

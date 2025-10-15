@@ -1,0 +1,5 @@
+common --experimental_python_import_all_repositories=false
+common --incompatible_default_to_explicit_init_py
+
+# Use a minimal venv and don't require a system python to bootstrap
+common --@rules_python//python/config_settings:bootstrap_impl=script

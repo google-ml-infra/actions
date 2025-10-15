@@ -16,11 +16,17 @@
 
 import os
 import sys
+from typing import Any, Dict, List
 from google.protobuf import text_format
 from google.protobuf.json_format import MessageToDict
 from benchmarking.proto import benchmark_registry_pb2
 from protovalidate import validate, ValidationError
 
+Runner = Dict[str, Any]
+RunnerPool = Dict[str, List[Runner]]
+RunnerMap = Dict[str, RunnerPool]
+ContainerMap = Dict[str, str]
+MatrixEntry = Dict[str, Any]
 
 def _format_validation_error(violation) -> str:
   """Formats a single protovalidate violation into a human-readable string."""
@@ -43,11 +49,12 @@ def load_and_validate_suite_from_pbtxt(
   try:
     with open(path, "r") as f:
       suite = text_format.Parse(f.read(), benchmark_registry_pb2.BenchmarkSuite())
-    validate(suite)
-    return suite
   except (FileNotFoundError, text_format.ParseError) as e:
     print(f"Error loading or parsing registry file '{path}': {e}", file=sys.stderr)
     sys.exit(1)
+
+  try:
+    validate(suite)
   except ValidationError as e:
     error_messages = "\n".join(_format_validation_error(v) for v in e.violations)
     print(
@@ -56,18 +63,26 @@ def load_and_validate_suite_from_pbtxt(
     )
     sys.exit(1)
 
+  return suite
 
 class MatrixGenerator:
   """Generates a GitHub Actions matrix from a benchmark registry."""
 
-  def __init__(self, gha_runners: dict, containers: dict):
-    """Initializes with GHA runner and container configs."""
+  def __init__(self, gha_runners: RunnerMap, containers: ContainerMap):
+    """Initializes the generator with configuration data.
+
+    Args:
+      gha_runners: A nested dictionary defining the available runners, keyed
+        by repository name and then by HardwareCategory.
+      containers: A dictionary mapping HardwareCategory strings to the
+        container image URL.
+    """
     self.gha_runners = gha_runners
     self.containers = containers
 
   def _find_gha_runner(
     self, hw_config: benchmark_registry_pb2.HardwareConfig, repo_name: str
-  ) -> dict | None:
+  ) -> Runner | None:
     """Finds the best GHA runner for a given hardware config."""
     if repo_name not in self.gha_runners:
       print(
@@ -107,9 +122,9 @@ class MatrixGenerator:
     #    that key is present.
     return sorted(candidates, key=lambda r: r.get("vcpu", float("inf")))[0]
 
-  def generate(self, suite, workflow_type_str, repo_name: str):
+  def generate(self, suite, workflow_type_str, repo_name: str) -> List[MatrixEntry]:
     """Generates the full matrix."""
-    matrix = []
+    matrix: List[MatrixEntry] = []
     workflow_enum = benchmark_registry_pb2.WorkflowType.Value(workflow_type_str.upper())
 
     for benchmark in suite.benchmarks:
@@ -143,7 +158,7 @@ class MatrixGenerator:
         topo_short = f"{topo.num_hosts}h{topo.num_devices_per_host}d"
         workflow_short = workflow_type_str.lower()
 
-        entry = {
+        entry: MatrixEntry = {
           "config_id": f"{benchmark.name}_{hw_short}_{topo_short}_{workflow_short}",
           "runner_label": runner["label"],
           "container_image": container,
