@@ -20,7 +20,7 @@ DEFAULT_SEED_CONFIG_FILE = "jax_seed.yaml"
 DEFAULT_PYTHON_VERSION = "3.12"
 DEFAULT_HARDWARE = "tpu"
 DEFAULT_BUILD_PROJECT = False
-SUPPORTED_HARDWARE = ["tpu", "gpu", "cuda12", "cuda13"]
+SUPPORTED_HARDWARE = ["tpu", "gpu", "cuda12", "cuda13", "cpu"]
 
 TENSORFLOW_DEPS = [
   "tensorflow",
