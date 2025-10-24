@@ -1,0 +1,225 @@
+# Reusable workflow to run benchmarks defined in a benchmark registry.
+#
+# This workflow generates and executes a parallel matrix of benchmark jobs
+# based on the provided registry_file and workflow_type.
+#
+# Note that GITHUB_WORKSPACE env var is used instead of github.workspace
+# context reference due to https://github.com/actions/runner/issues/2058. 
+# Specifically, github.workspace and runner.workspace don't point to container 
+# valid paths when executing inside a container job.
+name: Run benchmarks
+
+on:
+  workflow_call:
+    inputs:
+      registry_file:
+        description: "Path to the .pbtxt benchmark registry file, relative to the repository root."
+        required: true
+        type: string
+      workflow_type:
+        description: "The workflow type to run (e.g., PRESUBMIT)."
+        required: true
+        type: string
+
+permissions:
+  contents: read # Required for actions/checkout.
+
+jobs:
+  generate_matrix:
+    name: Generate matrix
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:bce8f0918e20f0c6f3f7be3d6c3bd025aac02aaa020c6354a894f3018bf8ad15 # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Checkout user repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: user_repo
+
+      - name: Extract ML actions repo ref
+        env:
+          REPO_NAME: google-ml-infra/actions
+        id: extract_ml_actions_repo_ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO_REF=""
+
+          if [[ "${{ github.repository }}" == "$REPO_NAME" ]]; then
+            # Use sha for ML Actions PRs for reproducibility.
+            REPO_REF="${{ github.sha }}"
+          else
+            # For external repos, use ref (e.g. @v1).
+            WORKFLOW_REF="${{ github.workflow_ref }}"
+            REPO_REF=$(echo "$WORKFLOW_REF" | cut -d'@' -f2)
+          fi
+          
+          echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout ML actions repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          repository: 'google-ml-infra/actions'
+          ref: ${{ steps.extract_ml_actions_repo_ref.outputs.repo_ref}}
+          path: ml_actions
+
+      - name: Generate benchmark matrix
+        id: generate
+        shell: bash
+        run: |
+          set -euo pipefail
+          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
+          REGISTRY_PATH="$GITHUB_WORKSPACE/user_repo/${{ inputs.registry_file }}"
+          cd "$ML_ACTIONS_REPO" || exit 1
+
+          MATRIX_JSON="$(bazel run //benchmarking/gh_matrix_generator -- \
+          --registry_file="$REGISTRY_PATH" \
+          --workflow_type="${{ inputs.workflow_type }}" | jq -c '.')"
+
+          echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
+
+  run_benchmarks:
+    name: Run benchmark (${{ matrix.config_id }})
+    needs: generate_matrix
+    if: needs.generate_matrix.outputs.matrix != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+
+    runs-on: ${{ matrix.runner_label }}
+    container:
+      image: ${{ matrix.container_image }}
+
+    steps:
+      - name: Checkout user repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: user_repo
+
+      - name: Extract ML actions repo ref
+        env:
+          REPO_NAME: google-ml-infra/actions
+        id: extract_ml_actions_repo_ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO_REF=""
+
+          if [[ "${{ github.repository }}" == "$REPO_NAME" ]]; then
+            # Use SHA for ML Actions PRs for reproducibility.
+            REPO_REF="${{ github.sha }}"
+          else
+            # For external repos, use ref (e.g. @v1).
+            WORKFLOW_REF="${{ github.workflow_ref }}"
+            REPO_REF=$(echo "$WORKFLOW_REF" | cut -d'@' -f2)
+          fi
+
+          echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout ML actions repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          repository: 'google-ml-infra/actions'
+          ref: ${{ steps.extract_ml_actions_repo_ref.outputs.repo_ref}}
+          path: ml_actions
+
+      - name: Set up Python
+        if: matrix.workload_type == 'python_workload'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.workload_details.pythonVersion }}
+
+      - name: Install Python deps
+        if: matrix.workload_type == 'python_workload'
+        shell: bash
+        run: |
+          set -euo pipefail
+          USER_REPO="$GITHUB_WORKSPACE/user_repo"
+          PROJECT_DIR="$USER_REPO/${{ matrix.workload_details.pipProjectPath || '.' }}"
+          cd "$PROJECT_DIR" || exit 1
+          echo "Searching for dependency files in $PROJECT_DIR."
+        
+          if [[ -f "requirements.lock" ]]; then
+            echo "Found requirements.lock, installing from lock file."
+            pip install -r requirements.lock
+
+          elif [[ -f "pyproject.toml" ]]; then
+            echo "Found pyproject.toml, installing from source."
+            pip install .
+            
+            PIP_EXTRA_DEPS="$(jq -r 'join(",")' <<< "${{ toJson(matrix.pip_extra_deps) }}")"
+            if [[ -n "$PIP_EXTRA_DEPS" ]]; then
+                echo "Installing optional dependencies: [$PIP_EXTRA_DEPS]"
+                pip install .["$PIP_EXTRA_DEPS"]
+            fi
+
+          elif [[ -f "requirements.txt" ]]; then
+            echo "Found requirements.txt, installing."
+            pip install -r requirements.txt
+            
+          else
+            echo "Warning: Workload was python_workload, but no dependency file was found in $PROJECT_DIR."
+          fi
+
+      - name: Run benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          USER_REPO="$GITHUB_WORKSPACE/user_repo"
+          export TENSORBOARD_OUTPUT_DIR="$GITHUB_WORKSPACE/tblogs"
+          mkdir -p "$TENSORBOARD_OUTPUT_DIR"
+          cd "$USER_REPO" || exit 1
+          declare -a CMD_ARRAY
+
+          if [[ "${{ matrix.workload_type }}" == "bazel_target" ]]; then
+              CMD_ARRAY+=("bazel" "run" "${{ matrix.workload_details.executionTarget }}")
+              CMD_ARRAY+=("--")
+          elif [[ "${{ matrix.workload_type }}" == "python_workload" ]]; then
+              PYTHON_SCRIPT_PATH="$GITHUB_WORKSPACE/user_repo/${{ matrix.workload_details.scriptPath }}"
+              CMD_ARRAY+=("python" "$PYTHON_SCRIPT_PATH")
+          else
+              echo "Error: Unknown workload type '${{ matrix.workload_type }}'."
+              exit 1
+          fi
+
+          readarray -t USER_FLAGS < <(jq -r '.[]' <<< "${{ toJson(matrix.runtime_flags) }}")
+          CMD_ARRAY+=("${USER_FLAGS[@]}")
+          "${CMD_ARRAY[@]}"
+
+      - name: Parse TensorBoard logs and create benchmark result artifact
+        env:
+          BENCHMARK_CONFIG_ID: ${{ matrix.config_id }}
+          METRICS_MANIFEST_JSON: '${{ toJson(matrix.metrics) }}'
+        id: parse_tb_logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          TENSORBOARD_OUTPUT_DIR="$GITHUB_WORKSPACE/tblogs"
+          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
+          BENCHMARK_OUTPUT_DIR="$GITHUB_WORKSPACE/results"
+          ARTIFACT_FILE_PATH="$BENCHMARK_OUTPUT_DIR/benchmark_result.json"
+          mkdir -p "$BENCHMARK_OUTPUT_DIR"
+          cd "$ML_ACTIONS_REPO" || exit 1
+
+          bazel run //benchmarking/tb_parser -- \
+            --metrics_manifest_json="$METRICS_MANIFEST_JSON" \
+            --tblog_dir="$TENSORBOARD_OUTPUT_DIR" \
+            --output_dir="$BENCHMARK_OUTPUT_DIR" \
+            --config_id="$BENCHMARK_CONFIG_ID" \
+            --commit_sha="$GITHUB_SHA" \
+            --github_run_id="$GITHUB_RUN_ID"
+
+          echo "artifact_path=$ARTIFACT_FILE_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        with:
+          name: benchmark-result-${{ matrix.config_id }}
+          path: ${{ steps.parse_tb_logs.outputs.artifact_path }}

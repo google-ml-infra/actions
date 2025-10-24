@@ -16,34 +16,13 @@ load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@protobuf//bazel:py_proto_library.bzl", "py_proto_library")
 
 proto_library(
-    name = "benchmark_registry_proto",
-    srcs = ["benchmark_registry.proto"],
-    deps = [
-        "@protovalidate//proto/protovalidate/buf/validate:validate_proto",
-        "@protobuf//:wrappers_proto",
-        "//benchmarking/proto/common:stat_proto"
-    ],
-)
-
-proto_library(
-    name = "benchmark_result_proto",
-    srcs = ["benchmark_result.proto"],
-    deps = [
-        "@protovalidate//proto/protovalidate/buf/validate:validate_proto",
-        "@protobuf//:wrappers_proto",
-        "@protobuf//:timestamp_proto",
-        "//benchmarking/proto/common:stat_proto"
-    ],
-)
-
-py_proto_library(
-    name = "benchmark_registry_py_proto",
-    deps = [":benchmark_registry_proto"],
+    name = "stat_proto",
+    srcs = ["stat.proto"],
     visibility = ["//benchmarking:__subpackages__"],
 )
 
 py_proto_library(
-    name = "benchmark_result_py_proto",
-    deps = [":benchmark_result_proto"],
+    name = "stat_py_proto",
+    deps = [":stat_proto"],
     visibility = ["//benchmarking:__subpackages__"],
 )

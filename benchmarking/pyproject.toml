@@ -17,7 +17,9 @@ dependencies = [
     # We are waiting for a fix to be merged that will make this a subpackage of
     # the main protovalidate library, at which point this dependency can be removed.
     # See: https://github.com/bufbuild/protovalidate-python/pull/367
-    "bufbuild-protovalidate-protocolbuffers-python"
+    "bufbuild-protovalidate-protocolbuffers-python",
+    "tensorflow",
+    "numpy",
 ]
 
 [project.optional-dependencies]

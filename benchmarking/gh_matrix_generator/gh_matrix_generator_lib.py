@@ -159,6 +159,17 @@ class MatrixGenerator:
         topo = hw_config.topology
         topo_short = f"{topo.num_hosts}h{topo.num_devices_per_host}d"
         workflow_short = workflow_type_str.lower()
+        workload = benchmark.workload
+        workload_type = workload.WhichOneof("workload")
+        workload_details = getattr(workload, workload_type)
+        runtime_flags = list(workload.runtime_flags) + list(hw_config.runtime_flags)
+
+        pip_extra_deps = []
+        if workload_type == "python_workload":
+          pip_extra_deps.extend(workload_details.pip_optional_dependencies)
+
+        if hw_config.pip_optional_dependencies:
+          pip_extra_deps.extend(hw_config.pip_optional_dependencies)
 
         entry: MatrixEntry = {
           "config_id": f"{benchmark.name}_{hw_short}_{topo_short}_{workflow_short}",
@@ -167,9 +178,13 @@ class MatrixGenerator:
           "benchmark_name": benchmark.name,
           "description": benchmark.description,
           "owner": benchmark.owner,
-          "workload_spec": MessageToDict(benchmark.workload),
+          "workload_type": workload_type,
+          "workload_details": MessageToDict(workload_details),
           "hardware_config": MessageToDict(hw_config),
           "github_labels": list(benchmark.github_labels),
+          "pip_extra_deps": pip_extra_deps,
+          "runtime_flags": runtime_flags,
+          "metrics": [MessageToDict(m) for m in benchmark.metrics],
         }
         matrix.append(entry)
     return matrix

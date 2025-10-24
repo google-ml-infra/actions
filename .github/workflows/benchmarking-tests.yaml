@@ -9,7 +9,7 @@ on:
       - main
     paths:
       - 'benchmarking/**'
-      - '.github/workflows/benchmarking-tests.yml'
+      - '.github/workflows/benchmarking-tests.yaml'
   workflow_dispatch:
 
 permissions:

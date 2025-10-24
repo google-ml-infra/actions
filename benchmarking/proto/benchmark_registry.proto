@@ -14,11 +14,59 @@
 
 syntax = "proto3";
 
-package xla;
+package ml_actions.benchmarking;
 
 import "buf/validate/validate.proto";
+import "google/protobuf/wrappers.proto";
+import "benchmarking/proto/common/stat.proto";
 
-// Enum defining the target hardware platform category.
+// Defines the direction of improvement for a metric.
+enum ImprovementDirection {
+  IMPROVEMENT_DIRECTION_UNSPECIFIED = 0;
+
+  // Indicates that a smaller value is better (e.g., latency, error rate).
+  LESS = 1;
+
+  // Indicates that a larger value is better (e.g., throughput, accuracy).
+  GREATER = 2;
+}
+
+// Defines the static threshold analysis rules for a given statistic.
+message ComparisonSpec {
+  // REQUIRED: The expected baseline value.
+  google.protobuf.DoubleValue baseline = 1 [(buf.validate.field).required = true];
+  
+  // REQUIRED: The allowed percent deviation from the baseline.
+  google.protobuf.DoubleValue threshold = 2 [(buf.validate.field).required = true];
+
+  // Optional: The direction of improvement for this statistic.
+  ImprovementDirection improvement_direction = 3;
+}
+
+// Defines a specific statistic to compute.
+message StatSpec {
+  // REQUIRED: The statistic to compute from the raw data.
+  Stat stat = 1 [(buf.validate.field).enum = {not_in: [0]}];
+
+  // Optional: Enable and configure static threshold analysis.
+  optional ComparisonSpec comparison = 2;
+}
+
+// Defines a specific metric to be tracked.
+message MetricSpec {
+  // REQUIRED: The name of the metric. This MUST exactly match the
+  // tag used when logging to TensorBoard (e.g., "wall_time").
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: The unit of measurement (e.g., "ms", "percent", "gb").
+  string unit = 2 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: A list of statistics to compute and optionally validate
+  // for this metric.
+  repeated StatSpec stats = 3 [(buf.validate.field).repeated.min_items = 1];
+}
+
+// Defines the target hardware platform category.
 enum HardwareCategory {
   HARDWARE_CATEGORY_UNSPECIFIED = 0;
 
@@ -38,15 +86,14 @@ enum HardwareCategory {
   TPU_V6E = 9;
 }
 
-// Enum for the operating system.
+// Defines the target operating system.
 enum OS {
-  UNSPECIFIED = 0;
+  OS_UNSPECIFIED = 0;
   LINUX = 1;
   WINDOWS = 2;
 }
 
-
-// Message to specify the required hardware resources.
+// Defines the required hardware resources.
 message ResourceSpec {
   // Optional: Operating system required.
   OS os = 1;
@@ -61,7 +108,7 @@ message ResourceSpec {
   string tpu_topology = 4;
 }
 
-// Enum defining the workflow type.
+// Defines the workflow type.
 enum WorkflowType {
   WORKFLOW_TYPE_UNSPECIFIED = 0;
   PRESUBMIT = 1;   // Runs on pull requests before merging.
@@ -70,13 +117,13 @@ enum WorkflowType {
   MANUAL = 4;      // Triggered manually (e.g., for bisecting).
 }
 
-// Defines the execution topology
+// Defines the execution topology.
 message ExecutionTopology {
   int32 num_hosts = 1 [(buf.validate.field).int32.gt = 0];             // REQUIRED: Number of hosts.
   int32 num_devices_per_host = 2 [(buf.validate.field).int32.gt = 0];  // REQUIRED: Number of devices per host.
 }
 
-// Enum defining how frequently the benchmark should be reviewed and/or updated 
+// Defines how frequently the benchmark should be reviewed and/or updated 
 // for retention purposes.
 enum UpdateFrequency {
   UPDATE_FREQUENCY_UNSPECIFIED = 0;
@@ -87,7 +134,7 @@ enum UpdateFrequency {
 
 // Defines the configuration for a run on a specific hardware category.
 message HardwareConfig {
-  // REQUIRED: Specifies the primary hardware category needed, e.g., GPU_L4.
+  // REQUIRED: Specifies the primary hardware category needed (e.g., GPU_L4).
   HardwareCategory hardware_category = 1 [(buf.validate.field).enum = { not_in: [0]}];
 
   // REQUIRED: Defines the execution topology for the run.
@@ -96,47 +143,82 @@ message HardwareConfig {
   // REQUIRED: Specifies which workflows this config applies to.
   repeated WorkflowType workflow_type = 3 [(buf.validate.field).repeated.min_items = 1];
 
-  // Optional: List of flags for the benchmark runner executable itself
-  // (e.g., --num_repeats).
+  // Optional: Hardware-specific runtime flags (e.g., --precision=fp16).
   repeated string runtime_flags = 4;
 
   // Optional: Resource specification.
   // If not provided, a default small runner for the category will be chosen.
   ResourceSpec resource_spec = 5;
+
+  // Optional: Hardware-specific dependencies (e.g., "cuda", "tpu").
+  repeated string pip_optional_dependencies = 6;
 }
 
-// Specifies the type of workload for the benchmark.
-enum WorkloadType {
-  WORKLOAD_TYPE_UNSPECIFIED = 0;
-  
-  // Represents an HLO text dump file (.hlo).
-  HLO_TEXT = 1;        
-  
-  // Represents a StableHLO MLIR text file (.mlir).
-  STABLEHLO_MLIR = 2; 
-  
-  // Executable target defined in a BUILD file (e.g., a py_binary, cc_test, etc.) that can be invoked with `bazel run` or `bazel test`.
-  BAZEL_TARGET = 3;    
-}
-
-// Specifies the workload for the benchmark, including its type and source location.
-message WorkloadSpec {
-  // REQUIRED: Specifies the type of workload for the benchmark.
-  WorkloadType workload_type = 1 [(buf.validate.field).enum = { not_in: [0]}];
-
-  // The location of the workload's source.
+// Defines an HLO text dump file (.hlo) workload.
+message HloWorkload {
   oneof source {
     option (buf.validate.oneof).required = true;
 
-    // A relative path to a file within the source repository (e.g., "hlo/my_model.hlo").
-    string relative_path = 2;
+    // Relative path to a file within the source repository (e.g., "hlo/my_model.hlo").
+    string relative_path = 1;
 
     // GCS path (gs://bucket/path/to/artifact) for larger artifacts.
-    string gcs_path = 3;
-    
-    // An executable Bazel target label (e.g., "//path/to:my_benchmark").
-    string bazel_target = 4;
+    string gcs_path = 2;
   }
+}
+
+// Defines a stableHLO MLIR text file (.mlir) workload.
+message StableHloWorkload {
+  oneof source {
+    option (buf.validate.oneof).required = true;
+    
+    // Relative path to a file within the source repository (e.g., "hlo/my_model.hlo").
+    string relative_path = 1;
+
+    // GCS path (gs://bucket/path/to/artifact) for larger artifacts.
+    string gcs_path = 2;
+  }
+}
+
+// Defines a runnable Bazel target workload.
+message BazelTargetWorkload {
+
+  // REQUIRED: Bazel target within the source repository (e.g., "//my:target").
+  string execution_target = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// Defines a Python workload (i.e. pip-managed environment).
+message PythonWorkload {
+  // REQUIRED: The path to the Python script, relative to the repo root
+  // (e.g., "benchmarks/my_script.py").
+  string script_path = 1 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: e.g., "3.11".
+  string python_version = 2 [(buf.validate.field).string.min_len = 1];
+
+  // Optional: Base dependencies that this workload always requires (e.g., "test").
+  // Combined with hardware_config's pip_optional_dependencies.
+  repeated string pip_optional_dependencies = 3;
+
+  // Optional: The path to the pip project (the directory containing
+  // pyproject.toml or requirements.txt).
+  // If not provided, it defaults to the repository root.
+  optional string pip_project_path = 4;
+}
+
+// Specifies the workload for the benchmark.
+message WorkloadSpec {
+  oneof workload {
+    option (buf.validate.oneof).required = true;
+    HloWorkload hlo_workload = 1;
+    StableHloWorkload stablehlo_workload = 2;
+    BazelTargetWorkload bazel_target = 3;
+    PythonWorkload python_workload = 4;
+  }
+
+  // Optional: Base runtime flags (e.g., --model_name=...).
+  // Combined with hardware_config's runtime_flags.
+  repeated string runtime_flags = 5;
 }
 
 // Defines a specific benchmark configuration.
@@ -161,6 +243,9 @@ message BenchmarkConfig {
 
   // Optional: GitHub labels for filtering or triggering workflows.
   repeated string github_labels = 7;
+
+  // Optional: List of metrics to track.
+  repeated MetricSpec metrics = 8;
 }
 
 // Represents a collection of benchmark configurations.
