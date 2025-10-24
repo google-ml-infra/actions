@@ -1,0 +1,164 @@
+# Reusable workflow to run benchmarks defined in a Protobuf registry.
+#
+# This workflow generates and executes a parallel matrix of benchmark jobs
+# based on the provided `registry_file` and `workflow_type`.
+name: Run Benchmarks
+
+on:
+  workflow_call:
+    inputs:
+      registry_file:
+        description: "Path to the .pbtxt benchmark registry file, relative to the repository root."
+        required: true
+        type: string
+      workflow_type:
+        description: "The workflow type to run (e.g., PRESUBMIT)."
+        required: true
+        type: string
+
+permissions:
+  contents: read # Required for actions/checkout.
+
+jobs:
+  generate_matrix:
+    name: Generate Matrix
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:13e30036cf1d1bf2a49b81d6d7501baf75b2452c3870a4f2911319cbd297e877 # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+    steps:
+      - name: Checkout user repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: user_repo
+
+      - name: Checkout ML actions repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          repository: ${{ github.action_repository }}
+          path: ml_actions
+
+      - name: Generate benchmark matrix
+        id: generate
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          cd ml_actions
+          REGISTRY_PATH="${{ github.workspace }}/user_repo/${{ inputs.registry_file }}"
+          
+          # Generate unique delimiter
+          DELIMITER="$(uuidgen)"
+          echo "matrix<<$DELIMITER" >> "$GITHUB_OUTPUT"
+          
+          bazel run //benchmarking/gh_matrix_generator -- \
+            --registry_file="$REGISTRY_PATH" \
+            --workflow_type="${{ inputs.workflow_type }}" >> "$GITHUB_OUTPUT"
+
+          # shellcheck disable=SC2129
+          echo "$DELIMITER" >> "$GITHUB_OUTPUT"
+
+  run_benchmarks:
+    name: Run Benchmark (${{ matrix.config_id }})
+    needs: generate_matrix
+    if: needs.generate_matrix.outputs.matrix != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+
+    runs-on: ${{ matrix.runner_label }}
+    container:
+      image: ${{ matrix.container_image }}
+
+    steps:
+      - name: Checkout user repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+
+      - name: Checkout ML actions repo
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          repository: ${{ github.action_repository }}
+          path: ml_actions
+
+      - name: Install Python deps
+        if: matrix.workload_type == 'python_workload'
+        run: |
+          PROJECT_DIR="${{ matrix.workload_details.pipProjectPath || '.' }}"
+          echo "--- Searching for dependency files in '$PROJECT_DIR' ---"
+
+          INSTALL_CMD=""
+          if [[ -f "$PROJECT_DIR/requirements.lock" ]]; then
+            echo "--- Found requirements.lock, installing from lock file... ---"
+            INSTALL_CMD="pip install -r $PROJECT_DIR/requirements.lock"
+          elif [[ -f "$PROJECT_DIR/pyproject.toml" ]]; then
+            echo "--- Found pyproject.toml, installing from source... ---"
+            INSTALL_CMD="pip install $PROJECT_DIR"
+          elif [[ -f "$PROJECT_DIR/requirements.txt" ]]; then
+            echo "--- Found requirements.txt, installing... ---"
+            INSTALL_CMD="pip install -r $PROJECT_DIR/requirements.txt"
+          fi
+
+          if [[ -n "$INSTALL_CMD" ]]; then
+            "$INSTALL_CMD"
+            cd "$PROJECT_DIR"
+            EXTRAS_LIST="$(echo '${{ toJson(matrix.pip_extra_deps) }}' | jq -r 'join(",")')"
+
+            # Install specified opptional deps
+            if [[ -n "$EXTRAS_LIST" ]]; then
+              echo "Installing optional dependencies: [$EXTRAS_LIST]"
+              pip install .[$EXTRAS_LIST]
+            fi
+          else
+            echo "--- Workload was 'python_workload', but no dependency file was found in '$PROJECT_DIR'. ---"
+          fi
+
+      - name: Run Benchmark
+        env:
+          TENSORBOARD_OUTPUT_DIR: ${{ github.workspace }}/tblogs
+        run: |
+          # Create directory to store TensorBoard event files
+          mkdir -p ${{ github.workspace }}/tblogs
+
+          EXECUTION_COMMAND=""
+          if [[ "${{ matrix.workload_type }}" == "bazel_target" ]]; then
+            EXECUTION_COMMAND="bazel run ${{ matrix.workload_details.execution_target }}"
+          elif [[ "${{ matrix.workload_type }}" == "python_workload" ]]; then
+            EXECUTION_COMMAND="python ${{ matrix.workload_details.script_path }}"
+          else
+            echo "Error: Unknown workload type '${{ matrix.workload_type }}'"
+            exit 1
+          fi
+
+          $EXECUTION_COMMAND ${{ join(fromJson(matrix.runtime_flags), ' ') }}
+
+      - name: Parse TensorBoard logs and create Benchmark result artifact
+        env:
+          BENCHMARK_OUTPUT_DIR: ${{ github.workspace }}/results
+          BENCHMARK_CONFIG_ID: ${{ matrix.config_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          METRICS_MANIFEST_JSON: '${{ toJson(matrix.metrics) }}'
+          TENSORBOARD_OUTPUT_DIR: ${{ github.workspace }}/tblogs
+        run: |
+          mkdir -p ${{ github.workspace }}/results
+          cd ml_actions
+
+          bazel run //benchmarking/tensorboard_parser:tb_parser -- \
+            --metrics_manifest_json="$METRICS_MANIFEST_JSON" \
+            --tblog_dir="$TENSORBOARD_OUTPUT_DIR" \
+            --output_dir="$BENCHMARK_OUTPUT_DIR" \
+            --config_id="$BENCHMARK_CONFIG_ID" \
+            --commit_sha="$GITHUB_SHA" \
+            --github_run_id="$GITHUB_RUN_ID"
+
+      - name: Upload Benchmark Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        with:
+          name: benchmark-result-${{ matrix.config_id }}
+          path: ${{ github.workspace }}/results/benchmark_result.json
