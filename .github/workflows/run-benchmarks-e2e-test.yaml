@@ -1,0 +1,31 @@
+# This workflow is an end-to-end integration test for the
+# run-benchmarks.yaml reusable workflow.
+name: Benchmark workflow e2e test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'benchmarking/**'
+      - '.github/workflows/run-benchmarks-e2e-test.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel any previous runs on the same branch when a new commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  run_e2e_test:
+    name: Benchmarking workflow e2e test
+    uses: ./.github/workflows/run-benchmarks.yaml
+    with:
+      registry_file: "benchmarking/e2e_test/test_registry.pbtxt"
+      workflow_type: "PRESUBMIT"

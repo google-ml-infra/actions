@@ -12,20 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@protobuf//bazel:proto_library.bzl", "proto_library")
-load("@protobuf//bazel:py_proto_library.bzl", "py_proto_library")
-load("@rules_python//python:py_library.bzl", "py_library")
-
-proto_library(
-    name = "benchmark_registry_proto",
-    srcs = ["benchmark_registry.proto"],
-    deps = [
-        "@protovalidate//proto/protovalidate/buf/validate:validate_proto",
-    ],
-)
-
-py_proto_library(
-    name = "benchmark_registry_py_proto",
-    deps = [":benchmark_registry_proto"],
-    visibility = ["//benchmarking:__subpackages__"],
+filegroup(
+    name = "e2e_test_files",
+    srcs = glob([
+        "*.py",
+        "*.pbtxt",
+        "pyproject.toml",
+        "requirements.lock"
+    ]),
+    visibility = ["//visibility:public"],
 )
