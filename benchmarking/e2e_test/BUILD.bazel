@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-filegroup(
-    name = "e2e_test_files",
-    srcs = glob([
-        "*.py",
-        "*.pbtxt",
-        "pyproject.toml",
-        "requirements.lock"
-    ]),
-    visibility = ["//visibility:public"],
+load("@rules_python//python:py_binary.bzl", "py_binary")
+
+py_binary(
+    name = "test_benchmark",
+    main = "run_benchmark.py",
+    srcs = ["run_benchmark.py"],
+    deps = [
+        "@pypi//tensorflow",
+        "@pypi//setuptools"
+    ],
 )

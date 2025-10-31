@@ -18,11 +18,32 @@ import argparse
 import json
 import os
 import sys
+from typing import List
 from google.protobuf import json_format, timestamp_pb2
 from benchmarking.proto import benchmark_registry_pb2
 from benchmarking.proto import benchmark_result_pb2
 from benchmarking.tb_parser import tb_parser_lib
 from protovalidate import validate, ValidationError
+
+
+def _parse_metric_manifest(
+  metrics_manifest_json: str,
+) -> List[benchmark_registry_pb2.MetricSpec]:
+  """Parses the JSON metrics manifest into a list of MetricSpec protos."""
+  try:
+    metrics_manifest_dicts = json.loads(metrics_manifest_json)
+  except json.JSONDecodeError as e:
+    print(f"Error: Failed to parse --metrics_manifest_json: {e}", file=sys.stderr)
+    sys.exit(1)
+
+  # Convert list of metric spec dicts to a list of MetricSpec protos
+  metric_manifest = []
+  for metric_dict in metrics_manifest_dicts:
+    metric_spec = benchmark_registry_pb2.MetricSpec()
+    json_format.ParseDict(metric_dict, metric_spec)
+    metric_manifest.append(metric_spec)
+
+  return metric_manifest
 
 
 def _format_validation_error(violation) -> str:
@@ -44,19 +65,7 @@ def main():
   parser.add_argument("--github_run_id", required=True)
   args = parser.parse_args()
 
-  try:
-    metrics_manifest_dicts = json.loads(args.metrics_manifest_json)
-  except json.JSONDecodeError as e:
-    print(f"Error parsing --metrics_manifest_json: {e}", file=sys.stderr)
-    sys.exit(1)
-
-  # Convert list of metric spec dicts to a list of MetricSpec protos
-  metric_manifest = []
-  for metric_dict in metrics_manifest_dicts:
-    metric_spec = benchmark_registry_pb2.MetricSpec()
-    json_format.ParseDict(metric_dict, metric_spec)
-    metric_manifest.append(metric_spec)
-
+  metric_manifest = _parse_metric_manifest(args.metrics_manifest_json)
   tb_parser = tb_parser_lib.TensorBoardParser(metric_manifest)
   computed_stats = tb_parser.parse_and_compute(args.tblog_dir)
 

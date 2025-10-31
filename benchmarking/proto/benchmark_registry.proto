@@ -212,7 +212,7 @@ message WorkloadSpec {
     option (buf.validate.oneof).required = true;
     HloWorkload hlo_workload = 1;
     StableHloWorkload stablehlo_workload = 2;
-    BazelTargetWorkload bazel_target = 3;
+    BazelTargetWorkload bazel_workload = 3;
     PythonWorkload python_workload = 4;
   }
 

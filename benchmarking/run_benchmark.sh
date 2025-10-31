@@ -18,9 +18,9 @@
 # Environment variables:
 #
 # GITHUB_WORKSPACE (REQUIRED): Default working directory on the runner.
-# WORKLOAD_TYPE (REQUIRED): The type of workload to run ('bazel_target' pr 'python_workload').
+# WORKLOAD_TYPE (REQUIRED): The type of workload to run ('bazel_workload' pr 'python_workload').
 # RUNTIME_FLAGS_JSON (REQUIRED): A JSON string array of runtime flags to pass to the benchmark (e.g., '["--flag1", "value1"]').
-# EXECUTION_TARGET (CONDITIONAL): The Bazel target to run. Required if WORKLOAD_TYPE is 'bazel_target'. 
+# EXECUTION_TARGET (CONDITIONAL): The Bazel target to run. Required if WORKLOAD_TYPE is 'bazel_workload'. 
 # SCRIPT_PATH (CONDITIONAL): The path to the Python script, relative to the repository root. Required if WORKLOAD_TYPE is 'python_workload'.
 
 set -euo pipefail
@@ -32,7 +32,7 @@ mkdir -p "$TENSORBOARD_OUTPUT_DIR"
 cd "$USER_REPO" || exit 1
 readarray -t USER_FLAGS < <(jq -r '.[]' <<< "$RUNTIME_FLAGS_JSON")
 
-if [[ "$WORKLOAD_TYPE" == "bazel_target" ]]; then
+if [[ "$WORKLOAD_TYPE" == "bazel_workload" ]]; then
     bazel run "$EXECUTION_TARGET" -- "${USER_FLAGS[@]}"
 
 elif [[ "$WORKLOAD_TYPE" == "python_workload" ]]; then

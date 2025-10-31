@@ -20,6 +20,14 @@ on:
         description: "The workflow type to run (e.g., PRESUBMIT)."
         required: true
         type: string
+      ml_actions_ref:
+        description: >
+          The branch, tag, or SHA of google-ml-infra/actions to use. Defaults to 'main'.
+          Note: For runs triggered from within the google-ml-infra/actions repo
+          (e.g., a PR), the commit SHA (github.sha) is used automatically to test changes.
+        required: false
+        type: string
+        default: 'main'
 
 permissions:
   contents: read # Required for actions/checkout.
@@ -33,7 +41,7 @@ jobs:
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
-      - name: Checkout user repo
+      - name: Check out user repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
         with:
           repository: ${{ github.repository }}
@@ -45,7 +53,7 @@ jobs:
         env:
           USER_REPO: ${{ github.repository }}
           USER_REPO_SHA: ${{ github.sha }}
-          WORKFLOW_REF: ${{ github.workflow_ref }}
+          ML_ACTIONS_REF_INPUT: ${{ inputs.ml_actions_ref }}
           ML_ACTIONS_REPO: google-ml-infra/actions
         id: extract_ml_actions_repo_ref
         shell: bash
@@ -57,13 +65,13 @@ jobs:
             # Use SHA for ML Actions PRs for reproducibility.
             REPO_REF="$USER_REPO_SHA"
           else
-            # For external repos, use ref (e.g. @v1).
-            REPO_REF=$(echo "$WORKFLOW_REF" | cut -d'@' -f2)
+            # For external repos, use provided ref.
+            REPO_REF="$ML_ACTIONS_REF_INPUT"
           fi
-          
+
           echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout ML actions repo
+      - name: Check out ML actions repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
@@ -103,7 +111,7 @@ jobs:
       image: ${{ matrix.container_image }}
 
     steps:
-      - name: Checkout user repo
+      - name: Check out user repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
         with:
           repository: ${{ github.repository }}
@@ -115,7 +123,7 @@ jobs:
         env:
           USER_REPO: ${{ github.repository }}
           USER_REPO_SHA: ${{ github.sha }}
-          WORKFLOW_REF: ${{ github.workflow_ref }}
+          ML_ACTIONS_REF_INPUT: ${{ inputs.ml_actions_ref }}
           ML_ACTIONS_REPO: google-ml-infra/actions
         id: extract_ml_actions_repo_ref
         shell: bash
@@ -127,13 +135,13 @@ jobs:
             # Use SHA for ML Actions PRs for reproducibility.
             REPO_REF="$USER_REPO_SHA"
           else
-            # For external repos, use ref (e.g. @v1).
-            REPO_REF=$(echo "$WORKFLOW_REF" | cut -d'@' -f2)
+            # For external repos, use provided ref.
+            REPO_REF="$ML_ACTIONS_REF_INPUT"
           fi
 
           echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout ML actions repo
+      - name: Check out ML actions repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
@@ -198,3 +206,18 @@ jobs:
         with:
           name: benchmark-result-${{ matrix.config_id }}
           path: ${{ steps.parse_tb_logs.outputs.artifact_path }}
+
+      - name: Run static threshold analyzer
+        env:
+          BENCHMARK_RESULT_FILE: ${{ steps.parse_tb_logs.outputs.artifact_path }}
+          METRICS_MANIFEST_JSON: '${{ toJson(matrix.metrics) }}'
+        id: static_threshold_analyzer
+        shell: bash
+        run: |
+          set -euo pipefail
+          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
+          cd "$ML_ACTIONS_REPO" || exit 1
+
+          bazel run //benchmarking/static_threshold_analyzer -- \
+            --metrics_manifest_json="$METRICS_MANIFEST_JSON" \
+            --benchmark_result_file="$BENCHMARK_RESULT_FILE"

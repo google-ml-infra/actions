@@ -7,6 +7,14 @@
       { "label": "linux-arm64-c4a-16", "os": "LINUX", "vcpu": 16 }
     ]
   },
+  "google-ml-infra/torch_tpu": {
+    "CPU_X86": [
+      { "label": "linux-x86-n2-16", "os": "LINUX", "vcpu": 16 }
+    ],
+    "CPU_ARM64": [
+      { "label": "linux-arm64-c4a-16", "os": "LINUX", "vcpu": 16 }
+    ]
+  },
   "openxla/tokamax": {
     "CPU_X86": [
       { "label": "linux-x86-n2-16", "os": "LINUX", "vcpu": 16 },

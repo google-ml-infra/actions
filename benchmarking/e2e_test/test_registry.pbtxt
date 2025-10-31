@@ -6,15 +6,13 @@ benchmarks {
     python_workload {
       script_path: "benchmarking/e2e_test/run_benchmark.py"
       python_version: "3.11"
-      pip_optional_dependencies: "test"
-      pip_project_path:  "benchmarking/e2e_test"
+      pip_project_path:  "benchmarking/"
     }
   } 
   hardware_configs {
     hardware_category: CPU_X86
     topology { num_hosts: 1, num_devices_per_host: 1 }
     workflow_type: [PRESUBMIT]
-    pip_optional_dependencies: "cuda"
     resource_spec {
       os: LINUX
       min_vcpu_count: 16
@@ -34,6 +32,42 @@ benchmarks {
     }
     stats {
       stat: P99
+    }
+  }
+}
+
+benchmarks {
+  name: "e2e_bazel_benchmark"
+  description: "A test benchmark for a Bazel workload."
+  owner: "e2e-test-team"
+  workload {
+    bazel_workload {
+      execution_target: "//benchmarking/e2e_test:test_benchmark"
+    }
+  } 
+  hardware_configs {
+    hardware_category: CPU_X86
+    topology { num_hosts: 1, num_devices_per_host: 1 }
+    workflow_type: [PRESUBMIT]
+    resource_spec {
+      os: LINUX
+      min_vcpu_count: 16
+    }
+  }
+  update_frequency_policy: QUARTERLY
+  metrics {
+    name: "wall_time"
+    unit: "ms"
+    stats {
+      stat: MEAN
+      comparison: {
+        baseline { value: 100.0 }
+        threshold { value: 0.1 }
+        improvement_direction: LESS
+      }
+    }
+    stats {
+      stat: P90
     }
   }
 }

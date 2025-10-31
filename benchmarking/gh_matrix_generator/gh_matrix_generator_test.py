@@ -51,7 +51,7 @@ VALID_SUITE_PBTXT = """
       description: "A valid CPU benchmark."
       owner: "cpu-team"
       workload {
-        bazel_target: {
+        bazel_workload: {
           execution_target: "//b:cpu"
         }
         runtime_flags: "--model_name=cpu_model"
@@ -101,7 +101,7 @@ VALID_SUITE_PBTXT = """
         description: "A valid Windows benchmark."
         owner: "windows-team"
         workload {
-          bazel_target: {
+          bazel_workload: {
             execution_target: "//b:win"
           }
         }
@@ -120,7 +120,7 @@ INVALID_SUITE_MISSING_NAME_PBTXT = """
       description: "A benchmark with a missing name."
       owner: "cpu-team"
       workload {
-        bazel_target: {
+        bazel_workload: {
           execution_target: "//b:cpu"
         }
       }
