@@ -29,7 +29,7 @@ jobs:
     name: Generate matrix
     runs-on: linux-x86-n2-16
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:44b04823658fa377793d4a99f282a6c23d13d6f7157adcdd892e09a96a16d8ab # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00 # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
