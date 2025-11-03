@@ -43,19 +43,21 @@ jobs:
 
       - name: Extract ML actions repo ref
         env:
-          REPO_NAME: google-ml-infra/actions
+          USER_REPO: ${{ github.repository }}
+          USER_REPO_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          ML_ACTIONS_REPO: google-ml-infra/actions
         id: extract_ml_actions_repo_ref
         shell: bash
         run: |
           set -euo pipefail
           REPO_REF=""
 
-          if [[ "${{ github.repository }}" == "$REPO_NAME" ]]; then
-            # Use sha for ML Actions PRs for reproducibility.
-            REPO_REF="${{ github.sha }}"
+          if [[ "$USER_REPO" == "$ML_ACTIONS_REPO" ]]; then
+            # Use SHA for ML Actions PRs for reproducibility.
+            REPO_REF="$USER_REPO_SHA"
           else
             # For external repos, use ref (e.g. @v1).
-            WORKFLOW_REF="${{ github.workflow_ref }}"
             REPO_REF=$(echo "$WORKFLOW_REF" | cut -d'@' -f2)
           fi
           
@@ -70,17 +72,20 @@ jobs:
           persist-credentials: false
 
       - name: Generate benchmark matrix
+        env: 
+          REGISTRY_FILE: ${{ inputs.registry_file }}
+          WORKFLOW_TYPE: ${{ inputs.workflow_type }}
         id: generate
         shell: bash
         run: |
           set -euo pipefail
           ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
-          REGISTRY_PATH="$GITHUB_WORKSPACE/user_repo/${{ inputs.registry_file }}"
+          REGISTRY_PATH="$GITHUB_WORKSPACE/user_repo/$REGISTRY_FILE"
           cd "$ML_ACTIONS_REPO" || exit 1
 
           MATRIX_JSON="$(bazel run //benchmarking/gh_matrix_generator -- \
           --registry_file="$REGISTRY_PATH" \
-          --workflow_type="${{ inputs.workflow_type }}" | jq -c '.')"
+          --workflow_type="$WORKFLOW_TYPE" | jq -c '.')"
 
           echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
 
@@ -108,19 +113,21 @@ jobs:
 
       - name: Extract ML actions repo ref
         env:
-          REPO_NAME: google-ml-infra/actions
+          USER_REPO: ${{ github.repository }}
+          USER_REPO_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          ML_ACTIONS_REPO: google-ml-infra/actions
         id: extract_ml_actions_repo_ref
         shell: bash
         run: |
           set -euo pipefail
           REPO_REF=""
 
-          if [[ "${{ github.repository }}" == "$REPO_NAME" ]]; then
+          if [[ "$USER_REPO" == "$ML_ACTIONS_REPO" ]]; then
             # Use SHA for ML Actions PRs for reproducibility.
-            REPO_REF="${{ github.sha }}"
+            REPO_REF="$USER_REPO_SHA"
           else
             # For external repos, use ref (e.g. @v1).
-            WORKFLOW_REF="${{ github.workflow_ref }}"
             REPO_REF=$(echo "$WORKFLOW_REF" | cut -d'@' -f2)
           fi
 
@@ -142,11 +149,14 @@ jobs:
 
       - name: Install Python deps
         if: matrix.workload_type == 'python_workload'
+        env:
+          PIP_PROJECT_PATH: ${{ matrix.workload_details.pipProjectPath || '.' }}
+          PIP_EXTRA_DEPS_JSON: ${{ toJson(matrix.pip_extra_deps) }}
         shell: bash
         run: |
           set -euo pipefail
           USER_REPO="$GITHUB_WORKSPACE/user_repo"
-          PROJECT_DIR="$USER_REPO/${{ matrix.workload_details.pipProjectPath || '.' }}"
+          PROJECT_DIR="$USER_REPO/$PIP_PROJECT_PATH"
           cd "$PROJECT_DIR" || exit 1
           echo "Searching for dependency files in $PROJECT_DIR."
         
@@ -158,7 +168,7 @@ jobs:
             echo "Found pyproject.toml, installing from source."
             pip install .
             
-            PIP_EXTRA_DEPS="$(jq -r 'join(",")' <<< "${{ toJson(matrix.pip_extra_deps) }}")"
+            PIP_EXTRA_DEPS="$(jq -r 'join(",")' <<< "$PIP_EXTRA_DEPS_JSON")"
             if [[ -n "$PIP_EXTRA_DEPS" ]]; then
                 echo "Installing optional dependencies: [$PIP_EXTRA_DEPS]"
                 pip install .["$PIP_EXTRA_DEPS"]
@@ -173,6 +183,11 @@ jobs:
           fi
 
       - name: Run benchmark
+        env: 
+          WORKLOAD_TYPE: ${{ matrix.workload_type }}
+          EXECUTION_TARGET: ${{ matrix.workload_details.executionTarget }}
+          SCRIPT_PATH: ${{ matrix.workload_details.scriptPath }}
+          RUNTIME_FLAGS_JSON: ${{ toJson(matrix.runtime_flags) }}
         shell: bash
         run: |
           set -euo pipefail
@@ -182,18 +197,18 @@ jobs:
           cd "$USER_REPO" || exit 1
           declare -a CMD_ARRAY
 
-          if [[ "${{ matrix.workload_type }}" == "bazel_target" ]]; then
-              CMD_ARRAY+=("bazel" "run" "${{ matrix.workload_details.executionTarget }}")
+          if [[ "$WORKLOAD_TYPE" == "bazel_target" ]]; then
+              CMD_ARRAY+=("bazel" "run" "$EXECUTION_TARGET")
               CMD_ARRAY+=("--")
-          elif [[ "${{ matrix.workload_type }}" == "python_workload" ]]; then
-              PYTHON_SCRIPT_PATH="$GITHUB_WORKSPACE/user_repo/${{ matrix.workload_details.scriptPath }}"
+          elif [[ "$WORKLOAD_TYPE" == "python_workload" ]]; then
+              PYTHON_SCRIPT_PATH="$GITHUB_WORKSPACE/user_repo/$SCRIPT_PATH"
               CMD_ARRAY+=("python" "$PYTHON_SCRIPT_PATH")
           else
-              echo "Error: Unknown workload type '${{ matrix.workload_type }}'."
+              echo "Error: Unknown workload type '$WORKLOAD_TYPE'."
               exit 1
           fi
 
-          readarray -t USER_FLAGS < <(jq -r '.[]' <<< "${{ toJson(matrix.runtime_flags) }}")
+          readarray -t USER_FLAGS < <(jq -r '.[]' <<< "$RUNTIME_FLAGS_JSON")
           CMD_ARRAY+=("${USER_FLAGS[@]}")
           "${CMD_ARRAY[@]}"
 
