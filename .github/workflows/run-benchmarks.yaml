@@ -27,7 +27,7 @@ permissions:
 jobs:
   generate_matrix:
     name: Generate matrix
-    runs-on: linux-x86-n2-16
+    runs-on: ubuntu-latest
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00 # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     outputs:
