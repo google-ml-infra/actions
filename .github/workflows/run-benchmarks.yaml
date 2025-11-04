@@ -154,33 +154,8 @@ jobs:
           PIP_EXTRA_DEPS_JSON: ${{ toJson(matrix.pip_extra_deps) }}
         shell: bash
         run: |
-          set -euo pipefail
-          USER_REPO="$GITHUB_WORKSPACE/user_repo"
-          PROJECT_DIR="$USER_REPO/$PIP_PROJECT_PATH"
-          cd "$PROJECT_DIR" || exit 1
-          echo "Searching for dependency files in $PROJECT_DIR."
-        
-          if [[ -f "requirements.lock" ]]; then
-            echo "Found requirements.lock, installing from lock file."
-            pip install -r requirements.lock
-
-          elif [[ -f "pyproject.toml" ]]; then
-            echo "Found pyproject.toml, installing from source."
-            pip install .
-            
-            PIP_EXTRA_DEPS="$(jq -r 'join(",")' <<< "$PIP_EXTRA_DEPS_JSON")"
-            if [[ -n "$PIP_EXTRA_DEPS" ]]; then
-                echo "Installing optional dependencies: [$PIP_EXTRA_DEPS]"
-                pip install .["$PIP_EXTRA_DEPS"]
-            fi
-
-          elif [[ -f "requirements.txt" ]]; then
-            echo "Found requirements.txt, installing."
-            pip install -r requirements.txt
-            
-          else
-            echo "Warning: Workload was python_workload, but no dependency file was found in $PROJECT_DIR."
-          fi
+          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
+          "$ML_ACTIONS_REPO"/benchmarking/install_pip_deps.sh
 
       - name: Run benchmark
         env: 
@@ -190,27 +165,8 @@ jobs:
           RUNTIME_FLAGS_JSON: ${{ toJson(matrix.runtime_flags) }}
         shell: bash
         run: |
-          set -euo pipefail
-          USER_REPO="$GITHUB_WORKSPACE/user_repo"
-          export TENSORBOARD_OUTPUT_DIR="$GITHUB_WORKSPACE/tblogs"
-          mkdir -p "$TENSORBOARD_OUTPUT_DIR"
-          cd "$USER_REPO" || exit 1
-          declare -a CMD_ARRAY
-
-          if [[ "$WORKLOAD_TYPE" == "bazel_target" ]]; then
-              CMD_ARRAY+=("bazel" "run" "$EXECUTION_TARGET")
-              CMD_ARRAY+=("--")
-          elif [[ "$WORKLOAD_TYPE" == "python_workload" ]]; then
-              PYTHON_SCRIPT_PATH="$GITHUB_WORKSPACE/user_repo/$SCRIPT_PATH"
-              CMD_ARRAY+=("python" "$PYTHON_SCRIPT_PATH")
-          else
-              echo "Error: Unknown workload type '$WORKLOAD_TYPE'."
-              exit 1
-          fi
-
-          readarray -t USER_FLAGS < <(jq -r '.[]' <<< "$RUNTIME_FLAGS_JSON")
-          CMD_ARRAY+=("${USER_FLAGS[@]}")
-          "${CMD_ARRAY[@]}"
+          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
+          "$ML_ACTIONS_REPO"/benchmarking/run_benchmark.sh
 
       - name: Parse TensorBoard logs and create benchmark result artifact
         env:
