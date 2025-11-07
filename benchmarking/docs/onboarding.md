@@ -6,9 +6,8 @@ The system is designed to be agnostic to the benchmark workload, supporting any 
 
 The system follows two simple contracts:
 
-1. Input: A benchmark_registry.pbtxt (a "manifest"), defining benchmark requirements.
-
-2. Output: Benchmark scripts write raw metric data via TensorBoard.
+1. Input: Benchmark registry (e.g. benchmark_registry.pbtxt) defining benchmark requirements.
+2. Output: Metric data written via TensorBoard from benchmark scripts.
 
 Our infrastructure handles the following:
 
@@ -48,13 +47,14 @@ jobs:
 
 ### ml_actions_ref
 
-You must specify the ml_actions_ref input, otherwise it will default to `main`.
+You must specify the `ml_actions_ref` input, otherwise it will default to `main`.
 
-This value tells the reusable workflow which version (branch, tag, or SHA) of the google-ml-infra/actions repository to check out its internal scripts (e.g., install_pip_deps.sh).
+This value tells the reusable workflow which version (branch, tag, or SHA) of the google-ml-infra/actions repository to check out for its internal scripts.
 
-For production, use the same stable tag or SHA as used in the main `uses` line to pin the workflow file version.
+For production, use the same stable tag or SHA that's used to pin the reusable workflow file version (e.g. "v1.5.0" for "google-ml-infra/actions/.github/workflows/run_benchmarks.yml@v1.5.0").
 
 ### Workflow granularity
+
 We recommend creating a dedicated workflow file for each distinct [workflow_type](https://github.com/google-ml-infra/actions/blob/main/benchmarking/proto/benchmark_registry.proto#L112) you plan to support (PRESUBMIT, NIGHTLY, PERIODIC, etc.) to better control scheduling, triggers, and resource allocation.
 
 
@@ -171,9 +171,13 @@ benchmarks {
 
 ## Step 3: Log metrics via TensorBoard
 
-Your benchmark script will need to log metrics via TensorBoard to integrate with the infrastructure.
+Your benchmark script will need to log metrics via TensorBoard to integrate with the infrastructure. The reusable workflow provides a standard environment variable, `TENSORBOARD_OUTPUT_DIR`, which points to the directory where TensorBoard must write event files.
 
-The reusable workflow provides a standard environment variable, `TENSORBOARD_OUTPUT_DIR`, which points to the directory where TensorBoard must write event files.
+### API Requirement
+You must use a library that writes in the standard TensorBoard format.
+
+- **Required API**: The TensorFlow 2.x Summary API (e.g., tf.summary.create_file_writer).
+- **Supported Package**: This API is available in both the full [TensorFlow](https://pypi.org/project/tensorflow) package and the lightweight, standalone [TensorBoard](https://pypi.org/project/tensorboard) package. *Do not use the legacy TensorFlow 1.x tf.summary.FileWriter API, as it is incompatible*.
 
 Example script:
 
