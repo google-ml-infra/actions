@@ -35,6 +35,9 @@
     "GPU_A100": [
       { "label": "linux-x86-a2-48-a100-1gpu", "os": "LINUX", "gpu_count": 1 }
     ],
+    "GPU_B200": [
+      { "label": "linux-x86-a4-224-b200-1gpu", "os": "LINUX", "gpu_count": 1}
+    ],
     "TPU_V6E": [
       { "label": "linux-x86-ct6e-44-1tpu", "os": "LINUX", "tpu_topology": "1x1" }
     ]
