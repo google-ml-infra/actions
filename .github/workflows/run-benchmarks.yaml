@@ -89,13 +89,22 @@ jobs:
           set -euo pipefail
           ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
           REGISTRY_PATH="$GITHUB_WORKSPACE/user_repo/$REGISTRY_FILE"
+          MATRIX_JSON_PATH="$GITHUB_WORKSPACE/matrix.json"
           cd "$ML_ACTIONS_REPO" || exit 1
 
           MATRIX_JSON="$(bazel run //benchmarking/gh_matrix_generator -- \
           --registry_file="$REGISTRY_PATH" \
           --workflow_type="$WORKFLOW_TYPE" | jq -c '.')"
 
+          echo "$MATRIX_JSON" | jq '.' > "$MATRIX_JSON_PATH"
+          echo "matrix_json_path=$MATRIX_JSON_PATH" >> "$GITHUB_OUTPUT"
           echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
+
+      - name: Upload matrix JSON artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        with:
+          name: matrix-json
+          path: ${{ steps.generate.outputs.matrix_json_path }}
 
   run_benchmarks:
     name: Run benchmark (${{ matrix.config_id }})

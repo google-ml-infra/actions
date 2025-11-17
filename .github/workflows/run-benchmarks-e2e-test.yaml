@@ -12,6 +12,7 @@ on:
     paths:
       - 'benchmarking/**'
       - '.github/workflows/run-benchmarks-e2e-test.yaml'
+      - '.github/workflows/run-benchmarks.yaml'
   workflow_dispatch:
 
 permissions:
