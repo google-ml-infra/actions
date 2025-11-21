@@ -221,3 +221,31 @@ except Exception as e:
 Finally, the infrastructure needs to know what hardware is available to your repository. This is defined in a central "allowlist" file: [gha_runners.json](https://github.com/google-ml-infra/actions/blob/main/benchmarking/config/gha_runners.json).
 
 If your workflow fails with an error like `Error: No runner pool defined for repository 'my-org/my-repo'`, please file a bug to have your repository and its available runners added to this file.
+
+## Step 5: Testing
+
+When adding or modifying benchmarks, it is often useful to verify the configuration in the GitHub environment before merging. To avoid creating unnecessary PRs (which can clutter history) just to trigger a run, we recommend using a push-based workflow for testing.
+
+**Configure a test trigger**: Ensure your workflow file (from Step 1) is configured to trigger on push to your specific testing branch.
+
+```yaml
+on:
+  push:
+    branches:
+      - "benchmarking" # or your feature branch name
+```
+
+**Push to the testing branch**: Commit your changes to this branch and push to GitHub.
+
+```bash
+git checkout -b benchmarking
+git add .
+git commit -m "Test new benchmark config"
+git push origin benchmarking
+```
+
+**Verify the run**: Navigate to the Actions tab in your GitHub repository. You should see the workflow triggered by your push.
+
+1. Monitor the "Run benchmark" jobs to ensure the workload executes successfully.
+2. Check the "Parse TensorBoard logs" step output to confirm your metrics were found and parsed correctly.
+3. Verify the generated "Benchmark Result" artifacts.
