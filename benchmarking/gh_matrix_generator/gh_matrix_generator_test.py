@@ -51,17 +51,16 @@ VALID_SUITE_PBTXT = """
       description: "A valid CPU benchmark."
       owner: "cpu-team"
       workload {
-        bazel_workload: {
-          execution_target: "//b:cpu"
-        }
-        runtime_flags: "--model_name=cpu_model"
+        uses: "./ml_actions/benchmarking/actions/bazel_workload"
+        inputs { key: "target" value: "//b:cpu" }
+        inputs { key: "flags" value: "--model_name=cpu_model" }
       }
       hardware_configs {
         hardware_category: CPU_X86
         topology { num_hosts: 1, num_devices_per_host: 1 }
         workflow_type: [PRESUBMIT, POSTSUBMIT]
         resource_spec { min_vcpu_count: 32, os: LINUX }
-        runtime_flags: "--precision=fp32"
+        workload_action_inputs { key: "flags_hw" value: "--precision=fp32" }
       }
       update_frequency_policy: QUARTERLY
       metrics {
@@ -82,17 +81,15 @@ VALID_SUITE_PBTXT = """
       description: "A valid GPU benchmark."
       owner: "gpu-team"
       workload {
-        hlo_workload: {
-          gcs_path: "gs://bucket/model.hlo"
-        }
-        runtime_flags: "--iterations=100"
+        uses: "./ml_actions/benchmarking/actions/hlo_workload"
+        inputs { key: "gcs_path" value: "gs://bucket/model.hlo" }
+        inputs { key: "iterations" value: "100" }
       }
       hardware_configs {
         hardware_category: GPU_A100
         topology { num_hosts: 1, num_devices_per_host: 4 }
         workflow_type: [PRESUBMIT]
         resource_spec { gpu_count: 4 }
-        runtime_flags: "--use_gpu"
       }
       update_frequency_policy: WEEKLY
     }
@@ -101,9 +98,8 @@ VALID_SUITE_PBTXT = """
         description: "A valid Windows benchmark."
         owner: "windows-team"
         workload {
-          bazel_workload: {
-            execution_target: "//b:win"
-          }
+          uses: "./ml_actions/benchmarking/actions/bazel_workload"
+          inputs { key: "target" value: "//b:win" }
         }
         hardware_configs {
             hardware_category: CPU_X86
@@ -120,9 +116,7 @@ INVALID_SUITE_MISSING_NAME_PBTXT = """
       description: "A benchmark with a missing name."
       owner: "cpu-team"
       workload {
-        bazel_workload: {
-          execution_target: "//b:cpu"
-        }
+        uses: "./actions/bazel"
       }
       hardware_configs {
         hardware_category: CPU_X86
@@ -218,9 +212,8 @@ def test_generate_matrix_fails_on_unmatchable_runner(generator, capsys):
         description: "A benchmark that requires 8 GPUs."
         owner: "gpu-team"
         workload {
-          hlo_workload {
-            gcs_path: "gs://b/m.hlo"
-          }
+          uses: "./actions/hlo"
+          inputs { key: "path" value: "gs://b/m.hlo" }
         }
         hardware_configs {
           hardware_category: GPU_A100
