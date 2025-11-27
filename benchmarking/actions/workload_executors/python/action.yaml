@@ -1,0 +1,63 @@
+name: Python Workload Executor
+description: "Sets up Python, installs dependencies, and runs a benchmark script."
+
+inputs:
+  python_version:
+    description: "Python version to use (e.g. 3.10)."
+    required: true
+  script_path:
+    description: "Path to the Python script relative to the repo root."
+    required: true
+  pip_project_path:
+    description: "Path to the pip project directory relative to repo root (defaults to .)."
+    required: false
+    default: "."
+  pip_optional_dependencies:
+    description: "Base comma-separated list of extra pip packages."
+    required: false
+    default: ""
+  pip_optional_dependencies_hw:
+    description: "Comma-separated list of hardware-specific extra pip packages. This list is appended to pip_optional_dependencies."
+    required: false
+    default: ""
+  runtime_flags:
+    description: "Base runtime flags to pass to the script."
+    required: false
+    default: ""
+  runtime_flags_hw:
+    description: "Hardware-specific runtime flags, appended to runtime_flags."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: Install dependencies
+      shell: bash
+      env:
+        PIP_PROJECT_PATH: ${{ inputs.pip_project_path }}
+        PIP_OPTIONAL_DEPS: ${{ inputs.pip_optional_dependencies }}
+        PIP_OPTIONAL_DEPS_HW: ${{ inputs.pip_optional_dependencies_hw }}
+      run: |
+        "$GITHUB_ACTION_PATH/install_pip_deps.sh"
+
+    - name: Run benchmark script
+      shell: bash
+      env:
+        SCRIPT: ${{ inputs.script_path }}
+        ARGS: "${{ inputs.runtime_flags }} ${{ inputs.runtime_flags_hw }}"
+      run: |
+        set -euo pipefail
+        export PYTHONPATH="$GITHUB_WORKSPACE/user_repo"
+        cd "$GITHUB_WORKSPACE/user_repo"
+        
+        echo "::group::Run benchmark"
+        echo "Script: $SCRIPT"
+        echo "ARGS: $ARGS"
+        python "$SCRIPT" $ARGS
+        echo "::endgroup::"
