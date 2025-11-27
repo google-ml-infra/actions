@@ -1,0 +1,35 @@
+name: Dynamic Action Executor
+description: "Dynamically resolves and executes a GitHub Action securely."
+inputs:
+  action:
+    description: "The Action reference (e.g. actions/setup-node@v3 or ./user_repo/actions/my-action)"
+    required: true
+  action_inputs:
+    description: "JSON string of inputs for the action"
+    required: false
+    default: '{}'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate action wrapper
+      shell: bash
+      env:
+        REQUESTED_ACTION: ${{ inputs.action }}
+      run: |
+        set -euo pipefail
+
+        # Validate action path
+        if [[ ! "$REQUESTED_ACTION" =~ ^[a-zA-Z0-9_./@:-]+$ ]]; then
+          echo "error: Invalid action path: $REQUESTED_ACTION"
+          exit 1
+        fi
+
+        rm -rf ./.dynamic-action
+        mkdir -p ./.dynamic-action
+        sed "s|\$REQUESTED_ACTION|$REQUESTED_ACTION|g" "$GITHUB_ACTION_PATH/wrapper.yaml.template" > ./.dynamic-action/action.yml
+
+    - name: Execute wrapper
+      uses: ./.dynamic-action
+      with:        
+        safe_args: ${{ inputs.action_inputs }}

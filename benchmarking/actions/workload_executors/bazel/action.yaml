@@ -1,0 +1,45 @@
+name: Bazel Workload Executor
+description: "Executes a benchmark defined by a Bazel target."
+
+inputs:
+  target:
+    description: "The Bazel target to run (e.g. //benchmarks:my_test)."
+    required: true
+  bazel_run_flags:
+    description: "Base flags to pass to the bazel run command."
+    required: false
+    default: ""
+  bazel_run_flags_hw:
+    description: "Hardware-specific bazel run flags, appended to bazel_run_flags."
+    required: false
+    default: ""
+  runtime_flags:
+    description: "Base runtime flags passed to the binary."
+    required: false
+    default: ""
+  runtime_flags_hw:
+    description: "Hardware-specific runtime flags, appended to runtime_flags."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run Bazel target
+      shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        BAZEL_RUN_FLAGS: "${{ inputs.bazel_run_flags }} ${{ inputs.bazel_run_flags_hw }}"
+        ARGS: "${{ inputs.runtime_flags }} ${{ inputs.runtime_flags_hw }}"
+      run: |
+        echo "::group::Run Bazel target"
+
+        set -euo pipefail
+        cd "$GITHUB_WORKSPACE/user_repo"
+        
+        echo "TARGET: $TARGET"
+        echo "BAZEL RUN FLAGS: $BAZEL_RUN_FLAGS"
+        echo "ARGS: $ARGS"
+        bazel run $BAZEL_RUN_FLAGS "$TARGET" -- $ARGS
+
+        echo "::endgroup::"
