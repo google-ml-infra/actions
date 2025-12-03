@@ -1,0 +1,28 @@
+[project]
+name = "culprit-finder"
+version = "0.1.0"
+description = "A tool to find the exact commit in an open-source GitHub repository responsible for a Continuous Integration (CI) failure."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Developers",
+]
+
+[project.scripts]
+culprit-finder = "culprit_finder.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-mock",
+    "pre-commit",
+]
+
+[build-system]
+requires = ["setuptools>=77.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
