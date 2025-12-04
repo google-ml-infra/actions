@@ -143,82 +143,21 @@ message HardwareConfig {
   // REQUIRED: Specifies which workflows this config applies to.
   repeated WorkflowType workflow_type = 3 [(buf.validate.field).repeated.min_items = 1];
 
-  // Optional: Hardware-specific runtime flags (e.g., --precision=fp16).
-  repeated string runtime_flags = 4;
-
   // Optional: Resource specification.
   // If not provided, a default small runner for the category will be chosen.
-  ResourceSpec resource_spec = 5;
+  ResourceSpec resource_spec = 4;
 
-  // Optional: Hardware-specific dependencies (e.g., "cuda", "tpu").
-  repeated string pip_optional_dependencies = 6;
+  // Optional: Hardware-specific inputs for the workload executor action.
+  map<string, string> workload_action_inputs = 5;
 }
 
-// Defines an HLO text dump file (.hlo) workload.
-message HloWorkload {
-  oneof source {
-    option (buf.validate.oneof).required = true;
+// Defines the configuration for the workload executor action.
+message WorkloadAction {
+  // REQUIRED: Specifies the action to be used to execute the workload (e.g., my_repo/hlo_workload_executor@v4).
+  string action = 1 [(buf.validate.field).string.min_len = 1];
 
-    // Relative path to a file within the source repository (e.g., "hlo/my_model.hlo").
-    string relative_path = 1;
-
-    // GCS path (gs://bucket/path/to/artifact) for larger artifacts.
-    string gcs_path = 2;
-  }
-}
-
-// Defines a stableHLO MLIR text file (.mlir) workload.
-message StableHloWorkload {
-  oneof source {
-    option (buf.validate.oneof).required = true;
-    
-    // Relative path to a file within the source repository (e.g., "hlo/my_model.hlo").
-    string relative_path = 1;
-
-    // GCS path (gs://bucket/path/to/artifact) for larger artifacts.
-    string gcs_path = 2;
-  }
-}
-
-// Defines a runnable Bazel target workload.
-message BazelTargetWorkload {
-
-  // REQUIRED: Bazel target within the source repository (e.g., "//my:target").
-  string execution_target = 1 [(buf.validate.field).string.min_len = 1];
-}
-
-// Defines a Python workload (i.e. pip-managed environment).
-message PythonWorkload {
-  // REQUIRED: The path to the Python script, relative to the repo root
-  // (e.g., "benchmarks/my_script.py").
-  string script_path = 1 [(buf.validate.field).string.min_len = 1];
-
-  // REQUIRED: e.g., "3.11".
-  string python_version = 2 [(buf.validate.field).string.min_len = 1];
-
-  // Optional: Base dependencies that this workload always requires (e.g., "test").
-  // Combined with hardware_config's pip_optional_dependencies.
-  repeated string pip_optional_dependencies = 3;
-
-  // Optional: The path to the pip project (the directory containing
-  // pyproject.toml or requirements.txt).
-  // If not provided, it defaults to the repository root.
-  optional string pip_project_path = 4;
-}
-
-// Specifies the workload for the benchmark.
-message WorkloadSpec {
-  oneof workload {
-    option (buf.validate.oneof).required = true;
-    HloWorkload hlo_workload = 1;
-    StableHloWorkload stablehlo_workload = 2;
-    BazelTargetWorkload bazel_workload = 3;
-    PythonWorkload python_workload = 4;
-  }
-
-  // Optional: Base runtime flags (e.g., --model_name=...).
-  // Combined with hardware_config's runtime_flags.
-  repeated string runtime_flags = 5;
+  // Optional: Generic map of inputs to the action.
+  map<string, string> action_inputs = 2;
 }
 
 // Defines a specific benchmark configuration.
@@ -232,8 +171,8 @@ message BenchmarkConfig {
   // REQUIRED: The owner or team responsible for the benchmark.
   string owner = 3 [(buf.validate.field).string.min_len = 1];
 
-  // REQUIRED: The workload specification.
-  WorkloadSpec workload = 4 [(buf.validate.field).required = true];
+  // REQUIRED: Configuration for the workload executor action.
+  WorkloadAction workload = 4 [(buf.validate.field).required = true];
 
   // REQUIRED: List of hardware configurations.
   repeated HardwareConfig hardware_configs = 5 [(buf.validate.field).repeated.min_items = 1];
