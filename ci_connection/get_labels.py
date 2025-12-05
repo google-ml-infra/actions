@@ -31,6 +31,7 @@ import re
 import time
 import traceback
 import urllib.request
+import urllib.error
 
 
 def _get_label_request_headers() -> dict[str, str]:
@@ -64,11 +65,54 @@ def _get_label_data_via_api(gh_issue: str) -> list | None:
   total_attempts = 3
   cur_attempt = 1
 
+  permissions_url = "go/ml-github-actions:connect#labels-read-permissions"
+
   while cur_attempt <= total_attempts:
     request = urllib.request.Request(labels_url, headers=_get_label_request_headers())
     logging.info(f"Retrieving PR labels via API - attempt {cur_attempt}...")
+
     try:
       response = urllib.request.urlopen(request, timeout=10)
+
+      if response.status == 200:
+        data = response.read().decode("utf-8")
+        logging.debug(f"API labels data: \n{data}")
+        break
+
+    except urllib.error.HTTPError as e:
+      # This is unlikely to happen if GITHUB_TOKEN is present
+      if e.code == 404:
+        logging.error(
+          f"Resource not found (404) for: {labels_url}\n"
+          "Please ensure the workflow has "
+          "the necessary permissions to access this repository. "
+          f"See: {permissions_url}"
+        )
+        return None
+
+      elif e.code == 403:
+        # Check if this is a rate limit issue, or a permission issue
+        remaining_rate = e.headers.get("x-ratelimit-remaining")
+
+        if remaining_rate == "0":
+          logging.error("GitHub API rate limit exceeded (403).")
+        else:
+          logging.error(
+            "Permission denied (403). Please ensure the workflow has the correct "
+            f"permissions set. See: {permissions_url}"
+          )
+        return None
+
+      elif e.code == 429:
+        logging.warning("Secondary rate limit hit (429). Will attempt to retry...")
+
+      else:
+        logging.error(f"Request failed with HTTP status code: {e.code}")
+
+      cur_attempt += 1
+      _wait_before_repeat_request(cur_attempt, total_attempts)
+      continue
+
     except Exception:
       logging.error(
         f"Failed to retrieve labels via API due to an unexpected "
@@ -78,15 +122,6 @@ def _get_label_data_via_api(gh_issue: str) -> list | None:
       cur_attempt += 1
       _wait_before_repeat_request(cur_attempt, total_attempts)
       continue
-
-    if response.status == 200:
-      data = response.read().decode("utf-8")
-      logging.debug(f"API labels data: \n{data}")
-      break
-    else:
-      logging.error(f"Request failed with status code: {response.status}")
-      cur_attempt += 1
-      _wait_before_repeat_request(cur_attempt, total_attempts)
 
   if not data:
     logging.error("Retrieval of PR labels via API failed")
