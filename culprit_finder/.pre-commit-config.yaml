@@ -1,0 +1,32 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-ast
+        files: ^culprit_finder/
+      - id: check-merge-conflict
+        files: ^culprit_finder/
+      - id: check-toml
+        files: ^culprit_finder/
+      - id: check-yaml
+        files: ^culprit_finder/
+      - id: end-of-file-fixer
+        files: ^culprit_finder/
+      - id: trailing-whitespace
+        files: ^culprit_finder/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.3
+    hooks:
+      - id: ruff
+        args: [ --fix ]
+        files: ^culprit_finder/
+      - id: ruff-format
+        files: ^culprit_finder/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        additional_dependencies: []
+        files: ^culprit_finder/

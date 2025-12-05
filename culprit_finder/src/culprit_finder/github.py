@@ -1,0 +1,195 @@
+"""
+Module for interacting with the GitHub API via the gh CLI.
+"""
+
+import subprocess
+import json
+import logging
+from typing import Optional, TypedDict
+
+
+class CommitDetail(TypedDict):
+  message: str
+
+
+class Commit(TypedDict):
+  sha: str
+  commit: CommitDetail
+
+
+class Workflow(TypedDict):
+  name: str
+  path: str
+
+
+class Run(TypedDict):
+  headSha: str
+  status: str
+  createdAt: str
+  conclusion: Optional[str]
+  databaseId: int
+  url: str
+
+
+def run_command(args: list[str]) -> str:
+  """
+  Executes a gh CLI command and returns the stdout.
+
+  Args:
+      args: A list of arguments to pass to the 'gh' command.
+
+  Returns:
+      The standard output of the command as a string.
+
+  Raises:
+      subprocess.CalledProcessError: If the command fails (returns non-zero exit code).
+  """
+  try:
+    result = subprocess.run(["gh"] + args, check=True, capture_output=True, text=True)
+    return result.stdout.strip()
+  except subprocess.CalledProcessError as e:
+    logging.error("Command failed: %s", e.cmd)
+    logging.error("STDERR: %s", e.stderr)
+    raise
+
+
+def check_auth_status() -> bool:
+  """
+  Checks if the user is authenticated with the GitHub CLI.
+
+  Returns:
+      True if authenticated, False otherwise.
+  """
+  try:
+    subprocess.run(["gh", "auth", "status"], check=True, capture_output=True)
+    return True
+  except subprocess.CalledProcessError:
+    return False
+
+
+def compare_commits(repo: str, base_sha: str, head_sha: str) -> list[Commit]:
+  """
+  Gets the list of commits between two SHAs.
+
+  Args:
+      repo: The GitHub repository in 'owner/repo' format.
+      base_sha: The starting commit SHA (exclusive).
+      head_sha: The ending commit SHA (inclusive).
+
+  Returns:
+      A list of dictionaries, where each dictionary represents a commit
+      in the range (base_sha...head_sha].
+  """
+  endpoint = f"repos/{repo}/compare/{base_sha}...{head_sha}"
+  output = run_command(["api", endpoint])
+  data = json.loads(output)
+  return data.get("commits", [])
+
+
+def trigger_workflow(workflow_file: str, branch: str, inputs: dict[str, str]) -> None:
+  """
+  Triggers a workflow_dispatch event for a specific workflow on a branch.
+
+  Args:
+      workflow_file: The filename or ID of the workflow to trigger.
+      branch: The git branch reference to run the workflow on.
+      inputs: A dictionary of input keys and values for the workflow dispatch event.
+  """
+  cmd = ["workflow", "run", workflow_file, "--ref", branch]
+  for key, value in inputs.items():
+    cmd.extend(["-f", f"{key}={value}"])
+
+  run_command(cmd)
+
+
+def get_latest_run(workflow_file: str, branch: str) -> Run | None:
+  """
+  Gets the latest workflow run for a specific branch and workflow.
+
+  Args:
+      workflow_file: The filename or ID of the workflow to query.
+      branch: The git branch reference to filter runs by.
+
+  Returns:
+      A dictionary representing the latest workflow run object (containing fields like
+      headSha, status, conclusion, etc.), or None if no runs are found.
+  """
+  fields = "headSha,status,createdAt,conclusion,databaseId,url"
+  cmd = [
+    "run",
+    "list",
+    "--workflow",
+    workflow_file,
+    "--branch",
+    branch,
+    "--event",
+    "workflow_dispatch",
+    "--limit",
+    "1",
+    "--json",
+    fields,
+  ]
+
+  output = run_command(cmd)
+  runs = json.loads(output)
+  return runs[0] if runs else None
+
+
+def check_branch_exists(repo: str, branch_name: str) -> bool:
+  """
+  Checks if a branch exists in the remote repository.
+
+  Args:
+      repo: The GitHub repository in 'owner/repo' format.
+      branch_name: The name of the branch to check.
+
+  Returns:
+      True if the branch exists, False otherwise.
+  """
+  endpoint = f"repos/{repo}/git/refs/heads/{branch_name}"
+  try:
+    # We use subprocess directly here instead of run_command to avoid
+    # logging errors when the branch doesn't exist (which returns 404).
+    subprocess.run(["gh", "api", endpoint, "--silent"], check=True, capture_output=True)
+    return True
+  except subprocess.CalledProcessError:
+    return False
+
+
+def create_branch(repo: str, branch_name: str, sha: str) -> None:
+  """
+  Creates a new git branch (ref) from a specific SHA in the remote repository.
+
+  Args:
+      repo: The GitHub repository in 'owner/repo' format.
+      branch_name: The name of the new branch to create (e.g., 'my-feature-branch').
+      sha: The commit SHA to base the new branch on.
+  """
+  endpoint = f"repos/{repo}/git/refs"
+  cmd = ["api", endpoint, "-f", f"ref=refs/heads/{branch_name}", "-f", f"sha={sha}"]
+  run_command(cmd)
+
+
+def gh_delete_branch(repo: str, branch_name: str) -> None:
+  """
+  Deletes a git branch (ref) from the remote repository.
+
+  Args:
+      repo: The GitHub repository in 'owner/repo' format.
+      branch_name: The name of the branch to delete.
+  """
+  endpoint = f"repos/{repo}/git/refs/heads/{branch_name}"
+  cmd = ["api", "--method", "DELETE", endpoint]
+  run_command(cmd)
+
+
+def get_workflows() -> list[Workflow]:
+  """
+  Retrieves a list of workflows in the repository.
+
+  Returns:
+      A list of dictionaries, where each dictionary contains the 'name' and 'path' of a workflow.
+  """
+  cmd = ["workflow", "list", "--json", "path,name"]
+  workflows = run_command(cmd)
+  return json.loads(workflows)
