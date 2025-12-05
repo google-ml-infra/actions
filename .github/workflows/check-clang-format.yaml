@@ -1,0 +1,29 @@
+# A workflow to test clang-format composite action
+
+name: Test CI Clang-format Action
+# Run on pull_request
+on:
+  pull_request:
+    paths:
+    - ci_clangformat/**
+    - tests/ci_clangformat/**
+    - .github/workflows/check-clang-format.yaml
+    branches:
+      - main
+defaults:
+  run:
+    shell: bash
+jobs:
+  run-clang-format:
+    runs-on: "linux-x86-n2-16"
+    container: "us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build:latest"
+    timeout-minutes: 10
+    if: |
+      github.event.sender.type == 'User' ||
+      contains(github.event.pull_request.body, 'RUN_CLANG_FORMAT')
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: "Run clang-format action"
+        uses: ./ci_clangformat/
