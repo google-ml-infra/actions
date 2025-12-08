@@ -142,7 +142,7 @@ def _get_labels_via_api(gh_issue: str) -> list | None:
             logging.error("GitHub API rate limit exceeded for unauthenticated request.")
           else:
             logging.error(
-              f"Request blocked by GitHub (Secondary Rate Limit or Abuse Detection)."
+              "Request blocked by GitHub (Secondary Rate Limit or Abuse Detection)."
             )
           return None
 
