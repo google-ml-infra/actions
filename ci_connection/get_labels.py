@@ -59,6 +59,15 @@ def _wait_before_repeat_request(cur_attempt: int, total_attempts: int):
   time.sleep(wait_time)
 
 
+def _log_rate_limit(response,
+                    log_state_dict: dict,
+                    authentication_type: str):
+  if not log_state_dict[authentication_type]:
+    rate_limit = response.headers.get("x-ratelimit-limit")
+    log_state_dict[authentication_type] = True
+    logging.debug(f"API rate limit ({authentication_type}): {rate_limit}")
+
+
 def _get_labels_via_api(gh_issue: str) -> list | None:
   gh_repo = os.getenv("GITHUB_REPOSITORY")
   labels_url = f"https://api.github.com/repos/{gh_repo}/issues/{gh_issue}/labels"
@@ -79,8 +88,12 @@ def _get_labels_via_api(gh_issue: str) -> list | None:
     request = urllib.request.Request(labels_url, headers=headers)
     logging.info(f"Retrieving PR labels via API - attempt {cur_attempt}...")
 
+    is_authenticated = "Authorization" in headers
+    authentication_type = "with_token" if is_authenticated else "public"
+
     try:
       response = urllib.request.urlopen(request, timeout=10)
+      _log_rate_limit(response, rate_limit_logged, authentication_type)
 
       if response.status == 200:
         data = response.read().decode("utf-8")
@@ -88,13 +101,7 @@ def _get_labels_via_api(gh_issue: str) -> list | None:
         break
 
     except urllib.error.HTTPError as e:
-      is_authenticated = "Authorization" in headers
-      authentication_type = "with_token" if is_authenticated else "public"
-
-      if not rate_limit_logged[authentication_type]:
-        rate_limit = e.headers.get("x-ratelimit-limit")
-        rate_limit_logged[authentication_type] = True
-        logging.debug(f"API rate limit ({authentication_type}): {rate_limit}")
+      _log_rate_limit(e, rate_limit_logged, authentication_type)
 
       if e.code == 404:
         # A 404 means the repo/PR doesn't exist, or, the token has
