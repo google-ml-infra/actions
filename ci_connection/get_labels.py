@@ -33,15 +33,19 @@ import traceback
 import urllib.request
 import urllib.error
 
+_GITHUB_API_VERSION = "2022-11-28"
+
 
 def _get_label_request_headers() -> dict[str, str]:
-  gh_token = os.getenv("GITHUB_TOKEN")
   headers = {
     "Accept": "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
+    "X-GitHub-Api-Version": _GITHUB_API_VERSION,
   }
+
+  gh_token = os.getenv("GITHUB_TOKEN")
   if gh_token:
     headers["Authorization"] = f"Bearer {gh_token}"
+
   return headers
 
 
@@ -55,10 +59,12 @@ def _wait_before_repeat_request(cur_attempt: int, total_attempts: int):
   time.sleep(wait_time)
 
 
-def _get_label_data_via_api(gh_issue: str) -> list | None:
+def _get_labels_via_api(gh_issue: str) -> list | None:
   gh_repo = os.getenv("GITHUB_REPOSITORY")
   labels_url = f"https://api.github.com/repos/{gh_repo}/issues/{gh_issue}/labels"
   logging.debug(f"{gh_issue=!r}\n{gh_repo=!r}")
+
+  rate_limit_logged = {"with_token": False, "public": False}
 
   data = None
   label_json = None
@@ -67,8 +73,10 @@ def _get_label_data_via_api(gh_issue: str) -> list | None:
 
   permissions_url = "go/ml-github-actions:connect#labels-read-permissions"
 
+  headers = _get_label_request_headers()
+
   while cur_attempt <= total_attempts:
-    request = urllib.request.Request(labels_url, headers=_get_label_request_headers())
+    request = urllib.request.Request(labels_url, headers=headers)
     logging.info(f"Retrieving PR labels via API - attempt {cur_attempt}...")
 
     try:
@@ -80,31 +88,70 @@ def _get_label_data_via_api(gh_issue: str) -> list | None:
         break
 
     except urllib.error.HTTPError as e:
-      # This is unlikely to happen if GITHUB_TOKEN is present
+      is_authenticated = "Authorization" in headers
+      authentication_type = "with_token" if is_authenticated else "public"
+
+      if not rate_limit_logged[authentication_type]:
+        rate_limit = e.headers.get("x-ratelimit-limit")
+        rate_limit_logged[authentication_type] = True
+        logging.debug(f"API rate limit ({authentication_type}): {rate_limit}")
+
       if e.code == 404:
+        # A 404 means the repo/PR doesn't exist, or, the token has
+        # zero access as the repo is private - no sense in retrying anonymously
         logging.error(
           f"Resource not found (404) for: {labels_url}\n"
           "Please ensure the workflow has "
           "the necessary permissions to access this repository. "
-          f"See: {permissions_url}"
+          f"See {permissions_url}"
         )
         return None
 
-      elif e.code == 403:
-        # Check if this is a rate limit issue, or a permission issue
-        remaining_rate = e.headers.get("x-ratelimit-remaining")
+      elif e.code in (401, 403, 429):
+        rl_remaining = e.headers.get("x-ratelimit-remaining")
 
-        if remaining_rate == "0":
-          logging.error("GitHub API rate limit exceeded (403).")
-        else:
-          logging.error(
-            "Permission denied (403). Please ensure the workflow has the correct "
-            f"permissions set. See: {permissions_url}"
+        if is_authenticated:
+          # Check headers to distinguish between 'Forbidden' and 'Rate Limit'
+          # 429 is always a rate limit; 403 is a rate limit if the remaining limit is
+          # zero
+          is_rate_limit = e.code == 429 or rl_remaining == "0"
+
+          error_type = "Rate Limit" if is_rate_limit else "Permission"
+          error_msg = (
+            f"{error_type} error ({e.code}) encountered with an authenticated "
+            f"request (x-ratelimit-remaining: {rl_remaining}). "
+            f"Falling back to unauthenticated requests in the hopes this is a public "
+            f"repo."
           )
-        return None
 
-      elif e.code == 429:
-        logging.warning("Secondary rate limit hit (429). Will attempt to retry...")
+          if e.code == 403 and rl_remaining != "0":
+            error_msg += (
+              f"\nThe workflow likely lacks correct permissions ({permissions_url}).\n"
+              f"Follow {permissions_url} to avoid this in the future."
+            )
+          logging.warning(error_msg)
+
+          # Remove the token and immediately retry without waiting
+          del headers["Authorization"]
+          cur_attempt += 1
+          continue
+
+        # Not authenticated
+        if e.code == 403:
+          if rl_remaining == "0":
+            logging.error("GitHub API rate limit exceeded for unauthenticated request.")
+          else:
+            logging.error(
+              f"Request blocked by GitHub (Secondary Rate Limit or Abuse Detection)."
+            )
+          return None
+
+        elif e.code == 401:
+          logging.error("Unauthorized (401) on unauthenticated request.")
+          return None
+
+        elif e.code == 429:
+          logging.warning("Secondary rate limit hit (429) on unauthenticated request.")
 
       else:
         logging.error(f"Request failed with HTTP status code: {e.code}")
@@ -136,8 +183,8 @@ def _get_label_data_via_api(gh_issue: str) -> list | None:
   return label_json
 
 
-def _get_label_data_from_event_file() -> list | None:
-  """Fall back on labels from the event's payload, if API failed"""
+def _get_labels_from_event_file() -> list | None:
+  """Fall back on labels from the event's payload, if API failed."""
   event_payload_path = os.getenv("GITHUB_EVENT_PATH")
   try:
     with open(event_payload_path, "r", encoding="utf-8") as event_payload:
@@ -171,7 +218,7 @@ def _extract_labels(data: list) -> list | None:
 
 
 def retrieve_labels(print_to_stdout: bool = True) -> list[str] | None:
-  """Get the most up-to-date labels.
+  """Get the most up-to-date labels on the PR the workflow is running on.
 
   In case this is not a PR, return an empty list.
   """
@@ -197,12 +244,12 @@ def retrieve_labels(print_to_stdout: bool = True) -> list[str] | None:
   gh_issue = ref_match.group(1)
 
   # Try retrieving the labels info via API
-  label_data = _get_label_data_via_api(gh_issue)
+  label_data = _get_labels_via_api(gh_issue)
 
   # Fall back on labels from the event's payload, if API failed (unlikely)
   if label_data is None:
     logging.info("Attempting to retrieve labels from the event file")
-    label_data = _get_label_data_from_event_file()
+    label_data = _get_labels_from_event_file()
 
   if label_data is None:
     return None

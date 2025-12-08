@@ -46,7 +46,8 @@ STATE_ENV_OUT_PATH = os.path.join(STATE_OUT_DIR, STATE_ENV_FILENAME)
 # triggering a run:
 # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
 # https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/troubleshooting-workflows/enabling-debug-logging#enabling-runner-diagnostic-logging
-# Note that the above mentions ACTIONS_RUNNER_DEBUG, but it doesn't appear to get set - perhaps it is set via secrets
+# Note that the above mentions ACTIONS_RUNNER_DEBUG,
+# but it doesn't appear to get set - perhaps it is set via secrets
 _SHOW_DEBUG = bool(
   os.getenv(
     "WAIT_FOR_CONNECTION_DEBUG",
