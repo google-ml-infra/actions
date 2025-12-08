@@ -59,9 +59,7 @@ def _wait_before_repeat_request(cur_attempt: int, total_attempts: int):
   time.sleep(wait_time)
 
 
-def _log_rate_limit(response,
-                    log_state_dict: dict,
-                    authentication_type: str):
+def _log_rate_limit(response, log_state_dict: dict, authentication_type: str):
   if not log_state_dict[authentication_type]:
     rate_limit = response.headers.get("x-ratelimit-limit")
     log_state_dict[authentication_type] = True

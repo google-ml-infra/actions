@@ -29,7 +29,8 @@ runs:
       # Important: The token is used only for retrieving PR labels via API.
       # For the token to work, the calling workflow must have the following permissions
       # set: go/ml-github-actions:connect#labels-read-permissions.
-      GITHUB_TOKEN: ${{ github.token }}
+#      GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: fake_token # remove before submit
       # Remove before submit
       WAIT_FOR_CONNECTION_DEBUG: true
     # The calling workflow shouldn't fail in case this step does

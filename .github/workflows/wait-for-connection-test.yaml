@@ -25,7 +25,9 @@ defaults:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-permissions: {}
+permissions:
+  pull-requests: read
+  issues: read
 jobs:
   wait-test:
     strategy:
