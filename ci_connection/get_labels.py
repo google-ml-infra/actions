@@ -44,6 +44,7 @@ def _get_label_request_headers() -> dict[str, str]:
 
   gh_token = os.getenv("GITHUB_TOKEN")
   if gh_token:
+    logging.debug("Attached workflow token to headers")
     headers["Authorization"] = f"Bearer {gh_token}"
 
   return headers
