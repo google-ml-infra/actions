@@ -67,8 +67,9 @@ def _log_rate_limit(response, log_state_dict: dict, authentication_type: str):
 
 
 def _get_labels_via_api(gh_issue: str) -> list | None:
+  gh_api = os.getenv("GITHUB_API_URL", "https://api.github.com")
   gh_repo = os.getenv("GITHUB_REPOSITORY")
-  labels_url = f"https://api.github.com/repos/{gh_repo}/issues/{gh_issue}/labels"
+  labels_url = f"{gh_api}/repos/{gh_repo}/issues/{gh_issue}/labels"
   logging.debug(f"{gh_issue=!r}\n{gh_repo=!r}")
 
   rate_limit_logged = {"with_token": False, "public": False}
@@ -89,6 +90,7 @@ def _get_labels_via_api(gh_issue: str) -> list | None:
     is_authenticated = "Authorization" in headers
     authentication_type = "with_token" if is_authenticated else "public"
 
+    # noinspection PyBroadException
     try:
       response = urllib.request.urlopen(request, timeout=10)
       _log_rate_limit(response, rate_limit_logged, authentication_type)
@@ -106,9 +108,9 @@ def _get_labels_via_api(gh_issue: str) -> list | None:
         # zero access as the repo is private - no sense in retrying anonymously
         logging.error(
           f"Resource not found (404) for: {labels_url}\n"
-          "Please ensure the workflow has "
-          "the necessary permissions to access this repository. "
-          f"See {permissions_url}"
+          "The repository is likely private, and the workflow lacks permissions to "
+          "read its pull requests.\n"
+          f"Ensure the necessary permissions are set: {permissions_url}"
         )
         return None
 
@@ -120,11 +122,14 @@ def _get_labels_via_api(gh_issue: str) -> list | None:
           # 429 is always a rate limit; 403 is a rate limit if the remaining limit is
           # zero
           is_rate_limit = e.code == 429 or rl_remaining == "0"
+          limit_blurb = ""
+          if is_rate_limit:
+            limit_blurb = f" (x-ratelimit-remaining: {rl_remaining})"
 
           error_type = "Rate Limit" if is_rate_limit else "Permission"
           error_msg = (
             f"{error_type} error ({e.code}) encountered with an authenticated "
-            f"request (x-ratelimit-remaining: {rl_remaining}). "
+            f"request{limit_blurb}. "
             f"Falling back to unauthenticated requests in the hopes this is a public "
             f"repo."
           )
@@ -191,6 +196,7 @@ def _get_labels_via_api(gh_issue: str) -> list | None:
 def _get_labels_from_event_file() -> list | None:
   """Fall back on labels from the event's payload, if API failed."""
   event_payload_path = os.getenv("GITHUB_EVENT_PATH")
+  # noinspection PyBroadException
   try:
     with open(event_payload_path, "r", encoding="utf-8") as event_payload:
       label_json = json.load(event_payload).get("pull_request", {}).get("labels", [])

@@ -44,7 +44,8 @@ def _get_run_attempt_num() -> int | None:
   try:
     attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
     return attempt
-  except ValueError:  # shouldn't be possible in GitHub Actions, but to be safe
+  # Shouldn't be possible in GitHub Actions, but to be safe
+  except (TypeError, ValueError):
     logging.error("Could not retrieve GITHUB_RUN_ATTEMPT, assuming first attempt...")
     return 1
 
