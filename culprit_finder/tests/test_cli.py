@@ -132,14 +132,14 @@ def test_cli_auth_success(monkeypatch, mocker, cli_auth, token_auth):
         {"path": ".github/workflows/test.yml", "name": "Other"},
       ],
       True,
-      {"sha": "badsha123", "commit": {"message": "Bad commit message\nDetails"}},
+      {"sha": "badsha123", "message": "Bad commit message\nDetails"},
       "The culprit commit is: Bad commit message (SHA: badsha123)",
     ),
     # Scenario 2: Culprit finder workflow absent, Culprit Found
     (
       [{"path": ".github/workflows/test.yml", "name": "Other"}],
       False,
-      {"sha": "badsha456", "commit": {"message": "Another bad one"}},
+      {"sha": "badsha456", "message": "Another bad one"},
       "The culprit commit is: Another bad one (SHA: badsha456)",
     ),
     # Scenario 3: Culprit finder workflow present, No Culprit Found

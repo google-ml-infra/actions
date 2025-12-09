@@ -35,14 +35,16 @@ def main() -> None:
   """
   parser = argparse.ArgumentParser(description="Culprit finder for GitHub Actions.")
   parser.add_argument(
+    "-r",
     "--repo",
     required=True,
     help="Target GitHub repository (e.g., owner/repo)",
     type=_validate_repo,
   )
-  parser.add_argument("--start", required=True, help="Last known good commit SHA")
-  parser.add_argument("--end", required=True, help="First known bad commit SHA")
+  parser.add_argument("-s", "--start", required=True, help="Last known good commit SHA")
+  parser.add_argument("-e", "--end", required=True, help="First known bad commit SHA")
   parser.add_argument(
+    "-w",
     "--workflow",
     required=True,
     help="Workflow filename (e.g., build_and_test.yml)",
@@ -78,7 +80,7 @@ def main() -> None:
   )
   culprit_commit = finder.run_bisection()
   if culprit_commit:
-    commit_message = culprit_commit["commit"]["message"].splitlines()[0]
+    commit_message = culprit_commit["message"].splitlines()[0]
     print(
       f"\nThe culprit commit is: {commit_message} (SHA: {culprit_commit['sha']})",
     )

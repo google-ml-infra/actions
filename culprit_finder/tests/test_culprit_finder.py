@@ -1,6 +1,7 @@
 """Tests for the CulpritFinder class."""
 
-from culprit_finder import culprit_finder
+from culprit_finder import culprit_finder, github
+import re
 import pytest
 from datetime import datetime, timezone
 
@@ -63,7 +64,7 @@ def test_wait_for_workflow_completion_success(mocker, finder):
   assert mock_gh.get_latest_run.call_count == 3
 
   for call_args in mock_gh.get_latest_run.call_args_list:
-    assert call_args[0][0] == workflow
+    assert call_args[0][1] == workflow
 
 
 @pytest.mark.parametrize("finder", [True, False], indirect=True)
@@ -90,6 +91,7 @@ def test_test_commit_success(mocker, finder):
     expected_inputs = {}
 
   mock_gh.trigger_workflow.assert_called_once_with(
+    REPO,
     expected_workflow,
     branch,
     expected_inputs,
@@ -106,8 +108,8 @@ def test_test_commit_failure(mocker, finder):
   assert finder._test_commit("sha", "branch") is False
 
 
-def _create_commit(sha: str, message: str) -> dict:
-  return {"sha": sha, "commit": {"message": message}}
+def _create_commit(sha: str, message: str) -> github.Commit:
+  return {"sha": sha, "message": message}
 
 
 @pytest.mark.parametrize(
@@ -215,7 +217,14 @@ def test_run_bisection_branch_cleanup_on_failure(mocker, finder):
     finder.run_bisection()
 
   mock_gh.create_branch.assert_called_once()
-  mock_gh.gh_delete_branch.assert_called_once_with(REPO, "culprit-finder/test-c0")
+
+  assert mock_gh.gh_delete_branch.call_count == 1
+  called_repo_delete, called_branch_name_delete = mock_gh.gh_delete_branch.call_args[0]
+  assert called_repo_delete == REPO
+  assert re.fullmatch(
+    r"culprit-finder/test-c0_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    called_branch_name_delete,
+  )
 
 
 def test_run_bisection_branch_already_exists(mocker, finder):
@@ -231,5 +240,10 @@ def test_run_bisection_branch_already_exists(mocker, finder):
 
   finder.run_bisection()
 
-  mock_gh.create_branch.assert_not_called()
-  mock_gh.gh_delete_branch.assert_called_once_with(REPO, "culprit-finder/test-c0")
+  assert mock_gh.gh_delete_branch.call_count == 1
+  called_repo_delete, called_branch_name_delete = mock_gh.gh_delete_branch.call_args[0]
+  assert called_repo_delete == REPO
+  assert re.fullmatch(
+    r"culprit-finder/test-c0_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    called_branch_name_delete,
+  )

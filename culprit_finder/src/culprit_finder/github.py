@@ -8,13 +8,9 @@ import logging
 from typing import Optional, TypedDict
 
 
-class CommitDetail(TypedDict):
-  message: str
-
-
 class Commit(TypedDict):
   sha: str
-  commit: CommitDetail
+  message: str
 
 
 class Workflow(TypedDict):
@@ -23,6 +19,17 @@ class Workflow(TypedDict):
 
 
 class Run(TypedDict):
+  """Represents a GitHub Actions workflow run.
+
+  Attributes:
+      headSha: The SHA of the head commit for the workflow run.
+      status: The current status of the workflow run (e.g., "completed", "in_progress", "queued").
+      createdAt: The timestamp when the workflow run was created.
+      conclusion: The conclusion of the workflow run if completed (e.g., "success", "failure", "cancelled"). Optional.
+      databaseId: The unique identifier for the workflow run in the GitHub database.
+      url: The URL to the workflow run on GitHub.
+  """
+
   headSha: str
   status: str
   createdAt: str
@@ -80,13 +87,31 @@ def compare_commits(repo: str, base_sha: str, head_sha: str) -> list[Commit]:
       A list of dictionaries, where each dictionary represents a commit
       in the range (base_sha...head_sha].
   """
-  endpoint = f"repos/{repo}/compare/{base_sha}...{head_sha}"
-  output = run_command(["api", endpoint])
-  data = json.loads(output)
-  return data.get("commits", [])
+  per_page = 250
+  page = 1
+
+  all_commits = []
+
+  while True:
+    endpoint = (
+      f"repos/{repo}/compare/{base_sha}...{head_sha}?page={page}&per_page={per_page}"
+    )
+    comparison_json = run_command(["api", endpoint])
+    comparison = json.loads(comparison_json)
+    commit_batch = comparison.get("commits", [])
+
+    if not commit_batch:
+      break
+
+    all_commits.extend(commit_batch)
+    page += 1
+
+  return [{"sha": c["sha"], "message": c["commit"]["message"]} for c in all_commits]
 
 
-def trigger_workflow(workflow_file: str, branch: str, inputs: dict[str, str]) -> None:
+def trigger_workflow(
+  repo: str, workflow_file: str, branch: str, inputs: dict[str, str]
+) -> None:
   """
   Triggers a workflow_dispatch event for a specific workflow on a branch.
 
@@ -95,14 +120,14 @@ def trigger_workflow(workflow_file: str, branch: str, inputs: dict[str, str]) ->
       branch: The git branch reference to run the workflow on.
       inputs: A dictionary of input keys and values for the workflow dispatch event.
   """
-  cmd = ["workflow", "run", workflow_file, "--ref", branch]
+  cmd = ["workflow", "run", workflow_file, "--ref", branch, "--repo", repo]
   for key, value in inputs.items():
     cmd.extend(["-f", f"{key}={value}"])
 
   run_command(cmd)
 
 
-def get_latest_run(workflow_file: str, branch: str) -> Run | None:
+def get_latest_run(repo: str, workflow_file: str, branch: str) -> Run | None:
   """
   Gets the latest workflow run for a specific branch and workflow.
 
@@ -128,6 +153,8 @@ def get_latest_run(workflow_file: str, branch: str) -> Run | None:
     "1",
     "--json",
     fields,
+    "--repo",
+    repo,
   ]
 
   output = run_command(cmd)
