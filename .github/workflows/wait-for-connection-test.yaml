@@ -38,7 +38,7 @@ jobs:
     container:
       image: ${{ startsWith(matrix.runner, 'linux') && 'us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build@sha256:cec01011e627c0fd101c521a8af7c09ce4557ab6dcc9f8678aeb67a3182ed821' || (startsWith(matrix.runner, 'windows') && null) }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # ratchet:actions/checkout@v4
         with:
           persist-credentials: false
       - name: Echo
