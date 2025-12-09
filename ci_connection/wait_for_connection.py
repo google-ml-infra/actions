@@ -128,7 +128,7 @@ def check_if_labels_require_connection_halting() -> Optional[bool]:
     )
     return True
   else:
-    if not HALT_ON_RETRY_LABEL:
+    if HALT_ON_RETRY_LABEL not in labels:
       logging.debug(f"No {HALT_ON_RETRY_LABEL!r} label found on the PR")
     else:
       logging.debug(
