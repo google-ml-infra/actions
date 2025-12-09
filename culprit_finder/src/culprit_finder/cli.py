@@ -66,7 +66,7 @@ def main() -> None:
 
   has_culprit_finder_workflow = any(
     wf["path"] == ".github/workflows/culprit_finder.yml"
-    for wf in github.get_workflows()
+    for wf in github.get_workflows(args.repo)
   )
 
   logging.info("Using culprit finder workflow: %s", has_culprit_finder_workflow)

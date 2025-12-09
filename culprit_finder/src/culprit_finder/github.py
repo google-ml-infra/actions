@@ -210,13 +210,13 @@ def gh_delete_branch(repo: str, branch_name: str) -> None:
   run_command(cmd)
 
 
-def get_workflows() -> list[Workflow]:
+def get_workflows(repo: str) -> list[Workflow]:
   """
   Retrieves a list of workflows in the repository.
 
   Returns:
       A list of dictionaries, where each dictionary contains the 'name' and 'path' of a workflow.
   """
-  cmd = ["workflow", "list", "--json", "path,name"]
+  cmd = ["workflow", "list", "--json", "path,name", "--repo", repo]
   workflows = run_command(cmd)
   return json.loads(workflows)
