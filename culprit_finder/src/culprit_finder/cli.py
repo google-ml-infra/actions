@@ -52,7 +52,9 @@ def main() -> None:
 
   args = parser.parse_args()
 
-  is_authenticated_with_cli = github.check_auth_status()
+  gh_client = github.GithubClient(repo=args.repo)
+
+  is_authenticated_with_cli = gh_client.check_auth_status()
   has_access_token = os.environ.get("GH_TOKEN") is not None
 
   if not is_authenticated_with_cli and not has_access_token:
@@ -66,7 +68,7 @@ def main() -> None:
 
   has_culprit_finder_workflow = any(
     wf["path"] == ".github/workflows/culprit_finder.yml"
-    for wf in github.get_workflows(args.repo)
+    for wf in gh_client.get_workflows()
   )
 
   logging.info("Using culprit finder workflow: %s", has_culprit_finder_workflow)
@@ -77,6 +79,7 @@ def main() -> None:
     end_sha=args.end,
     workflow_file=args.workflow,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
+    github_client=gh_client,
   )
   culprit_commit = finder.run_bisection()
   if culprit_commit:

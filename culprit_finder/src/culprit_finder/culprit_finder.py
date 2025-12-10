@@ -23,6 +23,7 @@ class CulpritFinder:
     end_sha: str,
     workflow_file: str,
     has_culprit_finder_workflow: bool,
+    github_client: github.GithubClient,
   ):
     """
     Initializes the CulpritFinder instance.
@@ -40,6 +41,7 @@ class CulpritFinder:
     self._culprit_finder_workflow_file = CULPRIT_FINDER_WORKFLOW_NAME
     self._workflow_file = workflow_file
     self._has_culprit_finder_workflow = has_culprit_finder_workflow
+    self._gh_client = github_client
 
   def _wait_for_workflow_completion(
     self,
@@ -65,7 +67,7 @@ class CulpritFinder:
     """
     start_time = time.time()
     while time.time() - start_time < timeout:
-      latest_run = github.get_latest_run(self._repo, workflow_file, branch_name)
+      latest_run = self._gh_client.get_latest_run(workflow_file, branch_name)
 
       if not latest_run:
         logging.info(
@@ -126,11 +128,10 @@ class CulpritFinder:
     )
 
     # Get the ID of the previous run (if any) to distinguish it from the new one we are about to trigger
-    previous_run = github.get_latest_run(self._repo, workflow_to_trigger, branch_name)
+    previous_run = self._gh_client.get_latest_run(workflow_to_trigger, branch_name)
     previous_run_id = previous_run["databaseId"] if previous_run else None
 
-    github.trigger_workflow(
-      self._repo,
+    self._gh_client.trigger_workflow(
       workflow_to_trigger,
       branch_name,
       inputs,
@@ -163,7 +164,7 @@ class CulpritFinder:
       as the cause of the specified issue. If the bisection process does not
       identify a commit, None is returned.
     """
-    commits = github.compare_commits(self._repo, self._start_sha, self._end_sha)
+    commits = self._gh_client.compare_commits(self._start_sha, self._end_sha)
     if not commits:
       logging.info("No commits found between %s and %s", self._start_sha, self._end_sha)
       return None
@@ -179,16 +180,16 @@ class CulpritFinder:
       branch_name = f"culprit-finder/test-{commit_sha}_{uuid.uuid4()}"
 
       # Ensure the branch does not exist from a previous run
-      if not github.check_branch_exists(self._repo, branch_name):
-        github.create_branch(self._repo, branch_name, commit_sha)
+      if not self._gh_client.check_branch_exists(branch_name):
+        self._gh_client.create_branch(branch_name, commit_sha)
         logging.info("Created branch %s", branch_name)
 
       try:
         is_good = self._test_commit(commit_sha, branch_name)
       finally:
-        if github.check_branch_exists(self._repo, branch_name):
+        if self._gh_client.check_branch_exists(branch_name):
           logging.info("Deleting branch %s", branch_name)
-          github.gh_delete_branch(self._repo, branch_name)
+          self._gh_client.delete_branch(branch_name)
 
       if is_good:
         good_idx = mid_idx

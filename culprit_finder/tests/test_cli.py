@@ -2,7 +2,7 @@
 
 import sys
 import pytest
-from culprit_finder import cli
+from culprit_finder import cli, github
 
 
 def _get_culprit_finder_command(
@@ -71,9 +71,21 @@ def test_cli_args_failures(monkeypatch, capsys, args, expected_error_msg):
   assert expected_error_msg.lower() in captured.err.lower()
 
 
+def _mock_gh_client(
+  mocker, is_authenticated: bool, workflows: list[github.Workflow] | None = None
+):
+  mock_gh_client_class = mocker.patch("culprit_finder.github.GithubClient")
+  mock_gh_client_instance = mock_gh_client_class.return_value
+  mock_gh_client_instance.check_auth_status.return_value = is_authenticated
+  if workflows:
+    mock_gh_client_instance.get_workflows.return_value = workflows
+  return mock_gh_client_instance
+
+
 def test_cli_not_authenticated(monkeypatch, mocker, caplog):
   """Tests that the CLI exits with an error when not authenticated via CLI or Token."""
-  mocker.patch("culprit_finder.github.check_auth_status", return_value=False)
+  _mock_gh_client(mocker, False)
+
   monkeypatch.delenv("GH_TOKEN", raising=False)
 
   monkeypatch.setattr(
@@ -101,10 +113,7 @@ def test_cli_not_authenticated(monkeypatch, mocker, caplog):
 def test_cli_auth_success(monkeypatch, mocker, cli_auth, token_auth):
   """Tests that the CLI proceeds if authenticated via CLI or GH_TOKEN."""
   mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
-  mocker.patch("culprit_finder.github.check_auth_status", return_value=cli_auth)
-  mocker.patch(
-    "culprit_finder.github.get_workflows", return_value=[{"path": "some/path"}]
-  )
+  _mock_gh_client(mocker, cli_auth, [{"path": "some/path", "name": "Culprit Finder"}])
 
   if token_auth:
     monkeypatch.setenv("GH_TOKEN", token_auth)
@@ -157,10 +166,10 @@ def test_cli_success(
   monkeypatch,
   mocker,
   capsys,
-  workflows_list,
-  has_culprit_workflow,
-  found_culprit_commit,
-  expected_output,
+  workflows_list: list[github.Workflow],
+  has_culprit_workflow: bool,
+  found_culprit_commit: github.Commit | None,
+  expected_output: str,
 ):
   """
   Tests the happy path.
@@ -168,15 +177,7 @@ def test_cli_success(
   Also verifies the CLI output based on whether a culprit is found.
   """
   mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
-  mocker.patch("culprit_finder.github.check_auth_status", return_value=True)
-
-  # Mock get_workflows to return a list including or excluding the culprit finder workflow
-  mocker.patch(
-    "culprit_finder.github.get_workflows",
-    return_value=workflows_list,
-  )
-
-  # Configure the mock return value for run_bisection
+  mock_gh_client_instance = _mock_gh_client(mocker, True, workflows_list)
   mock_finder.return_value.run_bisection.return_value = found_culprit_commit
 
   monkeypatch.setattr(
@@ -193,6 +194,7 @@ def test_cli_success(
     end_sha="sha2",
     workflow_file="test.yml",
     has_culprit_finder_workflow=has_culprit_workflow,
+    github_client=mock_gh_client_instance,
   )
   mock_finder.return_value.run_bisection.assert_called_once()
 
