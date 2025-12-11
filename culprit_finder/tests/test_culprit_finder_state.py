@@ -1,5 +1,7 @@
 """Tests for culprit_finder_state."""
 
+import pytest
+
 from culprit_finder import culprit_finder_state
 
 
@@ -10,7 +12,14 @@ def _isolate_state_home(monkeypatch, tmp_path):
   monkeypatch.setattr(culprit_finder_state.Path, "home", lambda: tmp_path)
 
 
-def test_save_then_load_state_round_trip(monkeypatch, tmp_path):
+@pytest.mark.parametrize(
+  "job",
+  [
+    None,
+    "test/job",
+  ],
+)
+def test_save_then_load_state_round_trip(monkeypatch, tmp_path, job: str | None):
   """Tests that saving and loading state works correctly."""
   _isolate_state_home(monkeypatch, tmp_path)
 
@@ -25,6 +34,7 @@ def test_save_then_load_state_round_trip(monkeypatch, tmp_path):
       "good": "PASS",
       "bad": "FAIL",
     },
+    "job": job,
   }
 
   persister = culprit_finder_state.StatePersister(
@@ -46,6 +56,10 @@ def test_delete_state_removes_file(monkeypatch, tmp_path):
     workflow="workflow.yml",
     original_start="start",
     original_end="end",
+    cache={},
+    current_good="",
+    current_bad="",
+    job=None,
   )
   persister = culprit_finder_state.StatePersister(
     repo="owner/repo", workflow="workflow.yml"

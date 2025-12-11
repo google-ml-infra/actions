@@ -57,6 +57,12 @@ def main() -> None:
     help="Workflow filename (e.g., build_and_test.yml)",
   )
   parser.add_argument(
+    "-j",
+    "--job",
+    required=False,
+    help="The specific job name within the workflow to monitor for pass/fail",
+  )
+  parser.add_argument(
     "--clear-cache",
     action="store_true",
     help="Deletes the local state file before execution",
@@ -68,6 +74,7 @@ def main() -> None:
   start: str | None = args.start
   end: str | None = args.end
   workflow_file_name: str | None = args.workflow
+  job_name: str | None = args.job
 
   if args.url:
     repo = _get_repo_from_url(args.url)
@@ -85,7 +92,7 @@ def main() -> None:
   gh_client = github_client.GithubClient(repo=repo, token=token)
 
   if args.url:
-    run = gh_client.get_run_from_url(args.url)
+    run, job_details = gh_client.get_run_and_job_from_url(args.url)
     if run.conclusion != "failure":
       raise ValueError("The provided URL does not point to a failed workflow run.")
 
@@ -96,6 +103,8 @@ def main() -> None:
 
     workflow_details = gh_client.get_workflow(run.workflow_id)
     workflow_file_name = workflow_details.path.split("/")[-1]
+    if job_details:
+      job_name = job_details.name
 
   if not start:
     parser.error("the following arguments are required: -s/--start")
@@ -108,9 +117,10 @@ def main() -> None:
   logging.info("Start commit: %s", start)
   logging.info("End commit: %s", end)
   logging.info("Workflow: %s", workflow_file_name)
+  logging.info("Job: %s", job_name)
 
   state_persister = culprit_finder_state.StatePersister(
-    repo=repo, workflow=workflow_file_name
+    repo=repo, workflow=workflow_file_name, job=job_name
   )
 
   if args.clear_cache and state_persister.exists():
@@ -120,6 +130,7 @@ def main() -> None:
     "repo": repo,
     "workflow": workflow_file_name,
     "original_start": start,
+    "job": job_name,
     "original_end": end,
     "current_good": "",
     "current_bad": "",
@@ -138,6 +149,7 @@ def main() -> None:
         "original_end": end,
         "current_good": "",
         "current_bad": "",
+        "job": job_name,
         "cache": {},
       }
     else:
@@ -160,6 +172,7 @@ def main() -> None:
     gh_client=gh_client,
     state=state,
     state_persister=state_persister,
+    job=job_name,
   )
 
   try:

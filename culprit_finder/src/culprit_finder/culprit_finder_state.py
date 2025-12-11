@@ -14,6 +14,7 @@ COMMIT_STATUS = Literal["PASS", "FAIL"]
 class CulpritFinderState(TypedDict):
   repo: str
   workflow: str
+  job: str | None
   original_start: str
   original_end: str
   current_good: str
@@ -51,9 +52,10 @@ def _sanitize_component(value: str) -> str:
 class StatePersister:
   """Handles the persistence of the CulpritFinderState."""
 
-  def __init__(self, repo: str, workflow: str):
+  def __init__(self, repo: str, workflow: str, job: str | None = None):
     self._repo = repo
     self._workflow = workflow
+    self._job = job
 
   def _get_base_dir(self) -> Path:
     """Returns the base directory for the repo state."""
@@ -69,6 +71,9 @@ class StatePersister:
   def _get_file_path(self) -> Path:
     """Returns the path to the state file."""
     safe_workflow = _sanitize_component(self._workflow) or "default"
+    if self._job:
+      safe_job = _sanitize_component(self._job)
+      return self._get_base_dir() / f"{safe_workflow}_{safe_job}.json"
     return self._get_base_dir() / f"{safe_workflow}.json"
 
   def _ensure_directory_exists(self) -> None:
@@ -106,6 +111,7 @@ class StatePersister:
       return {
         "repo": data["repo"],
         "workflow": data["workflow"],
+        "job": data.get("job", None),
         "original_start": data["original_start"],
         "original_end": data["original_end"],
         "current_good": data.get("current_good", ""),

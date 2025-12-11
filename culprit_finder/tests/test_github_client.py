@@ -136,3 +136,45 @@ def test_get_github_token_gh_not_found(mocker):
   mocker.patch.dict(os.environ, clear=True)
   mocker.patch("subprocess.run", side_effect=FileNotFoundError)
   assert github_client.get_github_token() is None
+
+
+@pytest.mark.parametrize(
+  "url, expected_run_id, expected_job_id",
+  [
+    ("https://github.com/owner/repo/actions/runs/123", "123", None),
+    ("https://github.com/owner/repo/actions/runs/123/job/456", "123", 456),
+    # Job ID 999 does not exist in the mock data, so we expect None for the job
+    ("https://github.com/owner/repo/actions/runs/123/job/999", "123", None),
+  ],
+)
+def test_get_run_and_job_from_url_success(
+  mocker, url, expected_run_id, expected_job_id
+):
+  """Tests parsing valid URLs for runs and jobs."""
+  client = github_client.GithubClient("owner/repo", token="test-token")
+  mock_get_run = mocker.patch.object(client, "get_run")
+
+  target_job = factories.create_job(mocker, "target_job", "success", job_id=456)
+  other_job = factories.create_job(mocker, "other_job", "success", job_id=1)
+  mock_get_run.return_value = factories.create_run(
+    mocker, "sha", "success", run_id=123, jobs=[target_job, other_job]
+  )
+
+  run, job = client.get_run_and_job_from_url(url)
+
+  assert run.id == int(expected_run_id)
+  mock_get_run.assert_called_once_with(expected_run_id)
+
+  if expected_job_id == 456:
+    assert job == target_job
+  else:
+    assert job is None
+
+
+def test_get_run_and_job_from_url_invalid_url():
+  """Tests that ValueError is raised for invalid URLs."""
+  client = github_client.GithubClient("owner/repo", token="test-token")
+  url = "https://github.com/owner/repo/pulls/1"
+
+  with pytest.raises(ValueError, match="Could not extract run ID from URL"):
+    client.get_run_and_job_from_url(url)

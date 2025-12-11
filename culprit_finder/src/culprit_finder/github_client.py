@@ -11,8 +11,9 @@ import subprocess
 
 import github
 from github.Commit import Commit
-from github.WorkflowRun import WorkflowRun
 from github.Workflow import Workflow
+from github.WorkflowJob import WorkflowJob
+from github.WorkflowRun import WorkflowRun
 
 
 class GithubClient:
@@ -184,9 +185,11 @@ class GithubClient:
     """
     return self._repo.get_workflow_run(int(run_id))
 
-  def get_run_from_url(self, url: str) -> WorkflowRun:
+  def get_run_and_job_from_url(
+    self, url: str
+  ) -> tuple[WorkflowRun, Optional[WorkflowJob]]:
     """
-    Retrieves workflow run details using a GitHub Actions URL.
+    Retrieves workflow run and job details using a GitHub Actions URL.
 
     The URL must follow one of these structures:
     - https://github.com/owner/repo/actions/runs/:runId
@@ -196,17 +199,28 @@ class GithubClient:
         url: The full GitHub URL to the workflow run or specific job.
 
     Returns:
-        A WorkflowRun object containing metadata for the extracted run ID.
+        A tuple containing a WorkflowRun object and an optional WorkflowJob object.
+        The WorkflowJob object is None if the URL points to a run without a specific job.
 
     Raises:
         ValueError: If the run ID cannot be parsed from the provided URL.
     """
-    match = re.search(r"actions/runs/(\d+)", url)
-    if not match:
+    run_id_match = re.search(r"actions/runs/(\d+)", url)
+    if not run_id_match:
       raise ValueError(f"Could not extract run ID from URL: {url}")
 
-    run_id = match.group(1)
-    return self.get_run(run_id)
+    job_id_match = re.search(r"job/(\d+)", url)
+
+    run_id = run_id_match.group(1)
+    run = self.get_run(run_id)
+
+    job: None | WorkflowJob = None
+    if job_id_match:
+      job_id = int(job_id_match.group(1))
+      job_list = list(run.jobs())
+      job = next((j for j in job_list if j.id == job_id), None)
+
+    return run, job
 
   def find_previous_successful_run(self, run: WorkflowRun) -> WorkflowRun:
     """
@@ -254,6 +268,19 @@ class GithubClient:
       )
 
     return last_successful_run
+
+  def get_run_jobs(self, run_id: str | int) -> list[WorkflowJob]:
+    """
+    Retrieves the list of jobs for a specific workflow run.
+
+    Args:
+        run_id: The database ID of the workflow run.
+
+    Returns:
+        A list of Job objects. Returns an empty list if no jobs are found.
+    """
+    run = self.get_run(str(run_id))
+    return list(run.jobs())
 
 
 def get_github_token() -> str | None:

@@ -53,13 +53,16 @@ culprit-finder [URL] --repo <OWNER/REPO> --start <GOOD_SHA> --end <BAD_SHA> --wo
 
 ### Arguments
 
-- `URL`: (Optional) A GitHub Actions Run URL (e.g., `https://github.com/owner/repo/actions/runs/12345`)
-from a failed workflow run. If provided, the tool infers the repository, workflow name, and the start and end SHAs.
+- `URL`: (Optional) A GitHub Actions Run or Job URL
+(e.g., `https://github.com/owner/repo/actions/runs/12345` or `.../job/67890`) from a failed workflow run.
+If provided, the tool infers the repository, workflow name, job name (if applicable), and the start and end SHAs.
 - `--repo`: The target GitHub repository in the format `owner/repo`. (Optional if URL is provided).
 - `--start`: The full or short SHA of the last known **good** commit. (Optional if URL is provided).
 - `--end`: The full or short SHA of the first known **bad** commit. (Optional URL is provided).
 - `--workflow`: The filename of the GitHub Actions workflow to run (e.g., `ci.yml`, `tests.yaml`).
 (Optional if URL is provided).
+- `--job` (Optional): The specific job name within the workflow to monitor for pass/fail.
+If not provided, the tool checks the overall workflow conclusion.
 - `--clear-cache`: (Optional) Deletes the local state file before execution to start a fresh bisection.
 
 ### State Persistence and Resuming
@@ -83,7 +86,12 @@ culprit-finder
 
 Using a URL to infer details (e.g., starting with a known bad run):
 ```shell
-culprit-finder https://github.com/google-ml-infra/actions/actions/runs/123456789 --start a1b2c3d
+culprit-finder https://github.com/google-ml-infra/actions/actions/runs/123456789
+```
+
+Using a Job URL to target a specific failure:
+```shell
+culprit-finder https://github.com/google-ml-infra/actions/actions/runs/123456789/job/987654321
 ```
 
 ## Developer Notes

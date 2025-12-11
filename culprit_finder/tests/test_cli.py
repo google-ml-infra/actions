@@ -192,6 +192,7 @@ def test_cli_success(
     "current_good": "",
     "current_bad": "",
     "cache": {},
+    "job": None,
   }
 
   mock_finder.assert_called_once_with(
@@ -201,6 +202,7 @@ def test_cli_success(
     workflow_file="test.yml",
     has_culprit_finder_workflow=has_culprit_workflow,
     gh_client=mock_gh_client_instance,
+    job=None,
     state=expected_state,
     state_persister=patches["state_persister_inst"],
   )
@@ -278,6 +280,7 @@ def test_cli_state_management(
       state=existing_state,
       gh_client=mock_gh_client_instance,
       state_persister=patches["state_persister_inst"],
+      job=None,
     )
   else:
     # If not exists or discarded, new state created
@@ -349,9 +352,9 @@ def test_cli_with_url(monkeypatch, mocker):
   )
   patches = _mock_state(mocker)
 
-  mock_gh_client_instance.get_run_from_url.return_value = factories.create_run(
-    mocker, head_sha="sha_from_url", conclusion="failure"
-  )
+  run = factories.create_run(mocker, head_sha="sha_from_url", conclusion="failure")
+  mock_gh_client_instance.get_run_from_url.return_value = run
+  mock_gh_client_instance.get_run_and_job_from_url.return_value = run, None
   mock_gh_client_instance.get_workflow.return_value = factories.create_workflow(
     mocker, name="Test Workflow", path=".github/workflows/test.yml"
   )
@@ -375,6 +378,7 @@ def test_cli_with_url(monkeypatch, mocker):
     "current_good": "",
     "current_bad": "",
     "cache": {},
+    "job": None,
   }
   mock_finder.assert_called_once_with(
     repo="owner/repo",
@@ -385,6 +389,7 @@ def test_cli_with_url(monkeypatch, mocker):
     gh_client=mock_gh_client_instance,
     state=expected_state,
     state_persister=patches["state_persister_inst"],
+    job=None,
   )
 
 

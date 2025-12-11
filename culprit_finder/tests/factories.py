@@ -6,6 +6,7 @@ from typing import Optional
 
 from github.Commit import Commit
 from github.Workflow import Workflow
+from github.WorkflowJob import WorkflowJob
 from github.WorkflowRun import WorkflowRun
 
 
@@ -15,6 +16,8 @@ def create_run(
   conclusion: Optional[str] = None,
   event: str = "push",
   status: str = "completed",
+  run_id: Optional[int] = None,
+  jobs: Optional[list[WorkflowJob]] = None,
 ) -> WorkflowRun:
   """Create a mock WorkflowRun object.
 
@@ -24,6 +27,8 @@ def create_run(
     conclusion: The conclusion of the run (e.g., "success", "failure").
     event: The event that triggered the run.
     status: The status of the run.
+    run_id: The database ID of the run.
+    jobs: The list of jobs for the run.
 
   Returns:
     A mock WorkflowRun object.
@@ -37,7 +42,8 @@ def create_run(
   run.status = status
   run.conclusion = conclusion
   run.url = f"https://github.com/owner/repo/actions/runs/{run.workflow_id}"
-  run.database_id = random.randint(1000, 9999)
+  run.id = run_id or random.randint(1000, 9999)
+  run.jobs.return_value = jobs or []
   return run
 
 
@@ -75,3 +81,25 @@ def create_workflow(mocker, name: str, path: str) -> Workflow:
   workflow.name = name
   workflow.path = path
   return workflow
+
+
+def create_job(
+  mocker, name: str, conclusion: str, job_id: Optional[int] = None
+) -> WorkflowJob:
+  """Create a mock WorkflowJob object.
+
+  Args:
+    mocker: The pytest-mocker fixture.
+    name: The name of the job.
+    conclusion: The conclusion of the job.
+    job_id: The database ID of the job.
+
+  Returns:
+    A mock WorkflowJob object.
+  """
+  job = mocker.Mock(spec=WorkflowJob)
+  job.name = name
+  job.conclusion = conclusion
+  job.status = "completed"
+  job.id = job_id or random.randint(1000, 9999)
+  return job
