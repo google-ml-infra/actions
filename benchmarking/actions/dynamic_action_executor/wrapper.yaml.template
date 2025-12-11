@@ -1,0 +1,11 @@
+name: Generated action wrapper
+description: "Generated action wrapper"
+inputs:
+  safe_args:
+    required: false
+    default: '{}'
+runs:
+  using: 'composite'
+  steps:
+    - uses: $REQUESTED_ACTION
+      with: ${{ fromJson(inputs.safe_args) }}

@@ -1,0 +1,67 @@
+name: Python Workload Executor
+description: "Sets up Python, installs dependencies, and runs a benchmark script."
+
+inputs:
+  python_version:
+    description: "Python version to use (e.g. 3.10)."
+    required: true
+  script_path:
+    description: "Path to the benchmark script, relative to the repo root."
+    required: true
+  pip_project_path:
+    description: "Path to the pip project directory, relative to repo root."
+    required: false
+    default: "."
+  pip_extras:
+    description: "Base comma-separated list of pip extras."
+    required: false
+    default: ""
+  pip_extras_hw:
+    description: "Comma-separated list of hardware-specific pip extras. This list is appended to pip_extras."
+    required: false
+    default: ""
+  runtime_flags:
+    description: "Base runtime flags to pass to the benchmark script."
+    required: false
+    default: ""
+  runtime_flags_hw:
+    description: "Hardware-specific runtime flags, appended to runtime_flags."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # ratchet:actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python_version }}
+
+    - name: Install dependencies
+      shell: bash
+      env:
+        PIP_PROJECT_PATH: ${{ inputs.pip_project_path }}
+        PIP_EXTRAS: ${{ inputs.pip_extras }}
+        PIP_EXTRAS_HW: ${{ inputs.pip_extras_hw }}
+      run: |
+        echo "::group::Install dependencies"
+        "$GITHUB_ACTION_PATH/install_pip_deps.sh"
+        echo "::endgroup::"
+
+    - name: Run benchmark script
+      shell: bash
+      env:
+        SCRIPT: ${{ inputs.script_path }}
+        ARGS: "${{ inputs.runtime_flags }} ${{ inputs.runtime_flags_hw }}"
+      run: |
+        echo "::group::Run Benchmark Script"
+
+        set -euo pipefail
+        export PYTHONPATH="$GITHUB_WORKSPACE/user_repo"
+        cd "$GITHUB_WORKSPACE/user_repo" || exit 1
+
+        echo "SCRIPT: $SCRIPT"
+        echo "ARGS: $ARGS"
+        python "$SCRIPT" $ARGS
+
+        echo "::endgroup::"

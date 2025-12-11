@@ -159,17 +159,16 @@ class MatrixGenerator:
         topo = hw_config.topology
         topo_short = f"{topo.num_hosts}h{topo.num_devices_per_host}d"
         workflow_short = workflow_type_str.lower()
-        workload = benchmark.workload
-        workload_type = workload.WhichOneof("workload")
-        workload_details = getattr(workload, workload_type)
-        runtime_flags = list(workload.runtime_flags) + list(hw_config.runtime_flags)
+        hw_config_dict = MessageToDict(hw_config, preserving_proto_field_name=True)
+        workload_dict = MessageToDict(
+          benchmark.workload, preserving_proto_field_name=True
+        )
+        workload_base_inputs = workload_dict.get("action_inputs", {}).copy()
+        hw_workload_inputs = MessageToDict(hw_config).get("workload_action_inputs", {})
 
-        pip_extra_deps = []
-        if workload_type == "python_workload":
-          pip_extra_deps.extend(workload_details.pip_optional_dependencies)
-
-        if hw_config.pip_optional_dependencies:
-          pip_extra_deps.extend(hw_config.pip_optional_dependencies)
+        # Hardware workload inputs overwrite/append base workload inputs
+        workload_base_inputs.update(hw_workload_inputs)
+        workload_dict["action_inputs"] = workload_base_inputs
 
         entry: MatrixEntry = {
           "config_id": f"{benchmark.name}_{hw_short}_{topo_short}_{workflow_short}",
@@ -178,13 +177,13 @@ class MatrixGenerator:
           "benchmark_name": benchmark.name,
           "description": benchmark.description,
           "owner": benchmark.owner,
-          "workload_type": workload_type,
-          "workload_details": MessageToDict(workload_details),
-          "hardware_config": MessageToDict(hw_config),
+          "workload": workload_dict,
+          "hardware_config": hw_config_dict,
           "github_labels": list(benchmark.github_labels),
-          "pip_extra_deps": pip_extra_deps,
-          "runtime_flags": runtime_flags,
-          "metrics": [MessageToDict(m) for m in benchmark.metrics],
+          "metrics": [
+            MessageToDict(m, preserving_proto_field_name=True)
+            for m in benchmark.metrics
+          ],
         }
         matrix.append(entry)
     return matrix
