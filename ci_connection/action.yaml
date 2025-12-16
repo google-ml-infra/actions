@@ -17,7 +17,6 @@ inputs:
   halt-dispatch-input:
     description: 'Should the action wait for user connection from workflow_dispatch?'
     default: "no"
-permissions: {}
 runs:
   using: "composite"
   steps:
@@ -26,6 +25,10 @@ runs:
     env:
       PYTHONUNBUFFERED: 1
       HALT_DISPATCH_INPUT: ${{ inputs.halt-dispatch-input }}
+      # Important: The token is used only for retrieving PR labels via API.
+      # For the token to work, the calling workflow must have the following permissions
+      # set: go/ml-github-actions:connect#labels-read-permissions.
+      GITHUB_TOKEN: ${{ github.token }}
     # The calling workflow shouldn't fail in case this step does
     continue-on-error: true
     run: bash "$GITHUB_ACTION_PATH/wait_for_connection.sh"

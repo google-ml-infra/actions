@@ -1,8 +1,8 @@
 # A workflow to test waiting for remote connections to the runner.
 name: Connection Test
-# Run on pull_request that is labeled as "optional_ci_tpu" or workflow dispatch
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - ci_connection
       - .github/workflows/wait-for-connection-test.yaml

@@ -46,7 +46,8 @@ STATE_ENV_OUT_PATH = os.path.join(STATE_OUT_DIR, STATE_ENV_FILENAME)
 # triggering a run:
 # https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
 # https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/troubleshooting-workflows/enabling-debug-logging#enabling-runner-diagnostic-logging
-# Note that the above mentions ACTIONS_RUNNER_DEBUG, but it doesn't appear to get set - perhaps it is set via secrets
+# Note that the above mentions ACTIONS_RUNNER_DEBUG,
+# but it doesn't appear to get set - perhaps it is set via secrets
 _SHOW_DEBUG = bool(
   os.getenv(
     "WAIT_FOR_CONNECTION_DEBUG",
@@ -77,8 +78,7 @@ class _ColoredFormatter(logging.Formatter):
     record.msg = self.style_text(record.msg, record)
     file_name = record.filename.removesuffix(".py")
     timestamp = datetime.now().strftime("%H:%M:%S")
-    out = f"[{file_name}] " if record.levelno <= logging.DEBUG else ""
-    out += f"{timestamp} {colored_text}"
+    out = f"[{file_name}] {timestamp} {colored_text}"
     if record.exc_text:
       out += f"\n{self.style_text(record.exc_text, record)}"
     return out

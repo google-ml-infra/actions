@@ -44,7 +44,8 @@ def _get_run_attempt_num() -> int | None:
   try:
     attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
     return attempt
-  except ValueError:  # shouldn't be possible in GitHub Actions, but to be safe
+  # Shouldn't be possible in GitHub Actions, but to be safe
+  except (TypeError, ValueError):
     logging.error("Could not retrieve GITHUB_RUN_ATTEMPT, assuming first attempt...")
     return 1
 
@@ -83,7 +84,8 @@ def is_debug_logging_enabled_and_job_type_is_schedule_or_workflow_dispatch() -> 
       logging.debug(f"Job type is {event_name}, not 'schedule' or 'workflow_dispatch'")
     if not actions_debug_enabled:
       logging.debug(
-        f"Job does not have logging enabled: RUNNER_DEBUG={actions_debug_enabled}"
+        f"Job does not have GH logging variable set: "
+        f"RUNNER_DEBUG={actions_debug_enabled}"
       )
   return result
 
@@ -128,7 +130,7 @@ def check_if_labels_require_connection_halting() -> Optional[bool]:
     )
     return True
   else:
-    if not HALT_ON_RETRY_LABEL:
+    if HALT_ON_RETRY_LABEL not in labels:
       logging.debug(f"No {HALT_ON_RETRY_LABEL!r} label found on the PR")
     else:
       logging.debug(
