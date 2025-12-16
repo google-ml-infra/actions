@@ -150,7 +150,7 @@ message HardwareConfig {
   // Optional: Hardware-specific inputs for the workload executor action.
   map<string, string> workload_action_inputs = 7;
 
-  // Prevent reuse of deleted tags/
+  // Prevent reuse of deleted tags.
   reserved 4, 6;
 }
 
