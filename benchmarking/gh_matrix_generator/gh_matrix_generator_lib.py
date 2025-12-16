@@ -163,8 +163,8 @@ class MatrixGenerator:
         workload_dict = MessageToDict(
           benchmark.workload, preserving_proto_field_name=True
         )
-        workload_base_inputs = workload_dict.get("action_inputs", {}).copy()
-        hw_workload_inputs = MessageToDict(hw_config).get("workload_action_inputs", {})
+        workload_base_inputs = workload_dict.get("action_inputs", {})
+        hw_workload_inputs = hw_config_dict.get("workload_action_inputs", {})
 
         # Hardware workload inputs overwrite/append base workload inputs
         workload_base_inputs.update(hw_workload_inputs)
