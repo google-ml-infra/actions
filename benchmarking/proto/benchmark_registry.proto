@@ -145,10 +145,13 @@ message HardwareConfig {
 
   // Optional: Resource specification.
   // If not provided, a default small runner for the category will be chosen.
-  ResourceSpec resource_spec = 4;
+  ResourceSpec resource_spec = 5;
 
   // Optional: Hardware-specific inputs for the workload executor action.
-  map<string, string> workload_action_inputs = 5;
+  map<string, string> workload_action_inputs = 7;
+
+  // Prevent reuse of deleted tags/
+  reserved 4, 6;
 }
 
 // Defines the configuration for the workload executor action.
