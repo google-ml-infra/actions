@@ -13,19 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Script to install workload pip deps.
+# Script to install Python workload deps.
 #
 # Environment variables:
 #
 # GITHUB_WORKSPACE (REQUIRED): Default working directory on the runner.
-# PIP_PROJECT_PATH (REQUIRED): Path to the pip project directory, relative to repo root.
-# PIP_EXTRAS (OPTIONAL): Base comma-separated list of pip extras.
-# PIP_EXTRAS_HW (OPTIONAL): Comma-separated list of hardware-specific pip extras. This list is appended to pip_extras.
+# PROJECT_PATH (REQUIRED): Path to the project directory, relative to repo root.
+# EXTRAS (OPTIONAL): Base comma-separated list of extras.
+# EXTRAS_HW (OPTIONAL): Comma-separated list of hardware-specific extras. This list is appended to extras.
 
 set -euo pipefail
 
 USER_REPO="$GITHUB_WORKSPACE/user_repo"
-PROJECT_DIR="$USER_REPO/$PIP_PROJECT_PATH"
+PROJECT_DIR="$USER_REPO/$PROJECT_PATH"
 
 cd "$PROJECT_DIR" || exit 1
 echo "Searching for dependency files in $PROJECT_DIR."
@@ -33,12 +33,12 @@ echo "Searching for dependency files in $PROJECT_DIR."
 get_combined_extras() {
   local extras=()
   
-  if [[ -n "${PIP_EXTRAS:-}" ]]; then
-    extras+=("$PIP_EXTRAS")
+  if [[ -n "${EXTRAS:-}" ]]; then
+    extras+=("$EXTRAS")
   fi
   
-  if [[ -n "${PIP_EXTRAS_HW:-}" ]]; then
-    extras+=("$PIP_EXTRAS_HW")
+  if [[ -n "${EXTRAS_HW:-}" ]]; then
+    extras+=("$EXTRAS_HW")
   fi
 
   echo "$(IFS=,; echo "${extras[*]}")"

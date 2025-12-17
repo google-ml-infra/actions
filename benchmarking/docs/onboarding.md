@@ -167,14 +167,14 @@ Available inputs for Python:
 
 - `python_version` (Required)
 - `script_path` (Required)
-- `pip_project_path` (Default: ".")
-- `pip_extras` / `pip_extras_hw` (Comma-separated extras)
+- `project_path` (Default: ".")
+- `extras` / `extras_hw` (Comma-separated extras)
 - `runtime_flags` / `runtime_flags_hw` (Passed to the script)
 
 ```proto
 benchmarks {
   name: "my_python_benchmark"
-  description: "Runs a pip-based Python script."
+  description: "Runs a Python script."
   owner: "my-team"
 
   workload {
@@ -184,10 +184,10 @@ benchmarks {
     # Base inputs
     action_inputs { key: "script_path" value: "benchmarking/scripts/run_pallas.py" }
     action_inputs { key: "python_version" value: "3.11" }
-    action_inputs { key: "pip_project_path" value: "." }
+    action_inputs { key: "project_path" value: "." }
 
-    # Base pip extras (e.g. pip install .[test])
-    action_inputs { key: "pip_extras" value: "test" }
+    # Base extras (e.g. pip install .[test])
+    action_inputs { key: "extras" value: "test" }
 
     # Base flags
     action_inputs { key: "runtime_flags" value: "--model_name=my_kernel" }
@@ -200,7 +200,7 @@ benchmarks {
     
     # Hardware extensions (merged into the inputs above)
     # Appends 'cuda' -> pip install .[test,cuda]
-    workload_action_inputs { key: "pip_extras_hw" value: "cuda" }
+    workload_action_inputs { key: "extras_hw" value: "cuda" }
 
     # Appends flag -> python script.py --model_name=my_kernel --use_gpu
     workload_action_inputs { key: "runtime_flags_hw" value: "--use_gpu" }

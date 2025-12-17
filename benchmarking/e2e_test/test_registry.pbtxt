@@ -1,6 +1,6 @@
 benchmarks {
   name: "e2e_python_benchmark"
-  description: "A test benchmark for a Python/pip based project."
+  description: "A test benchmark for a Python-based project."
   owner: "e2e-test-team"
   workload {
     # Must start with ./ml_actions because of the checkout path
@@ -8,8 +8,8 @@ benchmarks {
     action: "./ml_actions/benchmarking/actions/workload_executors/python"
     action_inputs { key: "script_path" value: "benchmarking/e2e_test/run_benchmark.py" }
     action_inputs { key: "python_version" value: "3.11" }
-    action_inputs { key: "pip_project_path" value: "benchmarking/" }
-    action_inputs { key: "pip_extras" value: "test"}
+    action_inputs { key: "project_path" value: "benchmarking/" }
+    action_inputs { key: "extras" value: "test"}
   }
   hardware_configs {
     hardware_category: CPU_X86

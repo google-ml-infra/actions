@@ -8,16 +8,16 @@ inputs:
   script_path:
     description: "Path to the benchmark script, relative to the repo root."
     required: true
-  pip_project_path:
-    description: "Path to the pip project directory, relative to repo root."
+  project_path:
+    description: "Path to the project directory, relative to repo root."
     required: false
     default: "."
-  pip_extras:
-    description: "Base comma-separated list of pip extras."
+  extras:
+    description: "Base comma-separated list of extras."
     required: false
     default: ""
-  pip_extras_hw:
-    description: "Comma-separated list of hardware-specific pip extras. This list is appended to pip_extras."
+  extras_hw:
+    description: "Comma-separated list of hardware-specific extras. This list is appended to extras."
     required: false
     default: ""
   runtime_flags:
@@ -40,12 +40,12 @@ runs:
     - name: Install dependencies
       shell: bash
       env:
-        PIP_PROJECT_PATH: ${{ inputs.pip_project_path }}
-        PIP_EXTRAS: ${{ inputs.pip_extras }}
-        PIP_EXTRAS_HW: ${{ inputs.pip_extras_hw }}
+        PROJECT_PATH: ${{ inputs.project_path }}
+        EXTRAS: ${{ inputs.extras }}
+        EXTRAS_HW: ${{ inputs.extras_hw }}
       run: |
         echo "::group::Install dependencies"
-        "$GITHUB_ACTION_PATH/install_pip_deps.sh"
+        "$GITHUB_ACTION_PATH/install_deps.sh"
         echo "::endgroup::"
 
     - name: Run benchmark script
