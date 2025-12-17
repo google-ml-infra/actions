@@ -8,6 +8,7 @@ import time
 import logging
 import uuid
 from culprit_finder import github
+from culprit_finder import culprit_finder_state
 
 
 CULPRIT_FINDER_WORKFLOW_NAME = "culprit_finder.yml"
@@ -24,6 +25,8 @@ class CulpritFinder:
     workflow_file: str,
     has_culprit_finder_workflow: bool,
     github_client: github.GithubClient,
+    state: culprit_finder_state.CulpritFinderState,
+    state_persister: culprit_finder_state.StatePersister,
   ):
     """
     Initializes the CulpritFinder instance.
@@ -34,6 +37,9 @@ class CulpritFinder:
         end_sha: The SHA of the first known bad commit.
         workflow_file: The name of the workflow file to test (e.g., 'build.yml').
         has_culprit_finder_workflow: Whether the repo being tested has a Culprit Finder workflow.
+        github_client: The GithubClient instance used to interact with GitHub.
+        state: The CulpritFinderState object containing the current bisection state.
+        state_persister: The StatePersister object used to save the bisection state.
     """
     self._repo = repo
     self._start_sha = start_sha
@@ -42,6 +48,8 @@ class CulpritFinder:
     self._workflow_file = workflow_file
     self._has_culprit_finder_workflow = has_culprit_finder_workflow
     self._gh_client = github_client
+    self._state = state
+    self._state_persister = state_persister
 
   def _wait_for_workflow_completion(
     self,
@@ -175,8 +183,21 @@ class CulpritFinder:
 
     while bad_idx - good_idx > 1:
       mid_idx = (good_idx + bad_idx) // 2
-
       commit_sha = commits[mid_idx]["sha"]
+
+      if commit_sha in self._state["cache"]:
+        logging.info("Using cached result for commit %s", commit_sha)
+        is_good = self._state["cache"][commit_sha] == "PASS"
+
+        if is_good:
+          good_idx = mid_idx
+          logging.info("Commit %s is good", commit_sha)
+        else:
+          bad_idx = mid_idx
+          logging.info("Commit %s is bad", commit_sha)
+
+        continue
+
       branch_name = f"culprit-finder/test-{commit_sha}_{uuid.uuid4()}"
 
       # Ensure the branch does not exist from a previous run
@@ -193,10 +214,16 @@ class CulpritFinder:
 
       if is_good:
         good_idx = mid_idx
+        self._state["current_good"] = commit_sha
+        self._state["cache"][commit_sha] = "PASS"
         logging.info("Commit %s is good", commit_sha)
       else:
         bad_idx = mid_idx
+        self._state["current_bad"] = commit_sha
+        self._state["cache"][commit_sha] = "FAIL"
         logging.info("Commit %s is bad", commit_sha)
+
+      self._state_persister.save(self._state)
 
     if bad_idx == len(commits):
       return None
