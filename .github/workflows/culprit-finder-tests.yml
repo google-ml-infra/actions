@@ -1,0 +1,45 @@
+# Workflow to run tests for the culprit_finder tool.
+name: Culprit Finder Tests
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "culprit_finder/**"
+      - ".github/workflows/culprit-finder-tests.yaml"
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "culprit_finder/**"
+      - ".github/workflows/culprit-finder-tests.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: pytest (culprit_finder, Python 3.11)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: culprit_finder
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # ratchet:actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: culprit_finder/pyproject.toml
+
+      - name: Install package + test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run tests
+        run: |
+          pytest
