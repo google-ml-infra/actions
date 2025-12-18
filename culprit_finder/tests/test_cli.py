@@ -2,6 +2,10 @@
 
 import sys
 import pytest
+import logging
+from unittest import mock
+from typing import TypedDict
+
 from culprit_finder import cli, github
 
 
@@ -10,6 +14,7 @@ def _get_culprit_finder_command(
   start_sha: str | None,
   end_sha: str | None,
   workflow_file: str | None,
+  clear_cache: bool = False,
 ) -> list[str]:
   command = ["culprit_finder"]
   if repo:
@@ -20,6 +25,8 @@ def _get_culprit_finder_command(
     command.extend(["--end", end_sha])
   if workflow_file:
     command.extend(["--workflow", workflow_file])
+  if clear_cache:
+    command.append("--clear-cache")
   return command
 
 
@@ -82,6 +89,26 @@ def _mock_gh_client(
   return mock_gh_client_instance
 
 
+class _MockStatePatches(TypedDict):
+  state_persister_cls: mock.MagicMock
+  state_persister_inst: mock.MagicMock
+
+
+def _mock_state(mocker, existing_state=None) -> _MockStatePatches:
+  state_persister_cls = mocker.patch(
+    "culprit_finder.culprit_finder_state.StatePersister"
+  )
+  state_persister_inst = state_persister_cls.return_value
+
+  state_persister_inst.load.return_value = existing_state
+  state_persister_inst.exists.return_value = existing_state is not None
+
+  return {
+    "state_persister_cls": state_persister_cls,
+    "state_persister_inst": state_persister_inst,
+  }
+
+
 def test_cli_not_authenticated(monkeypatch, mocker, caplog):
   """Tests that the CLI exits with an error when not authenticated via CLI or Token."""
   _mock_gh_client(mocker, False)
@@ -114,6 +141,7 @@ def test_cli_auth_success(monkeypatch, mocker, cli_auth, token_auth):
   """Tests that the CLI proceeds if authenticated via CLI or GH_TOKEN."""
   mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
   _mock_gh_client(mocker, cli_auth, [{"path": "some/path", "name": "Culprit Finder"}])
+  _mock_state(mocker)
 
   if token_auth:
     monkeypatch.setenv("GH_TOKEN", token_auth)
@@ -186,7 +214,19 @@ def test_cli_success(
     _get_culprit_finder_command("owner/repo", "sha1", "sha2", "test.yml"),
   )
 
+  patches = _mock_state(mocker)
+
   cli.main()
+
+  expected_state = {
+    "repo": "owner/repo",
+    "workflow": "test.yml",
+    "original_start": "sha1",
+    "original_end": "sha2",
+    "current_good": "",
+    "current_bad": "",
+    "cache": {},
+  }
 
   mock_finder.assert_called_once_with(
     repo="owner/repo",
@@ -195,8 +235,137 @@ def test_cli_success(
     workflow_file="test.yml",
     has_culprit_finder_workflow=has_culprit_workflow,
     github_client=mock_gh_client_instance,
+    state=expected_state,
+    state_persister=patches["state_persister_inst"],
   )
   mock_finder.return_value.run_bisection.assert_called_once()
 
   captured = capsys.readouterr()
   assert expected_output in captured.out
+
+
+@pytest.mark.parametrize(
+  "state_exists, user_input, expected_delete_calls, expected_resume",
+  [
+    (False, None, 1, False),  # No state file, should create new, delete at end
+    (True, "y", 1, True),  # State exists, resume, should delete at end
+    (
+      True,
+      "n",
+      2,
+      False,
+    ),  # State exists, discard, delete old, create new, delete at end
+  ],
+)
+def test_cli_state_management(
+  monkeypatch,
+  mocker,
+  state_exists,
+  user_input,
+  expected_delete_calls,
+  expected_resume,
+):
+  """Tests state loading, user prompt, and cleanup."""
+  mock_finder_cls = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
+  mock_finder = mock_finder_cls.return_value
+  mock_finder.run_bisection.return_value = {"sha": "found_sha", "message": "msg"}
+
+  mock_gh_client_instance = _mock_gh_client(mocker, True)
+  existing_state = (
+    {
+      "repo": "owner/repo",
+      "workflow": "test.yml",
+      "original_start": "sha1",
+      "original_end": "sha2",
+      "current_good": "good_sha",
+      "current_bad": "bad_sha",
+      "cache": {},
+    }
+    if state_exists
+    else None
+  )
+  patches = _mock_state(mocker, existing_state)
+  mock_persister_inst = patches["state_persister_inst"]
+
+  if user_input:
+    mocker.patch("builtins.input", return_value=user_input)
+
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    _get_culprit_finder_command("owner/repo", "sha1", "sha2", "test.yml"),
+  )
+
+  cli.main()
+
+  assert mock_persister_inst.delete.call_count == expected_delete_calls
+
+  if state_exists and expected_resume:
+    mock_finder_cls.assert_called_with(
+      repo="owner/repo",
+      start_sha="good_sha",
+      end_sha="bad_sha",
+      workflow_file="test.yml",
+      has_culprit_finder_workflow=False,
+      state=existing_state,
+      github_client=mock_gh_client_instance,
+      state_persister=patches["state_persister_inst"],
+    )
+  else:
+    # If not exists or discarded, new state created
+    assert mock_finder_cls.called
+
+
+def test_cli_interrupted_saves_state(monkeypatch, mocker, caplog):
+  """Tests that state is saved when execution is interrupted."""
+  caplog.set_level(logging.INFO)
+  mock_finder_cls = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
+  mock_finder = mock_finder_cls.return_value
+  mock_finder.run_bisection.side_effect = KeyboardInterrupt
+
+  _mock_gh_client(mocker, True)
+
+  patches = _mock_state(mocker)
+  mock_persister_inst = patches["state_persister_inst"]
+
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    _get_culprit_finder_command("owner/repo", "sha1", "sha2", "test.yml"),
+  )
+
+  cli.main()
+
+  mock_persister_inst.save.assert_called_once()
+  mock_persister_inst.delete.assert_not_called()
+  assert (
+    "Bisection interrupted by user (CTRL+C). Saving current state..." in caplog.text
+  )
+
+
+def test_cli_clear_cache_deletes_state(monkeypatch, mocker):
+  """Tests that the --clear-cache argument triggers state deletion."""
+  mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
+  mock_finder.return_value.run_bisection.return_value = None
+
+  _mock_gh_client(mocker, True)
+
+  patches = _mock_state(mocker)
+  mock_persister_inst = patches["state_persister_inst"]
+  # Simulate state exists initially, then is deleted (so subsequent exists() calls return False)
+  # First call: checks if exists for clear-cache logic -> True
+  # Second call: checks if exists for resume logic -> False (simulating it was deleted)
+  mock_persister_inst.exists.side_effect = [True, False]
+
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    _get_culprit_finder_command(
+      "owner/repo", "sha1", "sha2", "test.yml", clear_cache=True
+    ),
+  )
+
+  cli.main()
+
+  # delete() should be called at start (due to clear-cache) and potentially at end (if no culprit found/successful run)
+  assert mock_persister_inst.delete.called
