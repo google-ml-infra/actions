@@ -195,6 +195,7 @@ def test_cli_success(
     workflow_file="test.yml",
     has_culprit_finder_workflow=has_culprit_workflow,
     github_client=mock_gh_client_instance,
+    use_cache=True,
   )
   mock_finder.return_value.run_bisection.assert_called_once()
 
