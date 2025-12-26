@@ -135,13 +135,24 @@ class GithubClient:
 
     self._run_command(cmd)
 
-  def get_latest_run(self, workflow_file: str, branch: str) -> Run | None:
+  def get_latest_run(
+    self,
+    workflow_file: str,
+    branch: Optional[str] = None,
+    commit: Optional[str] = None,
+    event: Optional[str] = None,
+    status: Optional[str] = None,
+  ) -> Run | None:
     """
     Gets the latest workflow run for a specific branch and workflow.
 
     Args:
-        workflow_file: The filename or ID of the workflow to query.
-        branch: The git branch reference to filter runs by.
+        workflow_file: The filename or ID of the workflow to query (e.g., "build.yml" or "12345").
+        branch: Optional. The git branch reference to filter runs by (e.g., "main", "feature-branch").
+        commit: Optional. The commit SHA to filter runs by.
+        event: Optional. The workflow event type to filter runs by (e.g., "push", "pull_request", "workflow_dispatch").
+        status: Optional. The run status to filter runs by (e.g., "completed", "in_progress", "queued", "failure").
+
 
     Returns:
         A dictionary representing the latest workflow run object (containing fields like
@@ -153,10 +164,6 @@ class GithubClient:
       "list",
       "--workflow",
       workflow_file,
-      "--branch",
-      branch,
-      "--event",
-      "workflow_dispatch",
       "--limit",
       "1",
       "--json",
@@ -164,6 +171,14 @@ class GithubClient:
       "--repo",
       self.repo,
     ]
+    if branch:
+      cmd.extend(["--branch", branch])
+    if commit:
+      cmd.extend(["--commit", commit])
+    if event:
+      cmd.extend(["--event", event])
+    if status:
+      cmd.extend(["--status", status])
 
     output = self._run_command(cmd)
     runs = json.loads(output)

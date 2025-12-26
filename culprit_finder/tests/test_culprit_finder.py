@@ -27,6 +27,7 @@ def finder(request, mock_gh_client):
     workflow_file=WORKFLOW_FILE,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
     github_client=mock_gh_client,
+    use_cache=False,
   )
 
 
@@ -70,7 +71,7 @@ def test_wait_for_workflow_completion_success(mocker, finder, mock_gh_client):
   assert mock_gh_client.get_latest_run.call_count == 3
 
   for call_args in mock_gh_client.get_latest_run.call_args_list:
-    assert call_args[0][0] == workflow
+    assert call_args.kwargs["workflow_file"] == workflow
 
 
 @pytest.mark.parametrize("finder", [True, False], indirect=True)
@@ -254,3 +255,90 @@ def test_run_bisection_branch_already_exists(mocker, finder, mock_gh_client):
     r"culprit-finder/test-c0_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
     called_branch_name_delete,
   )
+
+
+def test_run_bisection_uses_cache(mocker, mock_gh_client):
+  """Tests that bisection uses cached results when available."""
+  commits = [
+    _create_commit("c0", "m0"),
+    _create_commit("c1", "m1"),
+    _create_commit("c2", "m2"),
+  ]
+  mock_gh_client.compare_commits.return_value = commits
+
+  finder = culprit_finder.CulpritFinder(
+    repo=REPO,
+    start_sha="start_sha",
+    end_sha="end_sha",
+    workflow_file=WORKFLOW_FILE,
+    has_culprit_finder_workflow=True,
+    github_client=mock_gh_client,
+    use_cache=True,
+  )
+
+  # Scenario:
+  # c1 is checked first (mid). Cache returns failure. -> bad_idx = 1
+  # c0 is checked next. Cache returns success. -> good_idx = 0
+  # Result: c1 is culprit.
+
+  def get_latest_run_side_effect(**kwargs):
+    commit = kwargs.get("commit")
+    if kwargs.get("status") == "completed":
+      if commit == "c1":
+        return {"conclusion": "failure"}
+      if commit == "c0":
+        return {"conclusion": "success"}
+    return None
+
+  mock_gh_client.get_latest_run.side_effect = get_latest_run_side_effect
+
+  mock_test_commit = mocker.patch.object(finder, "_test_commit")
+
+  culprit = finder.run_bisection()
+
+  assert culprit == commits[1]
+  mock_test_commit.assert_not_called()
+  mock_gh_client.create_branch.assert_not_called()
+
+
+def test_run_bisection_mixed_cache(mocker, mock_gh_client):
+  """Tests bisection with a mix of cached and non-cached results."""
+  commits = [_create_commit("c0", "m0"), _create_commit("c1", "m1")]
+  mock_gh_client.compare_commits.return_value = commits
+
+  finder = culprit_finder.CulpritFinder(
+    repo=REPO,
+    start_sha="start_sha",
+    end_sha="end_sha",
+    workflow_file=WORKFLOW_FILE,
+    has_culprit_finder_workflow=True,
+    github_client=mock_gh_client,
+    use_cache=True,
+  )
+
+  # Scenario:
+  # c0 is checked first (mid). Cache miss. Run test -> Success.
+  # c1 is checked next (bad_idx was 2, good_idx became 0, mid is 1). Cache hit -> Failure.
+  # Result: c1 is culprit.
+
+  def get_latest_run_side_effect(**kwargs):
+    if kwargs.get("status") == "completed" and kwargs.get("commit") == "c1":
+      return {"conclusion": "failure"}
+    return None
+
+  mock_gh_client.get_latest_run.side_effect = get_latest_run_side_effect
+
+  # Mock _test_commit only for c0 (success)
+  mock_test_commit = mocker.patch.object(finder, "_test_commit")
+  mock_test_commit.side_effect = lambda sha, branch: True if sha == "c0" else False
+
+  # Mock branch existence for c0 test
+  mock_gh_client.check_branch_exists.side_effect = [False, True]
+
+  culprit = finder.run_bisection()
+
+  assert culprit == commits[1]
+
+  # verify _test_commit called for c0 but not c1
+  assert mock_test_commit.call_count == 1
+  assert mock_test_commit.call_args[0][0] == "c0"

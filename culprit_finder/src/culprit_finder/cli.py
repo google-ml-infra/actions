@@ -49,6 +49,11 @@ def main() -> None:
     required=True,
     help="Workflow filename (e.g., build_and_test.yml)",
   )
+  parser.add_argument(
+    "--no-cache",
+    action="store_true",
+    help="Disabled cached results. This will run the workflow on all commits.",
+  )
 
   args = parser.parse_args()
 
@@ -61,10 +66,12 @@ def main() -> None:
     logging.error("Not authenticated with GitHub CLI or GH_TOKEN env var is not set.")
     sys.exit(1)
 
+  use_cache = not args.no_cache
   logging.info("Initializing culprit finder for %s", args.repo)
   logging.info("Start commit: %s", args.start)
   logging.info("End commit: %s", args.end)
   logging.info("Workflow: %s", args.workflow)
+  logging.info("Use cache: %s", use_cache)
 
   has_culprit_finder_workflow = any(
     wf["path"] == ".github/workflows/culprit_finder.yml"
@@ -80,6 +87,7 @@ def main() -> None:
     workflow_file=args.workflow,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
     github_client=gh_client,
+    use_cache=use_cache,
   )
   culprit_commit = finder.run_bisection()
   if culprit_commit:

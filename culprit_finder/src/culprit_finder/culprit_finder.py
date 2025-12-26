@@ -24,6 +24,7 @@ class CulpritFinder:
     workflow_file: str,
     has_culprit_finder_workflow: bool,
     github_client: github.GithubClient,
+    use_cache: bool = True,
   ):
     """
     Initializes the CulpritFinder instance.
@@ -34,6 +35,7 @@ class CulpritFinder:
         end_sha: The SHA of the first known bad commit.
         workflow_file: The name of the workflow file to test (e.g., 'build.yml').
         has_culprit_finder_workflow: Whether the repo being tested has a Culprit Finder workflow.
+        use_cache: Whether to use the cached results from previous runs. Defaults to True.
     """
     self._repo = repo
     self._start_sha = start_sha
@@ -42,6 +44,7 @@ class CulpritFinder:
     self._workflow_file = workflow_file
     self._has_culprit_finder_workflow = has_culprit_finder_workflow
     self._gh_client = github_client
+    self._use_cache = use_cache
 
   def _wait_for_workflow_completion(
     self,
@@ -67,7 +70,9 @@ class CulpritFinder:
     """
     start_time = time.time()
     while time.time() - start_time < timeout:
-      latest_run = self._gh_client.get_latest_run(workflow_file, branch_name)
+      latest_run = self._gh_client.get_latest_run(
+        workflow_file=workflow_file, branch=branch_name, event="workflow_dispatch"
+      )
 
       if not latest_run:
         logging.info(
@@ -128,7 +133,9 @@ class CulpritFinder:
     )
 
     # Get the ID of the previous run (if any) to distinguish it from the new one we are about to trigger
-    previous_run = self._gh_client.get_latest_run(workflow_to_trigger, branch_name)
+    previous_run = self._gh_client.get_latest_run(
+      workflow_file=workflow_to_trigger, branch=branch_name, event="workflow_dispatch"
+    )
     previous_run_id = previous_run["databaseId"] if previous_run else None
 
     self._gh_client.trigger_workflow(
@@ -175,8 +182,22 @@ class CulpritFinder:
 
     while bad_idx - good_idx > 1:
       mid_idx = (good_idx + bad_idx) // 2
-
       commit_sha = commits[mid_idx]["sha"]
+
+      if self._use_cache:
+        previous_run = self._gh_client.get_latest_run(
+          workflow_file=self._workflow_file, commit=commit_sha, status="completed"
+        )
+        if previous_run:
+          logging.info("Found cached result for commit %s, skipping test", commit_sha)
+          if previous_run["conclusion"] == "success":
+            good_idx = mid_idx
+            logging.info("Commit %s is good", commit_sha)
+          else:
+            bad_idx = mid_idx
+            logging.info("Commit %s is bad", commit_sha)
+          continue
+
       branch_name = f"culprit-finder/test-{commit_sha}_{uuid.uuid4()}"
 
       # Ensure the branch does not exist from a previous run
