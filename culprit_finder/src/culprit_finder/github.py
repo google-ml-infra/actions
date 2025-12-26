@@ -5,6 +5,7 @@ Module for interacting with the GitHub API via the gh CLI.
 import subprocess
 import json
 import logging
+import re
 from typing import Optional, TypedDict
 
 
@@ -28,6 +29,8 @@ class Run(TypedDict):
       conclusion: The conclusion of the workflow run if completed (e.g., "success", "failure", "cancelled"). Optional.
       databaseId: The unique identifier for the workflow run in the GitHub database.
       url: The URL to the workflow run on GitHub.
+      workflowName: The name of the workflow file (e.g. "test.yml") or the name of the workflow.
+      workflowDatabaseId: The unique identifier for the workflow in the GitHub database.
   """
 
   headSha: str
@@ -36,6 +39,8 @@ class Run(TypedDict):
   conclusion: Optional[str]
   databaseId: int
   url: str
+  workflowName: str
+  workflowDatabaseId: int
 
 
 class GithubClient:
@@ -223,3 +228,26 @@ class GithubClient:
     cmd = ["workflow", "list", "--json", "path,name", "--repo", self.repo]
     workflows = self._run_command(cmd)
     return json.loads(workflows)
+
+  def get_run(self, run_id: str) -> Run:
+    """Get a run from its ID"""
+    cmd = [
+      "run",
+      "view",
+      run_id,
+      "--json",
+      "headSha,status,createdAt,conclusion,databaseId,url,workflowName,workflowDatabaseId",
+      "--repo",
+      self.repo,
+    ]
+    run = self._run_command(cmd)
+    return json.loads(run)
+
+  def get_run_from_url(self, url: str) -> Run:
+    """Get a run from a url with this structure: https://github.com/owner/repo/actions/runs/:runId/jobs/:jobId"""
+    match = re.search(r"actions/runs/(\d+)", url)
+    if not match:
+      raise ValueError(f"Could not extract run ID from URL: {url}")
+
+    run_id = match.group(1)
+    return self.get_run(run_id)
