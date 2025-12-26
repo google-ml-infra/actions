@@ -62,33 +62,38 @@ class GithubClient:
   def get_latest_run(
     self,
     workflow_id: str | int,
-    branch: str,
-    event: str,
+    branch: Optional[str] = None,
+    event: Optional[str] = None,
     created: Optional[str] = None,
     status: Optional[str] = None,
+    commit: Optional[str] = None,
   ) -> WorkflowRun | None:
     """
     Gets the latest workflow run for a specific branch and workflow.
 
     Args:
         workflow_id: The filename or ID of the workflow to query.
-        branch: The git branch reference to filter runs by.
-        event: The event that triggered the workflow run (e.g., "push", "pull_request").
+        branch: Optional git branch reference to filter runs by.
+        event: Optional event that triggered the workflow run (e.g., "push", "pull_request").
         created: Optional timestamp to filter runs by creation time.
         status: Optional status to filter runs by (e.g., "success", "failure").
+        commit: Optional commit SHA to filter runs by.
 
     Returns:
         The latest workflow run object, or None if no runs are found.
     """
     workflow = self._repo.get_workflow(workflow_id)
 
-    kwargs = {}
-    if created:
-      kwargs["created"] = created
-    if status:
-      kwargs["status"] = status
+    filters = {
+      "branch": branch,
+      "event": event,
+      "created": created,
+      "status": status,
+      "head_sha": commit,
+    }
+    kwargs = {k: v for k, v in filters.items() if v}
 
-    runs = workflow.get_runs(branch=branch, event=event, **kwargs)
+    runs = workflow.get_runs(**kwargs)
 
     if runs.totalCount > 0:
       return runs[0]

@@ -33,6 +33,7 @@ class CulpritFinder:
     state: culprit_finder_state.CulpritFinderState,
     state_persister: culprit_finder_state.StatePersister,
     job: str | None = None,
+    use_cache: bool = True,
   ):
     """
     Initializes the CulpritFinder instance.
@@ -47,6 +48,7 @@ class CulpritFinder:
         state: The CulpritFinderState object containing the current bisection state.
         state_persister: The StatePersister object used to save the bisection state.
         job: The specific job name within the workflow to monitor for pass/fail.
+        use_cache: Whether to use the cached results from previous runs. Defaults to True.
     """
     self._repo = repo
     self._start_sha = start_sha
@@ -58,6 +60,7 @@ class CulpritFinder:
     self._state = state
     self._state_persister = state_persister
     self._job = job
+    self._use_cache = use_cache
 
   def _wait_for_workflow_completion(
     self,
@@ -84,7 +87,7 @@ class CulpritFinder:
     start_time = time.time()
     while time.time() - start_time < timeout:
       latest_run = self._gh_client.get_latest_run(
-        workflow_file, branch_name, event="workflow_dispatch"
+        workflow_id=workflow_file, branch=branch_name, event="workflow_dispatch"
       )
 
       if not latest_run:
@@ -115,12 +118,15 @@ class CulpritFinder:
       time.sleep(poll_interval)
     raise TimeoutError("Timed out waiting for workflow to complete")
 
-  def _get_target_job(self, jobs: list[WorkflowJob]) -> WorkflowJob:
+  def _get_target_job(
+    self, jobs: list[WorkflowJob], invoked_from_another_workflow: bool
+  ) -> WorkflowJob:
     """
     Finds a specific job in the list, handling nested caller/called names.
 
     Args:
         jobs: A list of Job objects from a workflow run.
+        invoked_from_another_workflow: Whether the workflow was invoked from another workflow.
 
     Returns:
         The Job object that matches the target job name.
@@ -130,7 +136,7 @@ class CulpritFinder:
     """
 
     def get_job_name(name: str) -> str:
-      if self._has_culprit_finder_workflow:
+      if invoked_from_another_workflow:
         # when calling a workflow from another workflow, the job name is
         # in the format "Caller Job Name / Called Job Name"
         return name.split("/", 1)[-1].strip()
@@ -181,7 +187,7 @@ class CulpritFinder:
 
     # Get the ID of the previous run (if any) to distinguish it from the new one we are about to trigger
     previous_run = self._gh_client.get_latest_run(
-      workflow_to_trigger, branch_name, event="workflow_dispatch"
+      workflow_id=workflow_to_trigger, branch=branch_name, event="workflow_dispatch"
     )
     previous_run_id = previous_run.id if previous_run else None
 
@@ -210,10 +216,76 @@ class CulpritFinder:
 
     if self._job:
       jobs = self._gh_client.get_run_jobs(run.id)
-      target_job = self._get_target_job(jobs)
+      target_job = self._get_target_job(jobs, self._has_culprit_finder_workflow)
       return target_job.conclusion == "success"
 
     return run.conclusion == "success"
+
+  def _check_existing_run(self, commit_sha: str) -> bool | None:
+    """
+    Checks for an existing workflow run for the commit.
+
+    Args:
+        commit_sha: The SHA of the commit to check for existing runs.
+
+    Returns:
+        True if a successful run is found, False if a failed run is found,
+        or None if no completed run exists.
+    """
+    previous_run = self._gh_client.get_latest_run(
+      workflow_id=self._workflow_file, commit=commit_sha, status="completed"
+    )
+    if previous_run:
+      logging.info(
+        "Found result from previous run for commit %s, skipping test", commit_sha
+      )
+      if self._job:
+        jobs = self._gh_client.get_run_jobs(previous_run.id)
+        target_job = self._get_target_job(jobs, False)
+        return target_job.conclusion == "success"
+      return previous_run.conclusion == "success"
+    return None
+
+  def _execute_test_with_branch(self, commit_sha: str) -> bool:
+    """
+    Creates a branch, runs the test, and cleans up.
+
+    Args:
+        commit_sha: The SHA of the commit to be tested.
+
+    Returns:
+        True if the test passed, False otherwise.
+    """
+    branch_name = f"culprit-finder/test-{commit_sha}_{uuid.uuid4()}"
+
+    # Ensure the branch does not exist from a previous run
+    if not self._gh_client.check_branch_exists(branch_name):
+      self._gh_client.create_branch(branch_name, commit_sha)
+      logging.info("Created branch %s", branch_name)
+      self._gh_client.wait_for_branch_creation(branch_name, timeout=180)
+
+    try:
+      return self._test_commit(commit_sha, branch_name)
+    finally:
+      if self._gh_client.check_branch_exists(branch_name):
+        logging.info("Deleting branch %s", branch_name)
+        self._gh_client.delete_branch(branch_name)
+
+  def _update_state(self, commit_sha: str, is_good: bool) -> None:
+    """
+    Updates the state and persists it.
+
+    Args:
+        commit_sha: The SHA of the commit that was tested.
+        is_good: Whether the commit was identified as good (True) or bad (False).
+    """
+    if is_good:
+      self._state["current_good"] = commit_sha
+      self._state["cache"][commit_sha] = "PASS"
+    else:
+      self._state["current_bad"] = commit_sha
+      self._state["cache"][commit_sha] = "FAIL"
+    self._state_persister.save(self._state)
 
   def run_bisection(self) -> Commit | None:
     """
@@ -242,47 +314,29 @@ class CulpritFinder:
     while bad_idx - good_idx > 1:
       mid_idx = (good_idx + bad_idx) // 2
       commit_sha = commits[mid_idx].sha
+      is_good = None
+      is_cached = False
 
       if commit_sha in self._state["cache"]:
         logging.info("Using cached result for commit %s", commit_sha)
         is_good = self._state["cache"][commit_sha] == "PASS"
+        is_cached = True
 
-        if is_good:
-          good_idx = mid_idx
-          logging.info("Commit %s is good", commit_sha)
-        else:
-          bad_idx = mid_idx
-          logging.info("Commit %s is bad", commit_sha)
+      if is_good is None and self._use_cache:
+        is_good = self._check_existing_run(commit_sha)
 
-        continue
-
-      branch_name = f"culprit-finder/test-{commit_sha}_{uuid.uuid4()}"
-
-      # Ensure the branch does not exist from a previous run
-      if not self._gh_client.check_branch_exists(branch_name):
-        self._gh_client.create_branch(branch_name, commit_sha)
-        logging.info("Created branch %s", branch_name)
-        self._gh_client.wait_for_branch_creation(branch_name, timeout=180)
-
-      try:
-        is_good = self._test_commit(commit_sha, branch_name)
-      finally:
-        if self._gh_client.check_branch_exists(branch_name):
-          logging.info("Deleting branch %s", branch_name)
-          self._gh_client.delete_branch(branch_name)
+      if is_good is None:
+        is_good = self._execute_test_with_branch(commit_sha)
 
       if is_good:
         good_idx = mid_idx
-        self._state["current_good"] = commit_sha
-        self._state["cache"][commit_sha] = "PASS"
         logging.info("Commit %s is good", commit_sha)
       else:
         bad_idx = mid_idx
-        self._state["current_bad"] = commit_sha
-        self._state["cache"][commit_sha] = "FAIL"
         logging.info("Commit %s is bad", commit_sha)
 
-      self._state_persister.save(self._state)
+      if not is_cached:
+        self._update_state(commit_sha, is_good)
 
     if bad_idx == len(commits):
       return None
