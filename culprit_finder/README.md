@@ -47,12 +47,19 @@ set -o history
 After installation, you can run the tool using the `culprit-finder` command.
 
 ```shell
-culprit-finder --repo <OWNER/REPO> --start <GOOD_SHA> --end <BAD_SHA> --workflow <WORKFLOW_FILE>
+culprit-finder [URL] --repo <OWNER/REPO> --start <GOOD_SHA> --end <BAD_SHA> --workflow <WORKFLOW_FILE> [FLAGS]
 ```
 
 
 ### Arguments
 
+- `URL`: (Optional) A GitHub Actions Run URL (e.g., `https://github.com/owner/repo/actions/runs/12345`).
+If provided, the tool infers the repository, workflow name, and either the start or end SHA based on the
+run's status (success implies start SHA, failure implies end SHA).
+- `--repo`: The target GitHub repository in the format `owner/repo`. (Optional if URL is provided).
+- `--start`: The full or short SHA of the last known **good** commit. (Optional if inferred from a successful URL run).
+- `--end`: The full or short SHA of the first known **bad** commit. (Optional if inferred from a failed URL run).
+- `--workflow`: The filename of the GitHub Actions workflow to run (e.g., `ci.yml`, `tests.yaml`). (Optional if URL is provided).
 - `--repo`: The target GitHub repository in the format `owner/repo`.
 - `--start`: The full or short SHA of the last known **good** commit.
 - `--end`: The full or short SHA of the first known **bad** commit.
@@ -78,6 +85,10 @@ culprit-finder
 --workflow build_and_test.yml
 ```
 
+Using a URL to infer details (e.g., starting with a known bad run):
+```shell
+culprit-finder https://github.com/google-ml-infra/actions/actions/runs/123456789 --start a1b2c3d
+```
 
 ## Developer Notes
 

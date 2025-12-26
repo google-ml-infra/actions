@@ -5,6 +5,7 @@ Module for interacting with the GitHub API via the gh CLI.
 import subprocess
 import json
 import logging
+import re
 import time
 from typing import Optional, TypedDict
 
@@ -29,6 +30,8 @@ class Run(TypedDict):
       conclusion: The conclusion of the workflow run if completed (e.g., "success", "failure", "cancelled"). Optional.
       databaseId: The unique identifier for the workflow run in the GitHub database.
       url: The URL to the workflow run on GitHub.
+      workflowName: The name of the workflow file (e.g. "test.yml") or the name of the workflow.
+      workflowDatabaseId: The unique identifier for the workflow in the GitHub database.
   """
 
   headSha: str
@@ -37,6 +40,8 @@ class Run(TypedDict):
   conclusion: Optional[str]
   databaseId: int
   url: str
+  workflowName: str
+  workflowDatabaseId: int
 
 
 class GithubClient:
@@ -246,3 +251,49 @@ class GithubClient:
     cmd = ["workflow", "list", "--json", "path,name", "--repo", self.repo]
     workflows = self._run_command(cmd)
     return json.loads(workflows)
+
+  def get_run(self, run_id: str) -> Run:
+    """
+    Retrieves detailed information about a specific workflow run.
+
+    Args:
+        run_id: The unique database ID or number of the workflow run.
+
+    Returns:
+        A Run object containing metadata such as head SHA, status, and conclusion.
+    """
+    cmd = [
+      "run",
+      "view",
+      run_id,
+      "--json",
+      "headSha,status,createdAt,conclusion,databaseId,url,workflowName,workflowDatabaseId",
+      "--repo",
+      self.repo,
+    ]
+    run = self._run_command(cmd)
+    return json.loads(run)
+
+  def get_run_from_url(self, url: str) -> Run:
+    """
+    Retrieves workflow run details using a GitHub Actions URL.
+
+    The URL must follow one of these structures:
+    - https://github.com/owner/repo/actions/runs/:runId
+    - https://github.com/owner/repo/actions/runs/:runId/jobs/:jobId
+
+    Args:
+        url: The full GitHub URL to the workflow run or specific job.
+
+    Returns:
+        A Run object containing metadata for the extracted run ID.
+
+    Raises:
+        ValueError: If the run ID cannot be parsed from the provided URL.
+    """
+    match = re.search(r"actions/runs/(\d+)", url)
+    if not match:
+      raise ValueError(f"Could not extract run ID from URL: {url}")
+
+    run_id = match.group(1)
+    return self.get_run(run_id)

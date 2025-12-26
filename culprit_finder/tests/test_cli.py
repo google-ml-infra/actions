@@ -33,25 +33,6 @@ def _get_culprit_finder_command(
 @pytest.mark.parametrize(
   "args, expected_error_msg",
   [
-    # Missing Arguments Scenarios
-    (["culprit_finder"], "error"),  # No args
-    (
-      _get_culprit_finder_command(None, "sha1", "sha2", "test.yml"),
-      "error",
-    ),  # Missing repo
-    (
-      _get_culprit_finder_command("owner/repo", None, "sha2", "test.yml"),
-      "error",
-    ),  # Missing start
-    (
-      _get_culprit_finder_command("owner/repo", "sha1", None, "test.yml"),
-      "error",
-    ),  # Missing end
-    (
-      _get_culprit_finder_command("owner/repo", "sha1", "sha2", None),
-      "error",
-    ),  # Missing workflow
-    # Invalid Repo Format Scenarios
     (
       _get_culprit_finder_command("invalidrepo", "sha1", "sha2", "test.yml"),
       "Invalid repo format: invalidrepo",
@@ -67,7 +48,7 @@ def _get_culprit_finder_command(
     (_get_culprit_finder_command("", "sha1", "sha2", "test.yml"), "error"),
   ],
 )
-def test_cli_args_failures(monkeypatch, capsys, args, expected_error_msg):
+def test_invalid_repo_format(monkeypatch, capsys, args, expected_error_msg):
   """Tests that the CLI exits with an error for invalid inputs (missing args or invalid formats)."""
   monkeypatch.setattr(sys, "argv", args)
 
@@ -369,3 +350,139 @@ def test_cli_clear_cache_deletes_state(monkeypatch, mocker):
 
   # delete() should be called at start (due to clear-cache) and potentially at end (if no culprit found/successful run)
   assert mock_persister_inst.delete.called
+
+
+@pytest.mark.parametrize(
+  "run_status, extra_args, expected_start, expected_end",
+  [
+    ("success", ["--end", "sha2"], "sha_from_url", "sha2"),
+    ("failure", ["--start", "sha1"], "sha1", "sha_from_url"),
+  ],
+)
+def test_cli_with_url(
+  monkeypatch, mocker, run_status, extra_args, expected_start, expected_end
+):
+  """Tests that the CLI correctly infers arguments from a URL based on run status."""
+  mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
+  mock_gh_client_instance = _mock_gh_client(
+    mocker,
+    True,
+    [{"path": ".github/workflows/culprit_finder.yml", "name": "Culprit Finder"}],
+  )
+  patches = _mock_state(mocker)
+
+  mock_gh_client_instance.get_run_from_url.return_value = {
+    "headSha": "sha_from_url",
+    "status": run_status,
+    "workflowName": "test.yml",
+    "workflowDatabaseId": 123,
+  }
+
+  url = "https://github.com/owner/repo/actions/runs/123"
+  args = ["culprit_finder", url] + extra_args
+  monkeypatch.setattr(sys, "argv", args)
+
+  cli.main()
+
+  expected_state = {
+    "repo": "owner/repo",
+    "workflow": "test.yml",
+    "original_start": expected_start,
+    "original_end": expected_end,
+    "current_good": "",
+    "current_bad": "",
+    "cache": {},
+  }
+  mock_finder.assert_called_once_with(
+    repo="owner/repo",
+    start_sha=expected_start,
+    end_sha=expected_end,
+    workflow_file="test.yml",
+    has_culprit_finder_workflow=True,
+    github_client=mock_gh_client_instance,
+    state=expected_state,
+    state_persister=patches["state_persister_inst"],
+  )
+
+
+@pytest.mark.parametrize(
+  "args, expected_error_msg",
+  [
+    (
+      ["culprit_finder"],
+      "the following arguments are required: -r/--repo (or provided via URL)",
+    ),
+    (
+      _get_culprit_finder_command(None, "sha1", "sha2", "test.yml"),
+      "the following arguments are required: -r/--repo (or provided via URL)",
+    ),
+  ],
+)
+def test_missing_repo_args(monkeypatch, capsys, args, expected_error_msg):
+  """Tests that the CLI exits with an error when repo is missing (before auth check)."""
+  monkeypatch.setattr(sys, "argv", args)
+  with pytest.raises(SystemExit):
+    cli.main()
+  captured = capsys.readouterr()
+  assert expected_error_msg in captured.err
+
+
+@pytest.mark.parametrize(
+  "args, expected_error_msg",
+  [
+    (
+      _get_culprit_finder_command("owner/repo", None, "sha2", "test.yml"),
+      "the following arguments are required: -s/--start",
+    ),
+    (
+      _get_culprit_finder_command("owner/repo", "sha1", None, "test.yml"),
+      "the following arguments are required: -e/--end",
+    ),
+    (
+      _get_culprit_finder_command("owner/repo", "sha1", "sha2", None),
+      "the following arguments are required: -w/--workflow",
+    ),
+  ],
+)
+def test_missing_args_standard_authenticated(
+  monkeypatch, mocker, capsys, args, expected_error_msg
+):
+  """Tests that the CLI exits with an error for missing args after repo check (requires auth)."""
+  _mock_gh_client(mocker, True)
+  monkeypatch.setattr(sys, "argv", args)
+
+  with pytest.raises(SystemExit):
+    cli.main()
+
+  captured = capsys.readouterr()
+  assert expected_error_msg in captured.err
+
+
+@pytest.mark.parametrize(
+  "run_status, extra_args, expected_error_msg",
+  [
+    ("success", [], "the following arguments are required: -e/--end"),
+    ("failure", [], "the following arguments are required: -s/--start"),
+  ],
+)
+def test_missing_args_with_url(
+  monkeypatch, mocker, capsys, run_status, extra_args, expected_error_msg
+):
+  """Tests that the CLI fails when required arguments are missing even with URL."""
+  mock_gh_client_instance = _mock_gh_client(mocker, True)
+  mock_gh_client_instance.get_run_from_url.return_value = {
+    "headSha": "sha_from_url",
+    "status": run_status,
+    "workflowName": "test.yml",
+    "workflowDatabaseId": 123,
+  }
+
+  url = "https://github.com/owner/repo/actions/runs/123"
+  args = ["culprit_finder", url] + extra_args
+  monkeypatch.setattr(sys, "argv", args)
+
+  with pytest.raises(SystemExit):
+    cli.main()
+
+  captured = capsys.readouterr()
+  assert expected_error_msg in captured.err
