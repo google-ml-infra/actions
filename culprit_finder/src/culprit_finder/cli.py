@@ -72,6 +72,13 @@ def main() -> None:
     action="store_true",
     help="Disabled cached results. This will run the workflow on all commits.",
   )
+  parser.add_argument(
+    "--retry",
+    required=False,
+    help="Number of times to retry the workflow run if it fails (default: 0).",
+    default=0,
+    type=int,
+  )
 
   args = parser.parse_args()
 
@@ -129,6 +136,7 @@ def main() -> None:
   logging.info("Workflow: %s", workflow_file_name)
   logging.info("Job: %s", job_name)
   logging.info("Use cache: %s", use_cache)
+  logging.info("Retries: %s", args.retry)
 
   state_persister = culprit_finder_state.StatePersister(
     repo=repo, workflow=workflow_file_name, job=job_name
@@ -185,6 +193,7 @@ def main() -> None:
     state_persister=state_persister,
     job=job_name,
     use_cache=use_cache,
+    retries=args.retry,
   )
 
   try:

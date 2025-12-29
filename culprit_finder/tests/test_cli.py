@@ -204,6 +204,7 @@ def test_cli_success(
     gh_client=mock_gh_client_instance,
     job=None,
     use_cache=True,
+    retries=0,
     state=expected_state,
     state_persister=patches["state_persister_inst"],
   )
@@ -283,6 +284,7 @@ def test_cli_state_management(
       state_persister=patches["state_persister_inst"],
       job=None,
       use_cache=True,
+      retries=0,
     )
   else:
     # If not exists or discarded, new state created
@@ -393,6 +395,7 @@ def test_cli_with_url(monkeypatch, mocker):
     state_persister=patches["state_persister_inst"],
     job=None,
     use_cache=True,
+    retries=0,
   )
 
 
