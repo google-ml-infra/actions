@@ -57,6 +57,16 @@ culprit-finder --repo <OWNER/REPO> --start <GOOD_SHA> --end <BAD_SHA> --workflow
 - `--start`: The full or short SHA of the last known **good** commit.
 - `--end`: The full or short SHA of the first known **bad** commit.
 - `--workflow`: The filename of the GitHub Actions workflow to run (e.g., `ci.yml`, `tests.yaml`).
+- `--clear-cache`: (Optional) Deletes the local state file before execution to start a fresh bisection.
+
+### State Persistence and Resuming
+
+Culprit Finder automatically saves its progress after each commit is tested. If the process is interrupted (e.g., via `CTRL+C`) or fails due to network issues, you can resume from where you left off.
+
+1. **Automatic Save**: The state is stored locally in `~/.github_culprit_finder/`.
+2. **Resume**: When you restart the tool with the same `--repo` and `--workflow`, it will prompt you to resume from the saved state.
+3. **Caching**: Results for individual commits are cached. If the bisection hits a commit that was already tested in a previous session, it will use the cached "PASS" or "FAIL" result instead of triggering a new GitHub Action.
+
 
 ### Example
 
