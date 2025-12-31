@@ -29,7 +29,7 @@ class CulpritFinder:
     end_sha: str,
     workflow_file: str,
     has_culprit_finder_workflow: bool,
-    gh_client: github_client.GithubClient,
+    gh_client: github_client.GithubClient | github_client.DryRunGithubClient,
     state: culprit_finder_state.CulpritFinderState,
     state_persister: culprit_finder_state.StatePersister,
     job: str | None = None,
