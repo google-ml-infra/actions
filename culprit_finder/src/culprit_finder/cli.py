@@ -79,6 +79,11 @@ def main() -> None:
     default=0,
     type=int,
   )
+  parser.add_argument(
+    "--dry-run",
+    action="store_true",
+    help="Simulates the bisection process by printing the API calls that would be made without actually executing them",
+  )
 
   args = parser.parse_args()
 
@@ -101,25 +106,33 @@ def main() -> None:
     logging.error("Not authenticated with GitHub CLI or GH_TOKEN env var is not set.")
     sys.exit(1)
 
-  gh_client = github_client.GithubClient(repo=repo, token=token)
+  real_client = github_client.GithubClient(repo=repo, token=token)
 
   if args.url:
-    run, job_details = gh_client.get_run_and_job_from_url(args.url)
+    run, job_details = real_client.get_run_and_job_from_url(args.url)
     if run.conclusion != "failure":
       raise ValueError("The provided URL does not point to a failed workflow run.")
 
     if not start:
       if job_details:
-        previous_run = gh_client.find_previous_successful_job_run(run, job_details.name)
+        previous_run = real_client.find_previous_successful_job_run(
+          run, job_details.name
+        )
       else:
-        previous_run = gh_client.find_previous_successful_run(run)
+        previous_run = real_client.find_previous_successful_run(run)
       start = previous_run.head_sha
     end = run.head_sha
 
-    workflow_details = gh_client.get_workflow(run.workflow_id)
+    workflow_details = real_client.get_workflow(run.workflow_id)
     workflow_file_name = workflow_details.path.split("/")[-1]
     if job_details:
       job_name = job_details.name
+
+  gh_client = (
+    github_client.DryRunGithubClient(real_client, job_name=job_name)
+    if args.dry_run
+    else real_client
+  )
 
   if not start:
     parser.error("the following arguments are required: -s/--start")
@@ -198,13 +211,14 @@ def main() -> None:
 
   try:
     culprit_commit = finder.run_bisection()
-    if culprit_commit:
-      commit_message = culprit_commit.commit.message.splitlines()[0]
-      print(
-        f"\nThe culprit commit is: {commit_message} (SHA: {culprit_commit.sha})",
-      )
-    else:
-      print("No culprit commit found.")
+    if not args.dry_run:
+      if culprit_commit:
+        commit_message = culprit_commit.commit.message.splitlines()[0]
+        print(
+          f"\nThe culprit commit is: {commit_message} (SHA: {culprit_commit.sha})",
+        )
+      else:
+        print("No culprit commit found.")
 
     state_persister.delete()
   except KeyboardInterrupt:
