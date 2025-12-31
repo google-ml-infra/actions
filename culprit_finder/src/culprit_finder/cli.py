@@ -11,6 +11,7 @@ import logging
 import sys
 import re
 
+from culprit_finder import dry_run
 from culprit_finder import culprit_finder
 from culprit_finder import culprit_finder_state
 from culprit_finder import github_client
@@ -78,6 +79,11 @@ def main() -> None:
     help="Number of times to retry the workflow run if it fails (default: 0).",
     default=0,
     type=int,
+  )
+  parser.add_argument(
+    "--dry-run",
+    action="store_true",
+    help="Simulates the bisection process by printing the API calls that would be made without actually executing them",
   )
 
   args = parser.parse_args()
@@ -175,9 +181,9 @@ def main() -> None:
       state = state_persister.load()
       print("Resuming from the saved state.")
 
+  workflows = gh_client.get_workflows()
   has_culprit_finder_workflow = any(
-    wf.path == ".github/workflows/culprit_finder.yml"
-    for wf in gh_client.get_workflows()
+    wf.path == ".github/workflows/culprit_finder.yml" for wf in workflows
   )
 
   logging.info("Using culprit finder workflow: %s", has_culprit_finder_workflow)
@@ -194,6 +200,7 @@ def main() -> None:
     job=job_name,
     use_cache=use_cache,
     retries=args.retry,
+    dry_run=args.dry_run,
   )
 
   try:
@@ -205,8 +212,18 @@ def main() -> None:
       )
     else:
       print("No culprit commit found.")
-
     state_persister.delete()
+  except dry_run.DryRunHalt as halt:
+    dry_run.print_dry_run_summary(
+      repo,
+      start,
+      end,
+      workflow_file_name,
+      job_name,
+      halt,
+      finder.commits,
+      workflows,
+    )
   except KeyboardInterrupt:
     logging.info("Bisection interrupted by user (CTRL+C). Saving current state...")
     state_persister.save(state)

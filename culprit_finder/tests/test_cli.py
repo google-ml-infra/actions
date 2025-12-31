@@ -207,6 +207,7 @@ def test_cli_success(
     retries=0,
     state=expected_state,
     state_persister=patches["state_persister_inst"],
+    dry_run=False,
   )
   mock_finder.return_value.run_bisection.assert_called_once()
 
@@ -285,6 +286,7 @@ def test_cli_state_management(
       job=None,
       use_cache=True,
       retries=0,
+      dry_run=False,
     )
   else:
     # If not exists or discarded, new state created
@@ -396,6 +398,7 @@ def test_cli_with_url(monkeypatch, mocker):
     job=None,
     use_cache=True,
     retries=0,
+    dry_run=False,
   )
 
 
