@@ -66,6 +66,8 @@ If not provided, the tool checks the overall workflow conclusion.
 - `--retry`: (Optional) Number of times to retry the workflow run if it fails (default: 0).
 - `--clear-cache`: (Optional) Deletes the local state file before execution to start a fresh bisection.
 - `--no-cache`: (Optional) Disabled cached results. This will run the workflow on all commits.
+- `--dry-run`: (Optional) Simulates the bisection process by printing the API calls
+that would be made without actually executing them.
 
 ### State Persistence and Resuming
 

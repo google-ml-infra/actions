@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from culprit_finder import culprit_finder, culprit_finder_state, github_client
+from culprit_finder import culprit_finder, culprit_finder_state, github_client, dry_run
 
 import tests.factories as factories
 
@@ -544,7 +544,7 @@ def test_execute_test_with_branch_success(mocker, finder, mock_gh_client):
 
   mocker.patch.object(finder, "_test_commit", return_value=True)
 
-  result = finder._execute_test_with_branch(commit_sha)
+  result = finder._execute_test_with_branch(commit_sha, "culprit-finder/test-sha1_")
 
   assert result is True
   mock_gh_client.create_branch.assert_called_once()
@@ -561,7 +561,7 @@ def test_execute_test_with_branch_exception_cleanup(mocker, finder, mock_gh_clie
   mocker.patch.object(finder, "_test_commit", side_effect=Exception("Test error"))
 
   with pytest.raises(Exception, match="Test error"):
-    finder._execute_test_with_branch(commit_sha)
+    finder._execute_test_with_branch(commit_sha, "culprit-finder/test-sha1_")
 
   mock_gh_client.create_branch.assert_called_once()
   mock_gh_client.delete_branch.assert_called_once()
@@ -582,3 +582,33 @@ def test_update_state(finder, mock_state_persister, is_good, expected_status):
   field = "current_good" if is_good else "current_bad"
   assert finder._state[field] == commit_sha
   assert finder._state["cache"][commit_sha] == expected_status
+
+
+def test_run_bisection_dry_run(mocker, mock_gh_client, finder_factory):
+  """Tests that dry run halts at the first write (create_branch) and reports the midpoint."""
+  commits = [
+    factories.create_commit(mocker, "c0", "m0"),
+    factories.create_commit(mocker, "c1", "m1"),
+    factories.create_commit(mocker, "c2", "m2"),
+  ]
+  mock_gh_client.compare_commits.return_value = commits
+
+  finder = finder_factory(gh_client=mock_gh_client, dry_run=True)
+
+  # Dry run halts at create_branch with midpoint commit info.
+  with pytest.raises(dry_run.DryRunHalt) as exc_info:
+    finder.run_bisection()
+
+  halt = exc_info.value
+  # Midpoint of 3 commits (indices 0, 1, 2) is index 1.
+  assert halt.commit_sha == "c1"
+  assert halt.branch_name.startswith("culprit-finder/test-c1")
+
+  # Verify real client write methods were NOT called.
+  mock_gh_client.create_branch.assert_not_called()
+  mock_gh_client.delete_branch.assert_not_called()
+  mock_gh_client.trigger_workflow.assert_not_called()
+  mock_gh_client.check_branch_exists.assert_not_called()
+
+  # Verify read-only calls were made via the real client.
+  mock_gh_client.compare_commits.assert_called_once()

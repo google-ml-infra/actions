@@ -14,6 +14,7 @@ from github.WorkflowJob import WorkflowJob
 
 from culprit_finder import github_client
 from culprit_finder import culprit_finder_state
+from culprit_finder import dry_run
 
 
 CULPRIT_FINDER_WORKFLOW_NAME = "culprit_finder.yml"
@@ -35,6 +36,7 @@ class CulpritFinder:
     job: str | None = None,
     use_cache: bool = True,
     retries: int = 0,
+    dry_run: bool = False,
   ):
     """
     Initializes the CulpritFinder instance.
@@ -51,6 +53,7 @@ class CulpritFinder:
         job: The specific job name within the workflow to monitor for pass/fail.
         use_cache: Whether to use the cached results from previous runs. Defaults to True.
         retries: Number of times to retry workflow runs in case of failure.
+        dry_run: Whether to perform a dry run (no write GitHub API calls).
     """
     self._repo = repo
     self._start_sha = start_sha
@@ -64,6 +67,12 @@ class CulpritFinder:
     self._job = job
     self._use_cache = use_cache
     self._retries = retries
+    self._dry_run = dry_run
+    self._commits: list[Commit] = []
+
+  @property
+  def commits(self) -> list[Commit]:
+    return self._commits
 
   def _wait_for_workflow_completion(
     self,
@@ -264,18 +273,17 @@ class CulpritFinder:
       return previous_run.conclusion == "success"
     return None
 
-  def _execute_test_with_branch(self, commit_sha: str) -> bool:
+  def _execute_test_with_branch(self, commit_sha: str, branch_name: str) -> bool:
     """
     Creates a branch, runs the test, and cleans up.
 
     Args:
         commit_sha: The SHA of the commit to be tested.
+        branch_name: The name of the temporary branch to be created.
 
     Returns:
         True if the test passed, False otherwise.
     """
-    branch_name = f"culprit-finder/test-{commit_sha}_{uuid.uuid4()}"
-
     # Ensure the branch does not exist from a previous run
     if not self._gh_client.check_branch_exists(branch_name):
       self._gh_client.create_branch(branch_name, commit_sha)
@@ -320,20 +328,25 @@ class CulpritFinder:
       as the cause of the specified issue. If the bisection process does not
       identify a commit, None is returned.
     """
-    commits = self._gh_client.compare_commits(self._start_sha, self._end_sha)
-    if not commits:
+    self._commits = self._gh_client.compare_commits(self._start_sha, self._end_sha)
+    if not self._commits:
       logging.info("No commits found between %s and %s", self._start_sha, self._end_sha)
       return None
 
     # Initially, start_sha is good, which is before commits[0], so -1
     good_idx = -1
-    bad_idx = len(commits)
+    bad_idx = len(self._commits)
 
     while bad_idx - good_idx > 1:
       mid_idx = (good_idx + bad_idx) // 2
-      commit_sha = commits[mid_idx].sha
+      commit_sha = self._commits[mid_idx].sha
       is_good = None
       is_cached = False
+
+      branch_name = f"culprit-finder/test-{commit_sha}_{uuid.uuid4()}"
+
+      if self._dry_run:
+        raise dry_run.DryRunHalt(branch_name, commit_sha)
 
       if commit_sha in self._state["cache"]:
         logging.info("Using cached result for commit %s", commit_sha)
@@ -344,7 +357,7 @@ class CulpritFinder:
         is_good = self._check_existing_run(commit_sha)
 
       if is_good is None:
-        is_good = self._execute_test_with_branch(commit_sha)
+        is_good = self._execute_test_with_branch(commit_sha, branch_name)
 
       if is_good:
         good_idx = mid_idx
@@ -356,7 +369,7 @@ class CulpritFinder:
       if not is_cached:
         self._update_state(commit_sha, is_good)
 
-    if bad_idx == len(commits):
+    if bad_idx == len(self._commits):
       return None
 
-    return commits[bad_idx]
+    return self._commits[bad_idx]
