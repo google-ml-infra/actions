@@ -303,8 +303,8 @@ def test_cli_state_management(
   if state_exists and expected_resume:
     mock_finder_cls.assert_called_with(
       repo="owner/repo",
-      start_sha="good_sha",
-      end_sha="bad_sha",
+      start_sha="sha1",
+      end_sha="sha2",
       workflow_file="test.yml",
       has_culprit_finder_workflow=False,
       state=existing_state,

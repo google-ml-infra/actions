@@ -93,7 +93,7 @@ def main() -> None:
       state = state_persister.load()
       print("Resuming from the saved state.")
   else:
-    state = {
+    state: culprit_finder_state.CulpritFinderState = {
       "repo": args.repo,
       "workflow": args.workflow,
       "original_start": args.start,
@@ -117,8 +117,8 @@ def main() -> None:
 
   finder = culprit_finder.CulpritFinder(
     repo=args.repo,
-    start_sha=state["current_good"] or args.start,
-    end_sha=state["current_bad"] or args.end,
+    start_sha=args.start,
+    end_sha=args.end,
     workflow_file=args.workflow,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
     github_client=gh_client,
