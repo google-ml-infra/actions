@@ -12,6 +12,7 @@ import os
 import sys
 
 from culprit_finder import culprit_finder
+from culprit_finder import culprit_finder_state
 from culprit_finder import github
 
 logging.basicConfig(
@@ -49,6 +50,11 @@ def main() -> None:
     required=True,
     help="Workflow filename (e.g., build_and_test.yml)",
   )
+  parser.add_argument(
+    "--clear-cache",
+    action="store_true",
+    help="Deletes the local state file before execution",
+  )
 
   args = parser.parse_args()
 
@@ -60,6 +66,42 @@ def main() -> None:
   if not is_authenticated_with_cli and not has_access_token:
     logging.error("Not authenticated with GitHub CLI or GH_TOKEN env var is not set.")
     sys.exit(1)
+
+  state_persister = culprit_finder_state.StatePersister(
+    repo=args.repo, workflow=args.workflow
+  )
+
+  if args.clear_cache and state_persister.exists():
+    state_persister.delete()
+
+  if state_persister.exists():
+    print("\nA previous bisection state was found.")
+    resume = input("Do you want to resume from the saved state? (y/n): ").lower()
+    if resume not in ["y", "yes"]:
+      print("Starting a new bisection. Deleting the old state...")
+      state_persister.delete()
+      state: culprit_finder_state.CulpritFinderState = {
+        "repo": args.repo,
+        "workflow": args.workflow,
+        "original_start": args.start,
+        "original_end": args.end,
+        "current_good": "",
+        "current_bad": "",
+        "cache": {},
+      }
+    else:
+      state = state_persister.load()
+      print("Resuming from the saved state.")
+  else:
+    state: culprit_finder_state.CulpritFinderState = {
+      "repo": args.repo,
+      "workflow": args.workflow,
+      "original_start": args.start,
+      "original_end": args.end,
+      "current_good": "",
+      "current_bad": "",
+      "cache": {},
+    }
 
   logging.info("Initializing culprit finder for %s", args.repo)
   logging.info("Start commit: %s", args.start)
@@ -80,15 +122,25 @@ def main() -> None:
     workflow_file=args.workflow,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
     github_client=gh_client,
+    state=state,
+    state_persister=state_persister,
   )
-  culprit_commit = finder.run_bisection()
-  if culprit_commit:
-    commit_message = culprit_commit["message"].splitlines()[0]
-    print(
-      f"\nThe culprit commit is: {commit_message} (SHA: {culprit_commit['sha']})",
-    )
-  else:
-    print("No culprit commit found.")
+
+  try:
+    culprit_commit = finder.run_bisection()
+    if culprit_commit:
+      commit_message = culprit_commit["message"].splitlines()[0]
+      print(
+        f"\nThe culprit commit is: {commit_message} (SHA: {culprit_commit['sha']})",
+      )
+    else:
+      print("No culprit commit found.")
+
+    state_persister.delete()
+  except KeyboardInterrupt:
+    logging.info("Bisection interrupted by user (CTRL+C). Saving current state...")
+    state_persister.save(state)
+    logging.info("State saved.")
 
 
 if __name__ == "__main__":

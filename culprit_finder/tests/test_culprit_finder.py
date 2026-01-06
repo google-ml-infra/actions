@@ -1,6 +1,7 @@
 """Tests for the CulpritFinder class."""
 
 from culprit_finder import culprit_finder, github
+from culprit_finder import culprit_finder_state
 import re
 import pytest
 from datetime import datetime, timezone
@@ -17,8 +18,23 @@ def mock_gh_client(mocker):
 
 
 @pytest.fixture
-def finder(request, mock_gh_client):
+def mock_state_persister(mocker):
+  """Returns a mock StatePersister."""
+  return mocker.create_autospec(culprit_finder_state.StatePersister, instance=True)
+
+
+@pytest.fixture
+def finder(request, mock_gh_client, mock_state_persister):
   """Returns a CulpritFinder instance for testing."""
+  state: culprit_finder_state.CulpritFinderState = {
+    "repo": "test_repo",
+    "workflow": "test_workflow",
+    "original_start": "original_start_sha",
+    "original_end": "original_end_sha",
+    "current_good": "",
+    "current_bad": "",
+    "cache": {},
+  }
   has_culprit_finder_workflow = getattr(request, "param", True)
   return culprit_finder.CulpritFinder(
     repo=REPO,
@@ -27,6 +43,8 @@ def finder(request, mock_gh_client):
     workflow_file=WORKFLOW_FILE,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
     github_client=mock_gh_client,
+    state=state,
+    state_persister=mock_state_persister,
   )
 
 
@@ -187,7 +205,6 @@ def test_run_bisection(
 ):
   """Tests various bisection scenarios including finding a culprit, no culprit, etc."""
   mock_gh_client.compare_commits.return_value = commits
-
   # Mock check_branch_exists to alternate False/True to simulate creation/deletion needs
   # We need enough values for the max possible iterations (2 * len(commits))
   mock_gh_client.check_branch_exists.side_effect = [False, True] * (len(commits) + 1)
@@ -254,3 +271,78 @@ def test_run_bisection_branch_already_exists(mocker, finder, mock_gh_client):
     r"culprit-finder/test-c0_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
     called_branch_name_delete,
   )
+
+
+def test_run_bisection_updates_and_saves_state_each_iteration(
+  mocker, finder, mock_gh_client
+):
+  """
+  Verifies:
+  - state fields are updated between iterations
+  - state is saved after each non-cached iteration
+  """
+  commits = [
+    _create_commit("c0", "m0"),
+    _create_commit("c1", "m1"),
+    _create_commit("c2", "m2"),
+  ]
+  mock_gh_client.compare_commits.return_value = commits
+
+  # Two iterations will test two commits; each iteration calls check_branch_exists twice.
+  mock_gh_client.check_branch_exists.side_effect = [False, True, False, True]
+
+  mock_test = mocker.patch.object(finder, "_test_commit")
+  # Mid=1 => c1 is BAD, then mid=0 => c0 is GOOD
+  mock_test.side_effect = [False, True]
+
+  culprit = finder.run_bisection()
+  assert culprit == commits[1]
+
+  assert finder._state_persister.save.call_count == 2
+
+  # After first iteration (c1 BAD) state must reflect the failure.
+  state_after_1 = finder._state_persister.save.call_args_list[0][0][0]
+  assert state_after_1["current_bad"] == "c1"
+  assert state_after_1["cache"]["c1"] == "FAIL"
+
+  # After second iteration (c0 GOOD) state must reflect the pass and retain prior cache.
+  state_after_2 = finder._state_persister.save.call_args_list[1][0][0]
+  assert state_after_2["current_good"] == "c0"
+  assert state_after_2["cache"]["c0"] == "PASS"
+  assert state_after_2["cache"]["c1"] == "FAIL"
+
+
+def test_run_bisection_skips_testing_cached_commit(mocker, finder, mock_gh_client):
+  """
+  Verifies that when the midpoint commit already exists in the cache,
+  it is not tested (_test_commit is not called for it).
+  """
+  commits = [
+    _create_commit("c0", "m0"),
+    _create_commit("c1", "m1"),
+    _create_commit("c2", "m2"),
+  ]
+  mock_gh_client.compare_commits.return_value = commits
+
+  # Force first midpoint (c1) to be cached as PASS, so bisection should skip testing it.
+  finder._state["cache"]["c1"] = "PASS"
+
+  mock_test = mocker.patch.object(finder, "_test_commit")
+  # With good_idx updated by cached c1, next midpoint will be c2; test it once.
+  mock_test.side_effect = [False]
+
+  # Only one real iteration should create/cleanup a branch => two calls.
+  mock_gh_client.check_branch_exists.side_effect = [False, True]
+
+  culprit = finder.run_bisection()
+  assert culprit == commits[2]
+
+  # Ensure c1 was not tested because it was cached.
+  tested_shas = [call.args[0] for call in mock_test.call_args_list]
+  assert "c1" not in tested_shas
+  assert tested_shas == ["c2"]
+
+  # Cache-hit path should not persist state; only the real test of c2 should save.
+  finder._state_persister.save.assert_called_once()
+  saved_state = finder._state_persister.save.call_args[0][0]
+  assert saved_state["cache"]["c2"] == "FAIL"
