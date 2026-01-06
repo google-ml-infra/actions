@@ -5,6 +5,7 @@ Module for interacting with the GitHub API via the gh CLI.
 import subprocess
 import json
 import logging
+import time
 from typing import Optional, TypedDict
 
 
@@ -201,6 +202,28 @@ class GithubClient:
     endpoint = f"repos/{self.repo}/git/refs"
     cmd = ["api", endpoint, "-f", f"ref=refs/heads/{branch_name}", "-f", f"sha={sha}"]
     self._run_command(cmd)
+
+  def wait_for_branch_creation(self, branch_name: str, timeout: int = 60) -> None:
+    """
+    Waits for a branch to be available in the remote repository.
+
+    Args:
+        branch_name: The name of the branch to wait for.
+        timeout: The maximum time to wait in seconds.
+
+    Raises:
+        ValueError: If the branch is not created within the timeout.
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+      if self.check_branch_exists(branch_name):
+        # Even if the branch exists in git, the Actions subsystem needs a moment to sync.
+        # Without this delay, the workflow trigger often falls back to the default branch.
+        time.sleep(5)
+        logging.info("Awaited for branch %s creation successfully", branch_name)
+        return
+      time.sleep(1)
+    raise ValueError(f"Branch {branch_name} not created within timeout")
 
   def delete_branch(self, branch_name: str) -> None:
     """

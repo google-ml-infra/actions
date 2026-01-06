@@ -183,6 +183,7 @@ class CulpritFinder:
       if not self._gh_client.check_branch_exists(branch_name):
         self._gh_client.create_branch(branch_name, commit_sha)
         logging.info("Created branch %s", branch_name)
+        self._gh_client.wait_for_branch_creation(branch_name, timeout=180)
 
       try:
         is_good = self._test_commit(commit_sha, branch_name)
