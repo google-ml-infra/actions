@@ -1,6 +1,7 @@
 """Tests for the github module."""
 
 import json
+import pytest
 from culprit_finder import github
 
 
@@ -32,3 +33,33 @@ def test_compare_commits_multiple_pages(mocker):
   assert commits[3]["sha"] == "sha3"
 
   assert mock_run_command.call_count == 3
+
+
+def test_wait_for_branch_creation_success(mocker):
+  """Tests that wait_for_branch_creation returns when the branch is found."""
+  client = github.GithubClient("owner/repo")
+  mock_check = mocker.patch.object(client, "check_branch_exists")
+  # Simulate branch not found first time, then found
+  mock_check.side_effect = [False, True]
+
+  mocker.patch("time.sleep")  # Don't actually sleep in tests
+
+  # Should complete without raising an error
+  client.wait_for_branch_creation("test-branch", timeout=5)
+
+  assert mock_check.call_count == 2
+
+
+def test_wait_for_branch_creation_timeout(mocker):
+  """Tests that wait_for_branch_creation raises ValueError if timeout is reached."""
+  client = github.GithubClient("owner/repo")
+  mock_check = mocker.patch.object(client, "check_branch_exists", return_value=False)
+
+  mocker.patch("time.sleep")
+  # Mock time.time to simulate passage of time
+  mocker.patch("time.time", side_effect=[0, 1, 2, 3, 4, 5, 6])
+
+  with pytest.raises(ValueError, match="Branch test-branch not created within timeout"):
+    client.wait_for_branch_creation("test-branch", timeout=5)
+
+  assert mock_check.call_count > 1
