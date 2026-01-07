@@ -252,6 +252,21 @@ class GithubClient:
     workflows = self._run_command(cmd)
     return json.loads(workflows)
 
+  def get_workflow(self, workflow_id: int | str) -> Workflow:
+    """
+    Retrieves details of a specific workflow by its ID or filename.
+
+    Args:
+        workflow_id: The ID or filename (e.g., 'main.yml') of the workflow.
+
+    Returns:
+        A dictionary containing workflow details (id, name, path, state, etc.).
+    """
+    endpoint = f"repos/{self.repo}/actions/workflows/{workflow_id}"
+    cmd = ["api", endpoint]
+    output = self._run_command(cmd)
+    return json.loads(output)
+
   def get_run(self, run_id: str) -> Run:
     """
     Retrieves detailed information about a specific workflow run.

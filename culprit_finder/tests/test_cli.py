@@ -374,8 +374,11 @@ def test_cli_with_url(
   mock_gh_client_instance.get_run_from_url.return_value = {
     "headSha": "sha_from_url",
     "status": run_status,
-    "workflowName": "test.yml",
+    "workflowName": "Test Workflow",
     "workflowDatabaseId": 123,
+  }
+  mock_gh_client_instance.get_workflow.return_value = {
+    "path": ".github/workflows/test.yml"
   }
 
   url = "https://github.com/owner/repo/actions/runs/123"

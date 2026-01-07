@@ -68,7 +68,7 @@ def main() -> None:
   repo = args.repo
   start = args.start
   end = args.end
-  workflow = args.workflow
+  workflow_file_name = args.workflow
 
   if args.url:
     repo = _get_repo_from_url(args.url)
@@ -89,25 +89,28 @@ def main() -> None:
 
   if args.url:
     run = gh_client.get_run_from_url(args.url)
+    workflow = gh_client.get_workflow(run["workflowDatabaseId"])
     if run["status"] == "success":
       start = run["headSha"]
     else:
       end = run["headSha"]
-    workflow = run["workflowName"]
+    workflow_file_name = workflow["path"].split("/")[-1]
 
   if not start:
     parser.error("the following arguments are required: -s/--start")
   if not end:
     parser.error("the following arguments are required: -e/--end")
-  if not workflow:
+  if not workflow_file_name:
     parser.error("the following arguments are required: -w/--workflow")
 
   logging.info("Initializing culprit finder for %s", repo)
   logging.info("Start commit: %s", start)
   logging.info("End commit: %s", end)
-  logging.info("Workflow: %s", workflow)
+  logging.info("Workflow: %s", workflow_file_name)
 
-  state_persister = culprit_finder_state.StatePersister(repo=repo, workflow=workflow)
+  state_persister = culprit_finder_state.StatePersister(
+    repo=repo, workflow=workflow_file_name
+  )
 
   if args.clear_cache and state_persister.exists():
     state_persister.delete()
@@ -120,7 +123,7 @@ def main() -> None:
       state_persister.delete()
       state: culprit_finder_state.CulpritFinderState = {
         "repo": repo,
-        "workflow": workflow,
+        "workflow": workflow_file_name,
         "original_start": start,
         "original_end": end,
         "current_good": "",
@@ -133,7 +136,7 @@ def main() -> None:
   else:
     state: culprit_finder_state.CulpritFinderState = {
       "repo": repo,
-      "workflow": workflow,
+      "workflow": workflow_file_name,
       "original_start": start,
       "original_end": end,
       "current_good": "",
@@ -152,7 +155,7 @@ def main() -> None:
     repo=repo,
     start_sha=start,
     end_sha=end,
-    workflow_file=workflow,
+    workflow_file=workflow_file_name,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
     github_client=gh_client,
     state=state,
