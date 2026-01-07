@@ -21,10 +21,12 @@ in the established remote session.
 """
 
 import argparse
+import ctypes
 import json
 import logging
 import os
 import socket
+import sys
 import time
 import threading
 import subprocess
@@ -58,6 +60,53 @@ def parse_args():
     action="store_true",
   )
   return parser.parse_args()
+
+
+def enable_windows_vt():
+  """
+  Enables Virtual Terminal Processing on Windows via ctypes.
+  This fixes ANSI color codes and cursor glitches in subprocesses.
+  """
+  if os.name != 'nt':
+    return
+
+  # STD_OUTPUT_HANDLE is -11
+  # noinspection PyUnresolvedReferences
+  h_out = ctypes.windll.kernel32.GetStdHandle(-11)
+  out_mode = ctypes.c_uint32()
+
+  # Get current mode
+  # noinspection PyUnresolvedReferences
+  if not ctypes.windll.kernel32.GetConsoleMode(h_out, ctypes.byref(out_mode)):
+    return
+
+  # ENABLE_VIRTUAL_TERMINAL_PROCESSING is 0x0004
+  # Bitwise-OR it with the current mode
+  new_mode = out_mode.value | 0x0004
+  # noinspection PyUnresolvedReferences
+  ctypes.windll.kernel32.SetConsoleMode(h_out, new_mode)
+
+
+def set_console_size():
+  """
+  Attempts to detect the terminal size and force the Windows Console
+  buffer to match it. Falls back to a wide default if detection fails.
+  """
+  if os.name != 'nt':
+    return
+
+  try:
+    # Get the current size of the terminal window
+    # This usually returns the visible size e.g., what the user sees
+    columns, lines = os.get_terminal_size()
+
+    # Force the console buffer (the underlying memory) to match the window size.
+    # This prevents the "wrapping" or "truncation" issues
+    os.system(f"mode con: cols={columns} lines={lines}")
+
+  except OSError:
+    # In some cases, terminal size cannot be detected. If so, use a sensible default
+    os.system("mode con: cols=300 lines=50")
 
 
 def send_message(message: str, expect_response: bool = False) -> bytes | None:
@@ -123,9 +172,10 @@ def get_execution_state(no_env: bool = False):
   execution-state file. If that is not present, we attempt
   to retrieve the environment from the remote waiting server.
   """
+  # noinspection PyTypeChecker
+  data = {}
   if not os.path.exists(utils.STATE_INFO_PATH):
     logging.debug(f"Did not find the execution state file at {utils.STATE_INFO_PATH}")
-    data = {}
   else:
     logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
     with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
@@ -136,7 +186,6 @@ def get_execution_state(no_env: bool = False):
           f"Could not parse the execution state file:\n{e.msg}\n"
           "Continuing without reproducing the environment..."
         )
-        data = {}
 
   shell_command = data.get("shell_command")
   directory = data.get("directory")
@@ -168,6 +217,11 @@ def main():
   timer_thread = threading.Thread(target=keep_alive, daemon=True)
   timer_thread.start()
 
+  if os.name == 'nt':
+    # Fix various terminal display glitches when connecting to Windows machine
+    set_console_size()
+    enable_windows_vt()
+
   shell_command, directory, env = get_execution_state(no_env=args.no_env)
 
   # If environment data is provided, use it for the session to be created
@@ -188,11 +242,17 @@ def main():
 
   if utils.is_linux_or_linux_like_shell():
     logging.info("Launching interactive Bash session...")
-    subprocess.run(["bash", "-i"], env=env_data)
+    cmd_args = ["bash", "-i"]
   else:
     logging.info("Launching interactive PowerShell session...")
+
+    # Prevents Python's print buffer from mixing with PowerShell's output
+    sys.stdout.flush()
+
     # -NoExit keeps the shell open after running any profile scripts
-    subprocess.run(["powershell.exe", "-NoExit"], env=env_data)
+    cmd_args = ["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoExit"]
+
+  subprocess.run(cmd_args, env=env_data)
 
   send_message(ConnectionSignals.CONNECTION_CLOSED)
 
