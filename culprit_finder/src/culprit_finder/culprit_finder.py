@@ -75,7 +75,9 @@ class CulpritFinder:
     """
     start_time = time.time()
     while time.time() - start_time < timeout:
-      latest_run = self._gh_client.get_latest_run(workflow_file, branch_name)
+      latest_run = self._gh_client.get_latest_run(
+        workflow_file, branch_name, event="workflow_dispatch"
+      )
 
       if not latest_run:
         logging.info(
@@ -136,7 +138,9 @@ class CulpritFinder:
     )
 
     # Get the ID of the previous run (if any) to distinguish it from the new one we are about to trigger
-    previous_run = self._gh_client.get_latest_run(workflow_to_trigger, branch_name)
+    previous_run = self._gh_client.get_latest_run(
+      workflow_to_trigger, branch_name, event="workflow_dispatch"
+    )
     previous_run_id = previous_run["databaseId"] if previous_run else None
 
     self._gh_client.trigger_workflow(

@@ -32,6 +32,8 @@ class Run(TypedDict):
       url: The URL to the workflow run on GitHub.
       workflowName: The name of the workflow file (e.g. "test.yml") or the name of the workflow.
       workflowDatabaseId: The unique identifier for the workflow in the GitHub database.
+      headBranch: The branch on which the workflow run was triggered.
+      event: The event that triggered the workflow run (e.g., "push", "pull_request").
   """
 
   headSha: str
@@ -42,6 +44,8 @@ class Run(TypedDict):
   url: str
   workflowName: str
   workflowDatabaseId: int
+  headBranch: str
+  event: str
 
 
 class GithubClient:
@@ -141,28 +145,38 @@ class GithubClient:
 
     self._run_command(cmd)
 
-  def get_latest_run(self, workflow_file: str, branch: str) -> Run | None:
+  def get_latest_run(
+    self,
+    workflow_id: str | int,
+    branch: str,
+    event: str,
+    created: Optional[str] = None,
+    status: Optional[str] = None,
+  ) -> Run | None:
     """
     Gets the latest workflow run for a specific branch and workflow.
 
     Args:
-        workflow_file: The filename or ID of the workflow to query.
+        workflow_id: The filename or ID of the workflow to query.
         branch: The git branch reference to filter runs by.
+        event: The event that triggered the workflow run (e.g., "push", "pull_request").
+        created: Optional timestamp to filter runs by creation time.
+        status: Optional status to filter runs by (e.g., "success", "failure").
 
     Returns:
         A dictionary representing the latest workflow run object (containing fields like
         headSha, status, conclusion, etc.), or None if no runs are found.
     """
-    fields = "headSha,status,createdAt,conclusion,databaseId,url"
+    fields = "headSha,status,createdAt,conclusion,databaseId,url,event"
     cmd = [
       "run",
       "list",
       "--workflow",
-      workflow_file,
+      str(workflow_id),
       "--branch",
       branch,
       "--event",
-      "workflow_dispatch",
+      event,
       "--limit",
       "1",
       "--json",
@@ -170,6 +184,10 @@ class GithubClient:
       "--repo",
       self.repo,
     ]
+    if created:
+      cmd.extend(["--created", created])
+    if status:
+      cmd.extend(["--status", status])
 
     output = self._run_command(cmd)
     runs = json.loads(output)
@@ -282,7 +300,7 @@ class GithubClient:
       "view",
       run_id,
       "--json",
-      "headSha,status,createdAt,conclusion,databaseId,url,workflowName,workflowDatabaseId",
+      "headSha,status,createdAt,conclusion,databaseId,url,workflowName,workflowDatabaseId,headBranch,event",
       "--repo",
       self.repo,
     ]

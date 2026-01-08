@@ -36,6 +36,50 @@ def _get_repo_from_url(url: str) -> str:
   return match.group(1)
 
 
+def _get_start_commit(failed_run: github.Run, gh_client: github.GithubClient) -> str:
+  """
+  Finds the last successful run for the given failed run, considering the same event type and branch.
+  If no successful run is found, falls back to the last successful 'push' event.
+
+  Returns:
+    The SHA of the last successful commit, or None if no successful run is found.
+
+  Raises:
+    ValueError: If no successful run is found.
+  """
+  # Try to find a successful run with the same event type first.
+  # This ensures we are comparing runs with similar contexts (e.g., Pull Request vs Push),
+  # minimizing false positives caused by differences in merge commits or environment specifics.
+  last_successful_run = gh_client.get_latest_run(
+    failed_run["workflowDatabaseId"],
+    failed_run["headBranch"],
+    failed_run["event"],
+    created=f"<{failed_run['createdAt']}",
+    status="success",
+  )
+
+  # Fallback: If strict matching failed, try to find the last successful 'push' event.
+  if not last_successful_run and failed_run["event"] != "push":
+    logging.info(
+      "No successful run found for event '%s'. Falling back to 'push' event.",
+      failed_run["event"],
+    )
+    last_successful_run = gh_client.get_latest_run(
+      failed_run["workflowDatabaseId"],
+      failed_run["headBranch"],
+      event="push",
+      created=f"<{failed_run['createdAt']}",
+      status="success",
+    )
+
+  if not last_successful_run:
+    raise ValueError(
+      f"No previous successful run found for workflow '{failed_run['workflowName']}' on branch {failed_run['headBranch']}"
+    )
+
+  return last_successful_run["headSha"]
+
+
 def main() -> None:
   """
   Entry point for the culprit finder CLI.
@@ -65,10 +109,10 @@ def main() -> None:
 
   args = parser.parse_args()
 
-  repo = args.repo
-  start = args.start
-  end = args.end
-  workflow_file_name = args.workflow
+  repo: str | None = args.repo
+  start: str | None = args.start
+  end: str | None = args.end
+  workflow_file_name: str | None = args.workflow
 
   if args.url:
     repo = _get_repo_from_url(args.url)
@@ -89,12 +133,15 @@ def main() -> None:
 
   if args.url:
     run = gh_client.get_run_from_url(args.url)
-    workflow = gh_client.get_workflow(run["workflowDatabaseId"])
-    if run["status"] == "success":
-      start = run["headSha"]
-    else:
-      end = run["headSha"]
-    workflow_file_name = workflow["path"].split("/")[-1]
+    if run["conclusion"] != "failure":
+      raise ValueError("The provided URL does not point to a failed workflow run.")
+
+    if not start:
+      start = _get_start_commit(run, gh_client)
+    end = run["headSha"]
+
+    workflow_details = gh_client.get_workflow(run["workflowDatabaseId"])
+    workflow_file_name = workflow_details["path"].split("/")[-1]
 
   if not start:
     parser.error("the following arguments are required: -s/--start")

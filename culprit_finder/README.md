@@ -53,17 +53,13 @@ culprit-finder [URL] --repo <OWNER/REPO> --start <GOOD_SHA> --end <BAD_SHA> --wo
 
 ### Arguments
 
-- `URL`: (Optional) A GitHub Actions Run URL (e.g., `https://github.com/owner/repo/actions/runs/12345`).
-If provided, the tool infers the repository, workflow name, and either the start or end SHA based on the
-run's status (success implies start SHA, failure implies end SHA).
+- `URL`: (Optional) A GitHub Actions Run URL (e.g., `https://github.com/owner/repo/actions/runs/12345`)
+from a failed workflow run. If provided, the tool infers the repository, workflow name, and the start and end SHAs.
 - `--repo`: The target GitHub repository in the format `owner/repo`. (Optional if URL is provided).
-- `--start`: The full or short SHA of the last known **good** commit. (Optional if inferred from a successful URL run).
-- `--end`: The full or short SHA of the first known **bad** commit. (Optional if inferred from a failed URL run).
-- `--workflow`: The filename of the GitHub Actions workflow to run (e.g., `ci.yml`, `tests.yaml`). (Optional if URL is provided).
-- `--repo`: The target GitHub repository in the format `owner/repo`.
-- `--start`: The full or short SHA of the last known **good** commit.
-- `--end`: The full or short SHA of the first known **bad** commit.
+- `--start`: The full or short SHA of the last known **good** commit. (Optional if URL is provided).
+- `--end`: The full or short SHA of the first known **bad** commit. (Optional URL is provided).
 - `--workflow`: The filename of the GitHub Actions workflow to run (e.g., `ci.yml`, `tests.yaml`).
+(Optional if URL is provided).
 - `--clear-cache`: (Optional) Deletes the local state file before execution to start a fresh bisection.
 
 ### State Persistence and Resuming

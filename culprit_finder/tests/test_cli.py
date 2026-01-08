@@ -352,16 +352,7 @@ def test_cli_clear_cache_deletes_state(monkeypatch, mocker):
   assert mock_persister_inst.delete.called
 
 
-@pytest.mark.parametrize(
-  "run_status, extra_args, expected_start, expected_end",
-  [
-    ("success", ["--end", "sha2"], "sha_from_url", "sha2"),
-    ("failure", ["--start", "sha1"], "sha1", "sha_from_url"),
-  ],
-)
-def test_cli_with_url(
-  monkeypatch, mocker, run_status, extra_args, expected_start, expected_end
-):
+def test_cli_with_url(monkeypatch, mocker):
   """Tests that the CLI correctly infers arguments from a URL based on run status."""
   mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
   mock_gh_client_instance = _mock_gh_client(
@@ -373,20 +364,36 @@ def test_cli_with_url(
 
   mock_gh_client_instance.get_run_from_url.return_value = {
     "headSha": "sha_from_url",
-    "status": run_status,
+    "status": "failure",
     "workflowName": "Test Workflow",
     "workflowDatabaseId": 123,
+    "conclusion": "failure",
+    "headBranch": "main",
+    "event": "push",
+    "createdAt": "2023-01-01T00:00:00Z",
   }
   mock_gh_client_instance.get_workflow.return_value = {
     "path": ".github/workflows/test.yml"
   }
+  mock_gh_client_instance.get_latest_run.return_value = {
+    "headSha": "sha1",
+    "status": "completed",
+    "workflowName": "Test Workflow",
+    "workflowDatabaseId": 123,
+    "conclusion": "success",
+    "headBranch": "main",
+    "event": "push",
+    "createdAt": "2023-01-01T00:00:00Z",
+  }
 
   url = "https://github.com/owner/repo/actions/runs/123"
-  args = ["culprit_finder", url] + extra_args
+  args = ["culprit_finder", url, "--start", "sha1"]
   monkeypatch.setattr(sys, "argv", args)
 
   cli.main()
 
+  expected_start = "sha1"
+  expected_end = "sha_from_url"
   expected_state = {
     "repo": "owner/repo",
     "workflow": "test.yml",
@@ -461,31 +468,65 @@ def test_missing_args_standard_authenticated(
   assert expected_error_msg in captured.err
 
 
-@pytest.mark.parametrize(
-  "run_status, extra_args, expected_error_msg",
-  [
-    ("success", [], "the following arguments are required: -e/--end"),
-    ("failure", [], "the following arguments are required: -s/--start"),
-  ],
-)
-def test_missing_args_with_url(
-  monkeypatch, mocker, capsys, run_status, extra_args, expected_error_msg
-):
-  """Tests that the CLI fails when required arguments are missing even with URL."""
-  mock_gh_client_instance = _mock_gh_client(mocker, True)
-  mock_gh_client_instance.get_run_from_url.return_value = {
-    "headSha": "sha_from_url",
-    "status": run_status,
-    "workflowName": "test.yml",
+def create_run(event: str) -> github.Run:
+  return {
     "workflowDatabaseId": 123,
+    "headBranch": "main",
+    "event": event,
+    "createdAt": "2023-01-01T12:00:00Z",
+    "workflowName": "Test Workflow",
+    "headSha": "bad_sha",
+    "status": "completed",
+    "conclusion": "failure",
+    "url": "https://github.com/owner/repo/actions/runs/123",
+    "databaseId": 456,
   }
 
-  url = "https://github.com/owner/repo/actions/runs/123"
-  args = ["culprit_finder", url] + extra_args
-  monkeypatch.setattr(sys, "argv", args)
 
-  with pytest.raises(SystemExit):
-    cli.main()
+@pytest.mark.parametrize(
+  "event_type, side_effect, expected_sha, expected_calls",
+  [
+    # Case 1: Strict match found immediately for 'push'
+    (
+      "push",
+      [{"headSha": "good_sha", "status": "completed", "conclusion": "success"}],
+      "good_sha",
+      1,
+    ),
+    # Case 2: No strict match for 'workflow_dispatch', fall back to 'push'
+    (
+      "workflow_dispatch",
+      [
+        None,  # First call (strict match)
+        {
+          "headSha": "fallback_sha",
+          "status": "completed",
+          "conclusion": "success",
+        },  # Second call (fallback)
+      ],
+      "fallback_sha",
+      2,
+    ),
+  ],
+)
+def test_get_start_commit(event_type, side_effect, expected_sha, expected_calls):
+  """Tests that _get_start_commit handles strict matching and fallback logic correctly."""
+  mock_gh_client = mock.MagicMock(spec=github.GithubClient)
+  mock_gh_client.get_latest_run.side_effect = side_effect
 
-  captured = capsys.readouterr()
-  assert expected_error_msg in captured.err
+  run = create_run(event_type)
+  start_commit = cli._get_start_commit(run, mock_gh_client)
+
+  assert start_commit == expected_sha
+  assert mock_gh_client.get_latest_run.call_count == expected_calls
+
+
+def test_get_start_commit_raises_value_error_if_none_found():
+  """Tests that ValueError is raised if no successful run is found even after fallback."""
+  mock_gh_client = mock.MagicMock(spec=github.GithubClient)
+  mock_gh_client.get_latest_run.return_value = None
+
+  with pytest.raises(ValueError, match="No previous successful run found"):
+    cli._get_start_commit(create_run("workflow_dispatch"), mock_gh_client)
+
+  assert mock_gh_client.get_latest_run.call_count == 2
