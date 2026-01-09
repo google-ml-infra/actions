@@ -1,43 +1,22 @@
 """Tests for the github module."""
 
-import json
+import os
+import subprocess
+
 import pytest
+
 from culprit_finder import github
 
 
-def test_compare_commits_multiple_pages(mocker):
-  """Test fetching commits spanning multiple pages."""
-  mock_run_command = mocker.patch("culprit_finder.github.GithubClient._run_command")
-
-  repo = "owner/repo"
-  base_sha = "base"
-  head_sha = "head"
-
-  page1_commits = [
-    {"sha": f"sha{i}", "commit": {"message": f"msg{i}"}} for i in range(3)
-  ]
-  response_page_1 = json.dumps({"commits": page1_commits})
-
-  page2_commits = [{"sha": "sha3", "commit": {"message": "msg3"}}]
-  response_page_2 = json.dumps({"commits": page2_commits})
-
-  response_page_3 = json.dumps({"commits": []})
-
-  mock_run_command.side_effect = [response_page_1, response_page_2, response_page_3]
-
-  client = github.GithubClient(repo)
-  commits = client.compare_commits(base_sha, head_sha)
-
-  assert len(commits) == 4
-  assert commits[0]["sha"] == "sha0"
-  assert commits[3]["sha"] == "sha3"
-
-  assert mock_run_command.call_count == 3
+@pytest.fixture(autouse=True)
+def mock_pygithub(mocker):
+  """Mocks the PyGithub client to avoid network requests."""
+  return mocker.patch("culprit_finder.github.github.Github")
 
 
 def test_wait_for_branch_creation_success(mocker):
   """Tests that wait_for_branch_creation returns when the branch is found."""
-  client = github.GithubClient("owner/repo")
+  client = github.GithubClient("owner/repo", token="test-token")
   mock_check = mocker.patch.object(client, "check_branch_exists")
   # Simulate branch not found first time, then found
   mock_check.side_effect = [False, True]
@@ -52,7 +31,7 @@ def test_wait_for_branch_creation_success(mocker):
 
 def test_wait_for_branch_creation_timeout(mocker):
   """Tests that wait_for_branch_creation raises ValueError if timeout is reached."""
-  client = github.GithubClient("owner/repo")
+  client = github.GithubClient("owner/repo", token="test-token")
   mock_check = mocker.patch.object(client, "check_branch_exists", return_value=False)
 
   mocker.patch("time.sleep")
@@ -71,7 +50,6 @@ def create_run(event: str, conclusion: str, head_sha: str) -> github.Run:
     "headBranch": "main",
     "event": event,
     "createdAt": "2023-01-01T12:00:00Z",
-    "workflowName": "Test Workflow",
     "headSha": head_sha,
     "status": "completed",
     "conclusion": conclusion,
@@ -104,7 +82,7 @@ def create_run(event: str, conclusion: str, head_sha: str) -> github.Run:
 )
 def test_get_start_commit(mocker, event_type, runs, expected_sha, expected_calls):
   """Tests that _get_start_commit handles strict matching and fallback logic correctly."""
-  client = github.GithubClient("owner/repo")
+  client = github.GithubClient("owner/repo", token="test-token")
   mock_latest_run = mocker.patch.object(client, "get_latest_run")
   mock_latest_run.side_effect = runs
 
@@ -117,7 +95,7 @@ def test_get_start_commit(mocker, event_type, runs, expected_sha, expected_calls
 
 def test_get_start_commit_raises_value_error_if_none_found(mocker):
   """Tests that ValueError is raised if no successful run is found even after fallback."""
-  client = github.GithubClient("owner/repo")
+  client = github.GithubClient("owner/repo", token="test-token")
   mock_latest_run = mocker.patch.object(client, "get_latest_run")
   mock_latest_run.return_value = None
 
@@ -127,3 +105,40 @@ def test_get_start_commit_raises_value_error_if_none_found(mocker):
     )
 
   assert mock_latest_run.call_count == 2
+
+
+def test_get_github_token_env_var(mocker):
+  """Tests retrieving token from environment variable."""
+  mocker.patch.dict(os.environ, {"GH_TOKEN": "env-token"})
+  assert github.get_github_token() == "env-token"
+
+
+def test_get_github_token_gh_cli(mocker):
+  """Tests retrieving token from gh cli when env var is not set."""
+  # Ensure GH_TOKEN is not set/empty
+  mocker.patch.dict(os.environ, clear=True)
+
+  mock_run = mocker.patch("subprocess.run")
+  mock_run.return_value.stdout = "cli-token\n"
+
+  assert github.get_github_token() == "cli-token"
+  mock_run.assert_called_with(
+    ["gh", "auth", "token"], capture_output=True, text=True, check=True
+  )
+
+
+def test_get_github_token_gh_cli_error(mocker):
+  """Tests returning None when gh cli fails (e.g. not logged in)."""
+  mocker.patch.dict(os.environ, clear=True)
+  mocker.patch(
+    "subprocess.run",
+    side_effect=subprocess.CalledProcessError(1, ["gh", "auth", "token"]),
+  )
+  assert github.get_github_token() is None
+
+
+def test_get_github_token_gh_not_found(mocker):
+  """Tests returning None when gh cli is not installed."""
+  mocker.patch.dict(os.environ, clear=True)
+  mocker.patch("subprocess.run", side_effect=FileNotFoundError)
+  assert github.get_github_token() is None

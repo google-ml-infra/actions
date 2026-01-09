@@ -8,7 +8,6 @@ and authentication checks. It initializes the `CulpritFinder` with user-provided
 
 import argparse
 import logging
-import os
 import sys
 import re
 
@@ -78,14 +77,12 @@ def main() -> None:
       "the following arguments are required: -r/--repo (or provided via URL)"
     )
 
-  gh_client = github.GithubClient(repo=repo)
-
-  is_authenticated_with_cli = gh_client.check_auth_status()
-  has_access_token = os.environ.get("GH_TOKEN") is not None
-
-  if not is_authenticated_with_cli and not has_access_token:
+  token = github.get_github_token()
+  if token is None:
     logging.error("Not authenticated with GitHub CLI or GH_TOKEN env var is not set.")
     sys.exit(1)
+
+  gh_client = github.GithubClient(repo=repo, token=token)
 
   if args.url:
     run = gh_client.get_run_from_url(args.url)

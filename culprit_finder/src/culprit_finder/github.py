@@ -1,13 +1,16 @@
 """
-Module for interacting with the GitHub API via the gh CLI.
+Module for interacting with the GitHub API via PyGithub.
 """
 
-import subprocess
-import json
 import logging
+import os
 import re
 import time
 from typing import Optional, TypedDict
+import subprocess
+
+import github
+from github.WorkflowRun import WorkflowRun
 
 
 class Commit(TypedDict):
@@ -30,7 +33,6 @@ class Run(TypedDict):
       conclusion: The conclusion of the workflow run if completed (e.g., "success", "failure", "cancelled"). Optional.
       databaseId: The unique identifier for the workflow run in the GitHub database.
       url: The URL to the workflow run on GitHub.
-      workflowName: The name of the workflow file (e.g. "test.yml") or the name of the workflow.
       workflowDatabaseId: The unique identifier for the workflow in the GitHub database.
       headBranch: The branch on which the workflow run was triggered.
       event: The event that triggered the workflow run (e.g., "push", "pull_request").
@@ -42,7 +44,6 @@ class Run(TypedDict):
   conclusion: Optional[str]
   databaseId: int
   url: str
-  workflowName: str
   workflowDatabaseId: int
   headBranch: str
   event: str
@@ -50,51 +51,33 @@ class Run(TypedDict):
 
 class GithubClient:
   """
-  A client for interacting with the GitHub API via the gh CLI.
+  A client for interacting with the GitHub API via PyGithub.
   """
 
-  def __init__(self, repo: str):
+  def __init__(self, repo: str, token: str):
     """
     Initializes the GithubClient.
 
     Args:
         repo: The GitHub repository in 'owner/repo' format.
+        token: The GitHub access token for authentication.
     """
-    self.repo = repo
+    self._github = github.Github(auth=github.Auth.Token(token))
+    self._repo = self._github.get_repo(repo, lazy=True)
 
-  def _run_command(self, args: list[str]) -> str:
-    """
-    Executes a gh CLI command and returns the stdout.
-
-    Args:
-        args: A list of arguments to pass to the 'gh' command.
-
-    Returns:
-        The standard output of the command as a string.
-
-    Raises:
-        subprocess.CalledProcessError: If the command fails (returns non-zero exit code).
-    """
-    try:
-      result = subprocess.run(["gh"] + args, check=True, capture_output=True, text=True)
-      return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-      logging.error("Command failed: %s", e.cmd)
-      logging.error("STDERR: %s", e.stderr)
-      raise
-
-  def check_auth_status(self) -> bool:
-    """
-    Checks if the user is authenticated with the GitHub CLI.
-
-    Returns:
-        True if authenticated, False otherwise.
-    """
-    try:
-      subprocess.run(["gh", "auth", "status"], check=True, capture_output=True)
-      return True
-    except subprocess.CalledProcessError:
-      return False
+  def _to_run_dict(self, run: WorkflowRun) -> Run:
+    """Converts a PyGithub WorkflowRun object to a Run TypedDict."""
+    return {
+      "headSha": run.head_sha,
+      "status": run.status,
+      "createdAt": run.created_at.isoformat(),
+      "conclusion": run.conclusion,
+      "databaseId": run.id,
+      "url": run.html_url,
+      "workflowDatabaseId": run.workflow_id,
+      "headBranch": run.head_branch,
+      "event": run.event,
+    }
 
   def compare_commits(self, base_sha: str, head_sha: str) -> list[Commit]:
     """
@@ -108,25 +91,8 @@ class GithubClient:
         A list of dictionaries, where each dictionary represents a commit
         in the range (base_sha...head_sha].
     """
-    # 250 is the limit of the compare endpoint
-    per_page = 250
-    page = 1
-
-    all_commits = []
-
-    while True:
-      endpoint = f"repos/{self.repo}/compare/{base_sha}...{head_sha}?page={page}&per_page={per_page}"
-      comparison_json = self._run_command(["api", endpoint])
-      comparison = json.loads(comparison_json)
-      commit_batch = comparison.get("commits", [])
-
-      if not commit_batch:
-        break
-
-      all_commits.extend(commit_batch)
-      page += 1
-
-    return [{"sha": c["sha"], "message": c["commit"]["message"]} for c in all_commits]
+    comparison = self._repo.compare(base_sha, head_sha)
+    return [{"sha": c.sha, "message": c.commit.message} for c in comparison.commits]
 
   def trigger_workflow(
     self, workflow_file: str, branch: str, inputs: dict[str, str]
@@ -139,11 +105,8 @@ class GithubClient:
         branch: The git branch reference to run the workflow on.
         inputs: A dictionary of input keys and values for the workflow dispatch event.
     """
-    cmd = ["workflow", "run", workflow_file, "--ref", branch, "--repo", self.repo]
-    for key, value in inputs.items():
-      cmd.extend(["-f", f"{key}={value}"])
-
-    self._run_command(cmd)
+    workflow = self._repo.get_workflow(workflow_file)
+    workflow.create_dispatch(branch, inputs)
 
   def get_latest_run(
     self,
@@ -164,34 +127,21 @@ class GithubClient:
         status: Optional status to filter runs by (e.g., "success", "failure").
 
     Returns:
-        A dictionary representing the latest workflow run object (containing fields like
-        headSha, status, conclusion, etc.), or None if no runs are found.
+        A dictionary representing the latest workflow run object, or None if no runs are found.
     """
-    fields = "headSha,status,createdAt,conclusion,databaseId,url,event"
-    cmd = [
-      "run",
-      "list",
-      "--workflow",
-      str(workflow_id),
-      "--branch",
-      branch,
-      "--event",
-      event,
-      "--limit",
-      "1",
-      "--json",
-      fields,
-      "--repo",
-      self.repo,
-    ]
-    if created:
-      cmd.extend(["--created", created])
-    if status:
-      cmd.extend(["--status", status])
+    workflow = self._repo.get_workflow(workflow_id)
 
-    output = self._run_command(cmd)
-    runs = json.loads(output)
-    return runs[0] if runs else None
+    kwargs = {}
+    if created:
+      kwargs["created"] = created
+    if status:
+      kwargs["status"] = status
+
+    runs = workflow.get_runs(branch=branch, event=event, **kwargs)
+
+    if runs.totalCount > 0:
+      return self._to_run_dict(runs[0])
+    return None
 
   def check_branch_exists(self, branch_name: str) -> bool:
     """
@@ -203,15 +153,10 @@ class GithubClient:
     Returns:
         True if the branch exists, False otherwise.
     """
-    endpoint = f"repos/{self.repo}/git/refs/heads/{branch_name}"
     try:
-      # We use subprocess directly here instead of run_command to avoid
-      # logging errors when the branch doesn't exist (which returns 404).
-      subprocess.run(
-        ["gh", "api", endpoint, "--silent"], check=True, capture_output=True
-      )
+      self._repo.get_branch(branch_name)
       return True
-    except subprocess.CalledProcessError:
+    except github.GithubException:
       return False
 
   def create_branch(self, branch_name: str, sha: str) -> None:
@@ -222,9 +167,7 @@ class GithubClient:
         branch_name: The name of the new branch to create (e.g., 'my-feature-branch').
         sha: The commit SHA to base the new branch on.
     """
-    endpoint = f"repos/{self.repo}/git/refs"
-    cmd = ["api", endpoint, "-f", f"ref=refs/heads/{branch_name}", "-f", f"sha={sha}"]
-    self._run_command(cmd)
+    self._repo.create_git_ref(f"refs/heads/{branch_name}", sha)
 
   def wait_for_branch_creation(self, branch_name: str, timeout: int = 60) -> None:
     """
@@ -255,9 +198,8 @@ class GithubClient:
     Args:
         branch_name: The name of the branch to delete.
     """
-    endpoint = f"repos/{self.repo}/git/refs/heads/{branch_name}"
-    cmd = ["api", "--method", "DELETE", endpoint]
-    self._run_command(cmd)
+    ref = self._repo.get_git_ref(f"heads/{branch_name}")
+    ref.delete()
 
   def get_workflows(self) -> list[Workflow]:
     """
@@ -266,9 +208,7 @@ class GithubClient:
     Returns:
         A list of dictionaries, where each dictionary contains the 'name' and 'path' of a workflow.
     """
-    cmd = ["workflow", "list", "--json", "path,name", "--repo", self.repo]
-    workflows = self._run_command(cmd)
-    return json.loads(workflows)
+    return [{"name": w.name, "path": w.path} for w in self._repo.get_workflows()]
 
   def get_workflow(self, workflow_id: int | str) -> Workflow:
     """
@@ -278,12 +218,10 @@ class GithubClient:
         workflow_id: The ID or filename (e.g., 'main.yml') of the workflow.
 
     Returns:
-        A dictionary containing workflow details (id, name, path, state, etc.).
+        A dictionary containing workflow details (name, path).
     """
-    endpoint = f"repos/{self.repo}/actions/workflows/{workflow_id}"
-    cmd = ["api", endpoint]
-    output = self._run_command(cmd)
-    return json.loads(output)
+    workflow_details = self._repo.get_workflow(workflow_id)
+    return {"name": workflow_details.name, "path": workflow_details.path}
 
   def get_run(self, run_id: str) -> Run:
     """
@@ -295,17 +233,8 @@ class GithubClient:
     Returns:
         A Run object containing metadata such as head SHA, status, and conclusion.
     """
-    cmd = [
-      "run",
-      "view",
-      run_id,
-      "--json",
-      "headSha,status,createdAt,conclusion,databaseId,url,workflowName,workflowDatabaseId,headBranch,event",
-      "--repo",
-      self.repo,
-    ]
-    run = self._run_command(cmd)
-    return json.loads(run)
+    run = self._repo.get_workflow_run(int(run_id))
+    return self._to_run_dict(run)
 
   def get_run_from_url(self, url: str) -> Run:
     """
@@ -371,8 +300,29 @@ class GithubClient:
       )
 
     if not last_successful_run:
+      workflow = self._repo.get_workflow(run["workflowDatabaseId"])
       raise ValueError(
-        f"No previous successful run found for workflow '{run['workflowName']}' on branch {run['headBranch']}"
+        f"No previous successful run found for workflow '{workflow.name}' on branch {run['headBranch']}"
       )
 
     return last_successful_run
+
+
+def get_github_token() -> str | None:
+  """Retrieves the GitHub access token from the environment or from the the GitHub CLI if not present.
+
+  Returns:
+    The GitHub access token if present, otherwise None.
+
+  """
+  token = os.environ.get("GH_TOKEN")
+  if token:
+    return token
+  try:
+    result = subprocess.run(
+      ["gh", "auth", "token"], capture_output=True, text=True, check=True
+    )
+    return result.stdout.strip()
+  except (subprocess.CalledProcessError, FileNotFoundError):
+    # Handle cases where gh is not installed or user is not logged in
+    return None

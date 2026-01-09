@@ -64,7 +64,10 @@ def _mock_gh_client(
 ):
   mock_gh_client_class = mocker.patch("culprit_finder.github.GithubClient")
   mock_gh_client_instance = mock_gh_client_class.return_value
-  mock_gh_client_instance.check_auth_status.return_value = is_authenticated
+  mocker.patch(
+    "culprit_finder.github.get_github_token",
+    return_value="fake-token" if is_authenticated else None,
+  )
   if workflows:
     mock_gh_client_instance.get_workflows.return_value = workflows
   return mock_gh_client_instance
@@ -109,35 +112,6 @@ def test_cli_not_authenticated(monkeypatch, mocker, caplog):
   assert (
     "Not authenticated with GitHub CLI or GH_TOKEN env var is not set." in caplog.text
   )
-
-
-@pytest.mark.parametrize(
-  "cli_auth, token_auth",
-  [
-    (False, "fake_token"),  # Auth via token only
-    (True, None),  # Auth via CLI only
-  ],
-)
-def test_cli_auth_success(monkeypatch, mocker, cli_auth, token_auth):
-  """Tests that the CLI proceeds if authenticated via CLI or GH_TOKEN."""
-  mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
-  _mock_gh_client(mocker, cli_auth, [{"path": "some/path", "name": "Culprit Finder"}])
-  _mock_state(mocker)
-
-  if token_auth:
-    monkeypatch.setenv("GH_TOKEN", token_auth)
-  else:
-    monkeypatch.delenv("GH_TOKEN", raising=False)
-
-  monkeypatch.setattr(
-    sys,
-    "argv",
-    _get_culprit_finder_command("owner/repo", "sha1", "sha2", "test.yml"),
-  )
-
-  cli.main()
-
-  mock_finder.assert_called_once()
 
 
 @pytest.mark.parametrize(
