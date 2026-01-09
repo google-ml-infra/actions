@@ -330,3 +330,49 @@ class GithubClient:
 
     run_id = match.group(1)
     return self.get_run(run_id)
+
+  def find_previous_successful_run(self, run: Run) -> Run:
+    """
+    Finds the last successful run for the given failed run, considering the same event type and branch.
+    If no successful run is found, falls back to the last successful 'push' event.
+
+    Args:
+      run: The failed run for which to find the previous successful run.
+
+    Returns:
+      The SHA of the last successful commit, or None if no successful run is found.
+
+    Raises:
+      ValueError: If no successful run is found.
+    """
+    # Try to find a successful run with the same event type first.
+    # This ensures we are comparing runs with similar contexts (e.g., Pull Request vs Push),
+    # minimizing false positives caused by differences in merge commits or environment specifics.
+    last_successful_run = self.get_latest_run(
+      run["workflowDatabaseId"],
+      run["headBranch"],
+      run["event"],
+      created=f"<{run['createdAt']}",
+      status="success",
+    )
+
+    # Fallback: If strict matching failed, try to find the last successful 'push' event.
+    if not last_successful_run and run["event"] != "push":
+      logging.info(
+        "No successful run found for event '%s'. Falling back to 'push' event.",
+        run["event"],
+      )
+      last_successful_run = self.get_latest_run(
+        run["workflowDatabaseId"],
+        run["headBranch"],
+        event="push",
+        created=f"<{run['createdAt']}",
+        status="success",
+      )
+
+    if not last_successful_run:
+      raise ValueError(
+        f"No previous successful run found for workflow '{run['workflowName']}' on branch {run['headBranch']}"
+      )
+
+    return last_successful_run

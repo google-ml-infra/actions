@@ -63,3 +63,67 @@ def test_wait_for_branch_creation_timeout(mocker):
     client.wait_for_branch_creation("test-branch", timeout=5)
 
   assert mock_check.call_count > 1
+
+
+def create_run(event: str, conclusion: str, head_sha: str) -> github.Run:
+  return {
+    "workflowDatabaseId": 123,
+    "headBranch": "main",
+    "event": event,
+    "createdAt": "2023-01-01T12:00:00Z",
+    "workflowName": "Test Workflow",
+    "headSha": head_sha,
+    "status": "completed",
+    "conclusion": conclusion,
+    "url": "https://github.com/owner/repo/actions/runs/123",
+    "databaseId": 456,
+  }
+
+
+@pytest.mark.parametrize(
+  "event_type, runs, expected_sha, expected_calls",
+  [
+    # Case 1: Strict match found immediately for 'push'
+    (
+      "push",
+      [create_run("push", "success", "good_sha")],
+      "good_sha",
+      1,
+    ),
+    # Case 2: No strict match for 'workflow_dispatch', fall back to 'push'
+    (
+      "workflow_dispatch",
+      [
+        None,  # First call (strict match)
+        create_run("push", "success", "fallback_sha"),  # Second call (fallback)
+      ],
+      "fallback_sha",
+      2,
+    ),
+  ],
+)
+def test_get_start_commit(mocker, event_type, runs, expected_sha, expected_calls):
+  """Tests that _get_start_commit handles strict matching and fallback logic correctly."""
+  client = github.GithubClient("owner/repo")
+  mock_latest_run = mocker.patch.object(client, "get_latest_run")
+  mock_latest_run.side_effect = runs
+
+  failed_run = create_run(event_type, "failure", "bad_sha")
+  previous_run = client.find_previous_successful_run(failed_run)
+
+  assert previous_run == create_run("push", "success", expected_sha)
+  assert mock_latest_run.call_count == expected_calls
+
+
+def test_get_start_commit_raises_value_error_if_none_found(mocker):
+  """Tests that ValueError is raised if no successful run is found even after fallback."""
+  client = github.GithubClient("owner/repo")
+  mock_latest_run = mocker.patch.object(client, "get_latest_run")
+  mock_latest_run.return_value = None
+
+  with pytest.raises(ValueError, match="No previous successful run found"):
+    client.find_previous_successful_run(
+      create_run("workflow_dispatch", "failure", "bad_sha")
+    )
+
+  assert mock_latest_run.call_count == 2
