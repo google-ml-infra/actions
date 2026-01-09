@@ -340,7 +340,7 @@ class GithubClient:
       run: The failed run for which to find the previous successful run.
 
     Returns:
-      The SHA of the last successful commit, or None if no successful run is found.
+      The latest successful run.
 
     Raises:
       ValueError: If no successful run is found.
