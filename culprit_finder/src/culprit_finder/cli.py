@@ -10,6 +10,7 @@ import argparse
 import logging
 import os
 import sys
+import re
 
 from culprit_finder import culprit_finder
 from culprit_finder import culprit_finder_state
@@ -28,6 +29,13 @@ def _validate_repo(repo: str) -> str:
   return repo
 
 
+def _get_repo_from_url(url: str) -> str:
+  match = re.search(r"github\.com/([^/]+/[^/]+)", url)
+  if not match:
+    raise ValueError(f"Could not extract repo from URL: {url}")
+  return match.group(1)
+
+
 def main() -> None:
   """
   Entry point for the culprit finder CLI.
@@ -35,19 +43,18 @@ def main() -> None:
   Parses command-line arguments then initiates the bisection process using CulpritFinder.
   """
   parser = argparse.ArgumentParser(description="Culprit finder for GitHub Actions.")
+  parser.add_argument("url", nargs="?", help="GitHub Actions Run URL")
   parser.add_argument(
     "-r",
     "--repo",
-    required=True,
     help="Target GitHub repository (e.g., owner/repo)",
     type=_validate_repo,
   )
-  parser.add_argument("-s", "--start", required=True, help="Last known good commit SHA")
-  parser.add_argument("-e", "--end", required=True, help="First known bad commit SHA")
+  parser.add_argument("-s", "--start", help="Last known good commit SHA")
+  parser.add_argument("-e", "--end", help="First known bad commit SHA")
   parser.add_argument(
     "-w",
     "--workflow",
-    required=True,
     help="Workflow filename (e.g., build_and_test.yml)",
   )
   parser.add_argument(
@@ -58,7 +65,20 @@ def main() -> None:
 
   args = parser.parse_args()
 
-  gh_client = github.GithubClient(repo=args.repo)
+  repo: str | None = args.repo
+  start: str | None = args.start
+  end: str | None = args.end
+  workflow_file_name: str | None = args.workflow
+
+  if args.url:
+    repo = _get_repo_from_url(args.url)
+
+  if not repo:
+    parser.error(
+      "the following arguments are required: -r/--repo (or provided via URL)"
+    )
+
+  gh_client = github.GithubClient(repo=repo)
 
   is_authenticated_with_cli = gh_client.check_auth_status()
   has_access_token = os.environ.get("GH_TOKEN") is not None
@@ -67,8 +87,33 @@ def main() -> None:
     logging.error("Not authenticated with GitHub CLI or GH_TOKEN env var is not set.")
     sys.exit(1)
 
+  if args.url:
+    run = gh_client.get_run_from_url(args.url)
+    if run["conclusion"] != "failure":
+      raise ValueError("The provided URL does not point to a failed workflow run.")
+
+    if not start:
+      previous_run = gh_client.find_previous_successful_run(run)
+      start = previous_run["headSha"]
+    end = run["headSha"]
+
+    workflow_details = gh_client.get_workflow(run["workflowDatabaseId"])
+    workflow_file_name = workflow_details["path"].split("/")[-1]
+
+  if not start:
+    parser.error("the following arguments are required: -s/--start")
+  if not end:
+    parser.error("the following arguments are required: -e/--end")
+  if not workflow_file_name:
+    parser.error("the following arguments are required: -w/--workflow")
+
+  logging.info("Initializing culprit finder for %s", repo)
+  logging.info("Start commit: %s", start)
+  logging.info("End commit: %s", end)
+  logging.info("Workflow: %s", workflow_file_name)
+
   state_persister = culprit_finder_state.StatePersister(
-    repo=args.repo, workflow=args.workflow
+    repo=repo, workflow=workflow_file_name
   )
 
   if args.clear_cache and state_persister.exists():
@@ -81,10 +126,10 @@ def main() -> None:
       print("Starting a new bisection. Deleting the old state...")
       state_persister.delete()
       state: culprit_finder_state.CulpritFinderState = {
-        "repo": args.repo,
-        "workflow": args.workflow,
-        "original_start": args.start,
-        "original_end": args.end,
+        "repo": repo,
+        "workflow": workflow_file_name,
+        "original_start": start,
+        "original_end": end,
         "current_good": "",
         "current_bad": "",
         "cache": {},
@@ -94,19 +139,14 @@ def main() -> None:
       print("Resuming from the saved state.")
   else:
     state: culprit_finder_state.CulpritFinderState = {
-      "repo": args.repo,
-      "workflow": args.workflow,
-      "original_start": args.start,
-      "original_end": args.end,
+      "repo": repo,
+      "workflow": workflow_file_name,
+      "original_start": start,
+      "original_end": end,
       "current_good": "",
       "current_bad": "",
       "cache": {},
     }
-
-  logging.info("Initializing culprit finder for %s", args.repo)
-  logging.info("Start commit: %s", args.start)
-  logging.info("End commit: %s", args.end)
-  logging.info("Workflow: %s", args.workflow)
 
   has_culprit_finder_workflow = any(
     wf["path"] == ".github/workflows/culprit_finder.yml"
@@ -116,10 +156,10 @@ def main() -> None:
   logging.info("Using culprit finder workflow: %s", has_culprit_finder_workflow)
 
   finder = culprit_finder.CulpritFinder(
-    repo=args.repo,
-    start_sha=args.start,
-    end_sha=args.end,
-    workflow_file=args.workflow,
+    repo=repo,
+    start_sha=start,
+    end_sha=end,
+    workflow_file=workflow_file_name,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
     github_client=gh_client,
     state=state,

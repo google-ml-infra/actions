@@ -5,6 +5,7 @@ Module for interacting with the GitHub API via the gh CLI.
 import subprocess
 import json
 import logging
+import re
 import time
 from typing import Optional, TypedDict
 
@@ -29,6 +30,10 @@ class Run(TypedDict):
       conclusion: The conclusion of the workflow run if completed (e.g., "success", "failure", "cancelled"). Optional.
       databaseId: The unique identifier for the workflow run in the GitHub database.
       url: The URL to the workflow run on GitHub.
+      workflowName: The name of the workflow file (e.g. "test.yml") or the name of the workflow.
+      workflowDatabaseId: The unique identifier for the workflow in the GitHub database.
+      headBranch: The branch on which the workflow run was triggered.
+      event: The event that triggered the workflow run (e.g., "push", "pull_request").
   """
 
   headSha: str
@@ -37,6 +42,10 @@ class Run(TypedDict):
   conclusion: Optional[str]
   databaseId: int
   url: str
+  workflowName: str
+  workflowDatabaseId: int
+  headBranch: str
+  event: str
 
 
 class GithubClient:
@@ -136,28 +145,38 @@ class GithubClient:
 
     self._run_command(cmd)
 
-  def get_latest_run(self, workflow_file: str, branch: str) -> Run | None:
+  def get_latest_run(
+    self,
+    workflow_id: str | int,
+    branch: str,
+    event: str,
+    created: Optional[str] = None,
+    status: Optional[str] = None,
+  ) -> Run | None:
     """
     Gets the latest workflow run for a specific branch and workflow.
 
     Args:
-        workflow_file: The filename or ID of the workflow to query.
+        workflow_id: The filename or ID of the workflow to query.
         branch: The git branch reference to filter runs by.
+        event: The event that triggered the workflow run (e.g., "push", "pull_request").
+        created: Optional timestamp to filter runs by creation time.
+        status: Optional status to filter runs by (e.g., "success", "failure").
 
     Returns:
         A dictionary representing the latest workflow run object (containing fields like
         headSha, status, conclusion, etc.), or None if no runs are found.
     """
-    fields = "headSha,status,createdAt,conclusion,databaseId,url"
+    fields = "headSha,status,createdAt,conclusion,databaseId,url,event"
     cmd = [
       "run",
       "list",
       "--workflow",
-      workflow_file,
+      str(workflow_id),
       "--branch",
       branch,
       "--event",
-      "workflow_dispatch",
+      event,
       "--limit",
       "1",
       "--json",
@@ -165,6 +184,10 @@ class GithubClient:
       "--repo",
       self.repo,
     ]
+    if created:
+      cmd.extend(["--created", created])
+    if status:
+      cmd.extend(["--status", status])
 
     output = self._run_command(cmd)
     runs = json.loads(output)
@@ -246,3 +269,110 @@ class GithubClient:
     cmd = ["workflow", "list", "--json", "path,name", "--repo", self.repo]
     workflows = self._run_command(cmd)
     return json.loads(workflows)
+
+  def get_workflow(self, workflow_id: int | str) -> Workflow:
+    """
+    Retrieves details of a specific workflow by its ID or filename.
+
+    Args:
+        workflow_id: The ID or filename (e.g., 'main.yml') of the workflow.
+
+    Returns:
+        A dictionary containing workflow details (id, name, path, state, etc.).
+    """
+    endpoint = f"repos/{self.repo}/actions/workflows/{workflow_id}"
+    cmd = ["api", endpoint]
+    output = self._run_command(cmd)
+    return json.loads(output)
+
+  def get_run(self, run_id: str) -> Run:
+    """
+    Retrieves detailed information about a specific workflow run.
+
+    Args:
+        run_id: The unique database ID or number of the workflow run.
+
+    Returns:
+        A Run object containing metadata such as head SHA, status, and conclusion.
+    """
+    cmd = [
+      "run",
+      "view",
+      run_id,
+      "--json",
+      "headSha,status,createdAt,conclusion,databaseId,url,workflowName,workflowDatabaseId,headBranch,event",
+      "--repo",
+      self.repo,
+    ]
+    run = self._run_command(cmd)
+    return json.loads(run)
+
+  def get_run_from_url(self, url: str) -> Run:
+    """
+    Retrieves workflow run details using a GitHub Actions URL.
+
+    The URL must follow one of these structures:
+    - https://github.com/owner/repo/actions/runs/:runId
+    - https://github.com/owner/repo/actions/runs/:runId/jobs/:jobId
+
+    Args:
+        url: The full GitHub URL to the workflow run or specific job.
+
+    Returns:
+        A Run object containing metadata for the extracted run ID.
+
+    Raises:
+        ValueError: If the run ID cannot be parsed from the provided URL.
+    """
+    match = re.search(r"actions/runs/(\d+)", url)
+    if not match:
+      raise ValueError(f"Could not extract run ID from URL: {url}")
+
+    run_id = match.group(1)
+    return self.get_run(run_id)
+
+  def find_previous_successful_run(self, run: Run) -> Run:
+    """
+    Finds the last successful run for the given failed run, considering the same event type and branch.
+    If no successful run is found, falls back to the last successful 'push' event.
+
+    Args:
+      run: The failed run for which to find the previous successful run.
+
+    Returns:
+      The latest successful run.
+
+    Raises:
+      ValueError: If no successful run is found.
+    """
+    # Try to find a successful run with the same event type first.
+    # This ensures we are comparing runs with similar contexts (e.g., Pull Request vs Push),
+    # minimizing false positives caused by differences in merge commits or environment specifics.
+    last_successful_run = self.get_latest_run(
+      run["workflowDatabaseId"],
+      run["headBranch"],
+      run["event"],
+      created=f"<{run['createdAt']}",
+      status="success",
+    )
+
+    # Fallback: If strict matching failed, try to find the last successful 'push' event.
+    if not last_successful_run and run["event"] != "push":
+      logging.info(
+        "No successful run found for event '%s'. Falling back to 'push' event.",
+        run["event"],
+      )
+      last_successful_run = self.get_latest_run(
+        run["workflowDatabaseId"],
+        run["headBranch"],
+        event="push",
+        created=f"<{run['createdAt']}",
+        status="success",
+      )
+
+    if not last_successful_run:
+      raise ValueError(
+        f"No previous successful run found for workflow '{run['workflowName']}' on branch {run['headBranch']}"
+      )
+
+    return last_successful_run
