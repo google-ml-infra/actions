@@ -10,12 +10,12 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 
-[project.scripts]
-culprit-finder = "culprit_finder.cli:main"
-
 dependencies = [
     "PyGithub",
 ]
+
+[project.scripts]
+culprit-finder = "culprit_finder.cli:main"
 
 
 [project.optional-dependencies]
