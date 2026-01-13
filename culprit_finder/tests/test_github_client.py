@@ -5,18 +5,20 @@ import subprocess
 
 import pytest
 
-from culprit_finder import github
+from culprit_finder import github_client
+
+import tests.factories as factories
 
 
 @pytest.fixture(autouse=True)
 def mock_pygithub(mocker):
   """Mocks the PyGithub client to avoid network requests."""
-  return mocker.patch("culprit_finder.github.github.Github")
+  return mocker.patch("culprit_finder.github_client.github.Github")
 
 
 def test_wait_for_branch_creation_success(mocker):
   """Tests that wait_for_branch_creation returns when the branch is found."""
-  client = github.GithubClient("owner/repo", token="test-token")
+  client = github_client.GithubClient("owner/repo", token="test-token")
   mock_check = mocker.patch.object(client, "check_branch_exists")
   # Simulate branch not found first time, then found
   mock_check.side_effect = [False, True]
@@ -31,7 +33,7 @@ def test_wait_for_branch_creation_success(mocker):
 
 def test_wait_for_branch_creation_timeout(mocker):
   """Tests that wait_for_branch_creation raises ValueError if timeout is reached."""
-  client = github.GithubClient("owner/repo", token="test-token")
+  client = github_client.GithubClient("owner/repo", token="test-token")
   mock_check = mocker.patch.object(client, "check_branch_exists", return_value=False)
 
   mocker.patch("time.sleep")
@@ -44,27 +46,13 @@ def test_wait_for_branch_creation_timeout(mocker):
   assert mock_check.call_count > 1
 
 
-def create_run(event: str, conclusion: str, head_sha: str) -> github.Run:
-  return {
-    "workflowDatabaseId": 123,
-    "headBranch": "main",
-    "event": event,
-    "createdAt": "2023-01-01T12:00:00Z",
-    "headSha": head_sha,
-    "status": "completed",
-    "conclusion": conclusion,
-    "url": "https://github.com/owner/repo/actions/runs/123",
-    "databaseId": 456,
-  }
-
-
 @pytest.mark.parametrize(
-  "event_type, runs, expected_sha, expected_calls",
+  "event_type, runs_data, expected_sha, expected_calls",
   [
     # Case 1: Strict match found immediately for 'push'
     (
       "push",
-      [create_run("push", "success", "good_sha")],
+      [{"event": "push", "conclusion": "success", "head_sha": "good_sha"}],
       "good_sha",
       1,
     ),
@@ -73,35 +61,41 @@ def create_run(event: str, conclusion: str, head_sha: str) -> github.Run:
       "workflow_dispatch",
       [
         None,  # First call (strict match)
-        create_run("push", "success", "fallback_sha"),  # Second call (fallback)
+        {
+          "event": "push",
+          "conclusion": "success",
+          "head_sha": "fallback_sha",
+        },  # Second call (fallback)
       ],
       "fallback_sha",
       2,
     ),
   ],
 )
-def test_get_start_commit(mocker, event_type, runs, expected_sha, expected_calls):
+def test_get_start_commit(mocker, event_type, runs_data, expected_sha, expected_calls):
   """Tests that _get_start_commit handles strict matching and fallback logic correctly."""
-  client = github.GithubClient("owner/repo", token="test-token")
+  client = github_client.GithubClient("owner/repo", token="test-token")
   mock_latest_run = mocker.patch.object(client, "get_latest_run")
+
+  runs = [factories.create_run(mocker, **data) if data else None for data in runs_data]
   mock_latest_run.side_effect = runs
 
-  failed_run = create_run(event_type, "failure", "bad_sha")
+  failed_run = factories.create_run(mocker, event_type, "failure", "bad_sha")
   previous_run = client.find_previous_successful_run(failed_run)
 
-  assert previous_run == create_run("push", "success", expected_sha)
+  assert previous_run.head_sha == expected_sha
   assert mock_latest_run.call_count == expected_calls
 
 
 def test_get_start_commit_raises_value_error_if_none_found(mocker):
   """Tests that ValueError is raised if no successful run is found even after fallback."""
-  client = github.GithubClient("owner/repo", token="test-token")
+  client = github_client.GithubClient("owner/repo", token="test-token")
   mock_latest_run = mocker.patch.object(client, "get_latest_run")
   mock_latest_run.return_value = None
 
   with pytest.raises(ValueError, match="No previous successful run found"):
     client.find_previous_successful_run(
-      create_run("workflow_dispatch", "failure", "bad_sha")
+      factories.create_run(mocker, "workflow_dispatch", "failure", "bad_sha")
     )
 
   assert mock_latest_run.call_count == 2
@@ -110,7 +104,7 @@ def test_get_start_commit_raises_value_error_if_none_found(mocker):
 def test_get_github_token_env_var(mocker):
   """Tests retrieving token from environment variable."""
   mocker.patch.dict(os.environ, {"GH_TOKEN": "env-token"})
-  assert github.get_github_token() == "env-token"
+  assert github_client.get_github_token() == "env-token"
 
 
 def test_get_github_token_gh_cli(mocker):
@@ -121,7 +115,7 @@ def test_get_github_token_gh_cli(mocker):
   mock_run = mocker.patch("subprocess.run")
   mock_run.return_value.stdout = "cli-token\n"
 
-  assert github.get_github_token() == "cli-token"
+  assert github_client.get_github_token() == "cli-token"
   mock_run.assert_called_with(
     ["gh", "auth", "token"], capture_output=True, text=True, check=True
   )
@@ -134,11 +128,11 @@ def test_get_github_token_gh_cli_error(mocker):
     "subprocess.run",
     side_effect=subprocess.CalledProcessError(1, ["gh", "auth", "token"]),
   )
-  assert github.get_github_token() is None
+  assert github_client.get_github_token() is None
 
 
 def test_get_github_token_gh_not_found(mocker):
   """Tests returning None when gh cli is not installed."""
   mocker.patch.dict(os.environ, clear=True)
   mocker.patch("subprocess.run", side_effect=FileNotFoundError)
-  assert github.get_github_token() is None
+  assert github_client.get_github_token() is None

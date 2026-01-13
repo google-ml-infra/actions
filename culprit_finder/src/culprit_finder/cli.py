@@ -13,7 +13,7 @@ import re
 
 from culprit_finder import culprit_finder
 from culprit_finder import culprit_finder_state
-from culprit_finder import github
+from culprit_finder import github_client
 
 logging.basicConfig(
   level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -77,25 +77,25 @@ def main() -> None:
       "the following arguments are required: -r/--repo (or provided via URL)"
     )
 
-  token = github.get_github_token()
+  token = github_client.get_github_token()
   if token is None:
     logging.error("Not authenticated with GitHub CLI or GH_TOKEN env var is not set.")
     sys.exit(1)
 
-  gh_client = github.GithubClient(repo=repo, token=token)
+  gh_client = github_client.GithubClient(repo=repo, token=token)
 
   if args.url:
     run = gh_client.get_run_from_url(args.url)
-    if run["conclusion"] != "failure":
+    if run.conclusion != "failure":
       raise ValueError("The provided URL does not point to a failed workflow run.")
 
     if not start:
       previous_run = gh_client.find_previous_successful_run(run)
-      start = previous_run["headSha"]
-    end = run["headSha"]
+      start = previous_run.head_sha
+    end = run.head_sha
 
-    workflow_details = gh_client.get_workflow(run["workflowDatabaseId"])
-    workflow_file_name = workflow_details["path"].split("/")[-1]
+    workflow_details = gh_client.get_workflow(run.workflow_id)
+    workflow_file_name = workflow_details.path.split("/")[-1]
 
   if not start:
     parser.error("the following arguments are required: -s/--start")
@@ -116,13 +116,22 @@ def main() -> None:
   if args.clear_cache and state_persister.exists():
     state_persister.delete()
 
+  state: culprit_finder_state.CulpritFinderState = {
+    "repo": repo,
+    "workflow": workflow_file_name,
+    "original_start": start,
+    "original_end": end,
+    "current_good": "",
+    "current_bad": "",
+    "cache": {},
+  }
   if state_persister.exists():
     print("\nA previous bisection state was found.")
     resume = input("Do you want to resume from the saved state? (y/n): ").lower()
     if resume not in ["y", "yes"]:
       print("Starting a new bisection. Deleting the old state...")
       state_persister.delete()
-      state: culprit_finder_state.CulpritFinderState = {
+      state = {
         "repo": repo,
         "workflow": workflow_file_name,
         "original_start": start,
@@ -134,19 +143,9 @@ def main() -> None:
     else:
       state = state_persister.load()
       print("Resuming from the saved state.")
-  else:
-    state: culprit_finder_state.CulpritFinderState = {
-      "repo": repo,
-      "workflow": workflow_file_name,
-      "original_start": start,
-      "original_end": end,
-      "current_good": "",
-      "current_bad": "",
-      "cache": {},
-    }
 
   has_culprit_finder_workflow = any(
-    wf["path"] == ".github/workflows/culprit_finder.yml"
+    wf.path == ".github/workflows/culprit_finder.yml"
     for wf in gh_client.get_workflows()
   )
 
@@ -158,7 +157,7 @@ def main() -> None:
     end_sha=end,
     workflow_file=workflow_file_name,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
-    github_client=gh_client,
+    gh_client=gh_client,
     state=state,
     state_persister=state_persister,
   )
@@ -166,9 +165,9 @@ def main() -> None:
   try:
     culprit_commit = finder.run_bisection()
     if culprit_commit:
-      commit_message = culprit_commit["message"].splitlines()[0]
+      commit_message = culprit_commit.commit.message.splitlines()[0]
       print(
-        f"\nThe culprit commit is: {commit_message} (SHA: {culprit_commit['sha']})",
+        f"\nThe culprit commit is: {commit_message} (SHA: {culprit_commit.sha})",
       )
     else:
       print("No culprit commit found.")
