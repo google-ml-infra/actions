@@ -18,6 +18,7 @@
 import logging
 import os
 import platform
+import socket
 import sys
 from datetime import datetime
 
@@ -27,6 +28,10 @@ class ConnectionSignals:
   CONNECTION_CLOSED: str = "connection_closed"
   KEEP_ALIVE: str = "keep_alive"
   ENV_STATE_REQUESTED: str = "env_state_requested"
+
+
+# Configuration
+HOST, PORT = "127.0.0.1", 12455
 
 
 # Default path constants for saving/reading execution state
@@ -105,11 +110,55 @@ def setup_logging():
   logger.setLevel(level)
   logger.handlers.clear()
 
-  handler = logging.StreamHandler(sys.stdout)
+  handler = logging.StreamHandler(sys.stderr)
   handler.setFormatter(_ColoredFormatter())
   handler.setLevel(level)
   logger.addHandler(handler)
   return logger
+
+
+def send_message(message: str, expect_response: bool = False) -> bytes | None:
+  """
+  Communicates with the server by sending a message and optionally receiving a response.
+
+  Args:
+      message: The message to send
+      expect_response: Whether to wait for and return a response
+
+  Returns:
+      The raw response data if expect_response is True, otherwise None
+  """
+  with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    try:
+      sock.connect((HOST, PORT))
+      sock.sendall(f"{message}\n".encode("utf-8"))
+
+      if expect_response:
+        data = b""
+        while True:
+          chunk = sock.recv(4096)
+          if not chunk:
+            # Connection closed by server
+            break
+          data += chunk
+        return data
+      return None
+    except ConnectionRefusedError:
+      logging.error(
+        f"Could not connect to server at {HOST}:{PORT}. Is the server running?"
+      )
+    except Exception as e:
+      logging.error(f"An error occurred: {e}")
+    return None
+
+
+def parent_alive(pid: int) -> bool:
+  """Check if a process with the given PID is running."""
+  try:
+    os.kill(pid, 0)  # Signal 0 = existence check
+    return True
+  except OSError:
+    return False
 
 
 def is_linux_or_linux_like_shell():

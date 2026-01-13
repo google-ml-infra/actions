@@ -21,10 +21,8 @@ in the established remote session.
 """
 
 import argparse
-import json
 import logging
 import os
-import socket
 import time
 import threading
 import subprocess
@@ -38,8 +36,6 @@ utils.setup_logging()
 
 _LOCK = threading.Lock()
 
-# Configuration (same as wait_for_connection.py)
-HOST, PORT = "127.0.0.1", 12455
 KEEP_ALIVE_INTERVAL = 30
 
 
@@ -63,94 +59,15 @@ def parse_args():
 def send_message(message: str, expect_response: bool = False) -> bytes | None:
   """
   Communicates with the server by sending a message and optionally receiving a response.
-
-  Args:
-      message: The message to send
-      expect_response: Whether to wait for and return a response
-
-  Returns:
-      The raw response data if expect_response is True, otherwise None
   """
   with _LOCK:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-      try:
-        sock.connect((HOST, PORT))
-        sock.sendall(f"{message}\n".encode("utf-8"))
-
-        if expect_response:
-          data = b""
-          while True:
-            chunk = sock.recv(4096)
-            if not chunk:
-              # Connection closed by server
-              break
-            data += chunk
-          return data
-        return None
-      except ConnectionRefusedError:
-        logging.error(
-          f"Could not connect to server at {HOST}:{PORT}. Is the server running?"
-        )
-      except Exception as e:
-        logging.error(f"An error occurred: {e}")
-      return None
-
-
-def request_env_state() -> dict[str, str] | None:
-  data = send_message(ConnectionSignals.ENV_STATE_REQUESTED, expect_response=True)
-  if not data:
-    return None
-  try:
-    json_data = data.decode("utf-8").strip()
-    env_data = json.loads(json_data)
-    return env_data
-  except Exception as e:
-    logging.error(f"An error occurred while parsing env state response: {e}")
+    return utils.send_message(message, expect_response)
 
 
 def keep_alive():
   while True:
     time.sleep(KEEP_ALIVE_INTERVAL)
     send_message(ConnectionSignals.KEEP_ALIVE)
-
-
-def get_execution_state(no_env: bool = False):
-  """
-  Returns the shell command, directory, and environment to replicate.
-
-  If `no_env` is True, environment is returned as None.
-  Otherwise, we prefer the environment data from the saved
-  execution-state file. If that is not present, we attempt
-  to retrieve the environment from the remote waiting server.
-  """
-  if not os.path.exists(utils.STATE_INFO_PATH):
-    logging.debug(f"Did not find the execution state file at {utils.STATE_INFO_PATH}")
-    data = {}
-  else:
-    logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
-    with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
-      try:
-        data: preserve_run_state.StateInfo = json.load(f)
-      except json.JSONDecodeError as e:
-        logging.error(
-          f"Could not parse the execution state file:\n{e.msg}\n"
-          "Continuing without reproducing the environment..."
-        )
-        data = {}
-
-  shell_command = data.get("shell_command")
-  directory = data.get("directory")
-
-  if no_env:
-    env = None
-  # Prefer `env` data from file over the data available via server,
-  # since its presence there means its was explicitly requested by the user
-  elif "env" in data:
-    env = data.get("env")
-  else:
-    env = request_env_state()
-
-  return shell_command, directory, env
 
 
 def main():
@@ -168,7 +85,12 @@ def main():
   timer_thread = threading.Thread(target=keep_alive, daemon=True)
   timer_thread.start()
 
-  shell_command, directory, env = get_execution_state(no_env=args.no_env)
+  def fetch_env():
+    return send_message(ConnectionSignals.ENV_STATE_REQUESTED, expect_response=True)
+
+  shell_command, directory, env = preserve_run_state.get_execution_state(
+    no_env=args.no_env, fetch_remote_env_callback=fetch_env
+  )
 
   # If environment data is provided, use it for the session to be created
   if env is not None:

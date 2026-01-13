@@ -27,7 +27,7 @@ import json
 import logging
 import os
 import re
-from typing import Sequence, TypedDict
+from typing import Callable, Sequence, TypedDict
 
 import utils
 
@@ -44,6 +44,60 @@ class StateInfo(TypedDict):
   shell_command: str | None
   directory: str | None
   env: dict[str, str] | None
+
+
+def get_execution_state(
+  no_env: bool = False,
+  fetch_remote_env_callback: Callable[[], bytes | None] | None = None,
+) -> tuple[str | None, str | None, dict[str, str] | None]:
+  """
+  Returns the shell command, directory, and environment to replicate.
+
+  If `no_env` is True, environment is returned as None.
+  Otherwise, we prefer the environment data from the saved
+  execution-state file. If that is not present, we attempt
+  to retrieve the environment from the remote waiting server
+  using the provided callback.
+  """
+  if not os.path.exists(utils.STATE_INFO_PATH):
+    logging.debug(f"Did not find the execution state file at {utils.STATE_INFO_PATH}")
+    data = {}
+  else:
+    logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
+    with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
+      try:
+        data: StateInfo = json.load(f)
+      except json.JSONDecodeError as e:
+        logging.error(
+          f"Could not parse the execution state file:\n{e.msg}\n"
+          "Continuing without reproducing the environment..."
+        )
+        data = {}
+
+  shell_command = data.get("shell_command")
+  directory = data.get("directory")
+
+  if no_env:
+    env = None
+  # Prefer `env` data from file over the data available via server,
+  # since its presence there means its was explicitly requested by the user
+  elif "env" in data:
+    env = data.get("env")
+  elif fetch_remote_env_callback:
+    data_bytes = fetch_remote_env_callback()
+    if data_bytes:
+      try:
+        json_data = data_bytes.decode("utf-8").strip()
+        env = json.loads(json_data)
+      except Exception as e:
+        logging.error(f"An error occurred while parsing env state response: {e}")
+        env = None
+    else:
+      env = None
+  else:
+    env = None
+
+  return shell_command, directory, env
 
 
 def parse_cli_args() -> argparse.Namespace:

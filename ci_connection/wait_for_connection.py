@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 import os
+import pathlib
 import shutil
 import sys
 import time
@@ -242,10 +243,6 @@ def construct_connection_command() -> tuple[str, str]:
 
   actions_path = os.path.dirname(__file__)
 
-  is_windows = platform.system() == "Windows"
-  if is_windows:
-    actions_path = actions_path.replace("\\", "\\\\")
-
   connect_command = (
     f"ml-actions-connect "
     f"--runner={runner_name} "
@@ -253,16 +250,32 @@ def construct_connection_command() -> tuple[str, str]:
     f"--loc={location} "
     f"--cluster={cluster}"
   )
+
   python_bin = sys.executable
-  main_connect_command = (
-    f'{connect_command} --entrypoint="{python_bin} {actions_path}/notify_connection.py"'
-  )
-  fallback_connect_command = f'{connect_command} --entrypoint="bash -i"'
+
+  is_windows = platform.system() == "Windows"
+
+  if is_windows:
+    # Swap to forward slashes for less backslash escaping headache
+    actions_path = pathlib.Path(actions_path).as_posix()
+    python_bin = pathlib.Path(python_bin).as_posix()
+    pwsh = "powershell.exe -NoExit"
+    main_connect_command = (
+      f'{connect_command} --entrypoint="{pwsh} '
+      f'-File {actions_path}/entrypoint.ps1 '
+      f'-PythonBin {python_bin!r}"'
+    )
+    fallback_connect_command = f'{connect_command} --entrypoint="{pwsh}"'
+  else:
+    main_connect_command = (
+      f'{connect_command} --entrypoint="{python_bin} {actions_path}/notify_connection.py"'
+    )
+    fallback_connect_command = f'{connect_command} --entrypoint="bash -i"'
 
   return main_connect_command, fallback_connect_command
 
 
-async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
+async def wait_for_connection(host: str = utils.HOST, port: int = utils.PORT):
   # Print out the data required to connect to this VM
   connect_command, fallback_connect_command = construct_connection_command()
 
