@@ -42,6 +42,21 @@ on:
         required: false
         type: string
         default: 'main'
+      publish_metrics:
+        description: "If true, publishes benchmark results to Google Cloud Pub/Sub."
+        required: false
+        type: boolean
+        default: false
+      pub_sub_gcp_project_id:
+        description: "Google Cloud Project ID for Pub/Sub"
+        required: false
+        type: string
+        default: "ml-oss-benchmarking-production"
+      pub_sub_gcp_topic_id:
+        description: "Pub/Sub Topic ID to publish results to"
+        required: false
+        type: string
+        default: "public-results-production"
 
 permissions:
   contents: read # Required for actions/checkout.
@@ -51,12 +66,12 @@ jobs:
     name: Generate matrix
     runs-on: linux-x86-n2-16
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00 # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
       - name: Check out user repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -86,7 +101,7 @@ jobs:
           echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
           ref: ${{ steps.extract_ml_actions_repo_ref.outputs.repo_ref}}
@@ -94,7 +109,7 @@ jobs:
           persist-credentials: false
 
       - name: Generate benchmark matrix
-        env: 
+        env:
           REGISTRY_FILE: ${{ inputs.registry_file }}
           WORKFLOW_TYPE: ${{ inputs.workflow_type }}
         id: generate
@@ -135,7 +150,7 @@ jobs:
 
     steps:
       - name: Check out user repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -165,7 +180,7 @@ jobs:
           echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
           ref: ${{ steps.extract_ml_actions_repo_ref.outputs.repo_ref}}
@@ -178,7 +193,7 @@ jobs:
           # Create TensorBoard output dir and export path to GITHUB_ENV
           TENSORBOARD_OUTPUT_DIR="$GITHUB_WORKSPACE/tblogs"
           mkdir -p "$TENSORBOARD_OUTPUT_DIR"
-          
+
           echo "Created TensorBoard output dir at: $TENSORBOARD_OUTPUT_DIR"
           echo "TENSORBOARD_OUTPUT_DIR=$TENSORBOARD_OUTPUT_DIR" >> "$GITHUB_ENV"
 
@@ -194,22 +209,22 @@ jobs:
           METRIC_SPECS_JSON: '${{ toJson(matrix.metrics) }}'
           WORKFLOW_TYPE: ${{ matrix.workflow_type }}
           RUNNER_LABEL: ${{ matrix.runner_label }}
-          BRANCH: ${{ github.ref_name }} 
+          BRANCH: ${{ github.ref_name }}
           RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         id: parse_tb_logs
         shell: bash
         run: |
           set -euo pipefail
           ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
-          BENCHMARK_OUTPUT_DIR="$GITHUB_WORKSPACE/results"
-          ARTIFACT_FILE_PATH="$BENCHMARK_OUTPUT_DIR/benchmark_result.json"
-          mkdir -p "$BENCHMARK_OUTPUT_DIR"
+          BENCHMARK_RESULTS_DIR="$GITHUB_WORKSPACE/results"
+          BENCHMARK_RESULT_FILE="$BENCHMARK_RESULTS_DIR/benchmark_result.json"
+          mkdir -p "$BENCHMARK_RESULTS_DIR"
           cd "$ML_ACTIONS_REPO" || exit 1
 
           bazel run //benchmarking/tb_parser -- \
             --metric_specs_json="$METRIC_SPECS_JSON" \
             --tblog_dir="$TENSORBOARD_OUTPUT_DIR" \
-            --output_dir="$BENCHMARK_OUTPUT_DIR" \
+            --output_dir="$BENCHMARK_RESULTS_DIR" \
             --config_id="$BENCHMARK_CONFIG_ID" \
             --commit_sha="$GITHUB_SHA" \
             --github_run_id="$GITHUB_RUN_ID" \
@@ -218,18 +233,19 @@ jobs:
             --branch="$BRANCH" \
             --run_url="$RUN_URL"
 
-          echo "artifact_path=$ARTIFACT_FILE_PATH" >> "$GITHUB_OUTPUT"
+          echo "benchmark_result_file=$BENCHMARK_RESULT_FILE" >> "$GITHUB_OUTPUT"
+          echo "benchmark_results_dir=$BENCHMARK_RESULTS_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Upload benchmark artifact
+      - name: Upload benchmark result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
         with:
           name: benchmark-result-${{ matrix.config_id }}
-          path: ${{ steps.parse_tb_logs.outputs.artifact_path }}
+          path: ${{ steps.parse_tb_logs.outputs.benchmark_result_file }}
 
       - name: Run static threshold analyzer
         env:
-          BENCHMARK_RESULT_FILE: ${{ steps.parse_tb_logs.outputs.artifact_path }}
           METRIC_SPECS_JSON: '${{ toJson(matrix.metrics) }}'
+          BENCHMARK_RESULT_FILE: ${{ steps.parse_tb_logs.outputs.benchmark_result_file }}
         id: static_threshold_analyzer
         shell: bash
         run: |
@@ -240,3 +256,22 @@ jobs:
           bazel run //benchmarking/static_threshold_analyzer -- \
             --metric_specs_json="$METRIC_SPECS_JSON" \
             --benchmark_result_file="$BENCHMARK_RESULT_FILE"
+
+      - name: Publish Results to Pub/Sub
+        if: success() && inputs.publish_metrics
+        env:
+          PROJECT_ID: ${{ inputs.pub_sub_gcp_project_id }}
+          TOPIC_ID: ${{ inputs.pub_sub_gcp_topic_id }}
+          BENCHMARK_RESULTS_DIR: ${{ steps.parse_tb_logs.outputs.benchmark_results_dir }}
+          USER_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
+          cd "$ML_ACTIONS_REPO" || exit 1
+
+          bazel run //benchmarking/publisher:publish_results -- \
+            --project_id="$PROJECT_ID" \
+            --topic_id="$TOPIC_ID" \
+            --benchmark_results_dir="$BENCHMARK_RESULTS_DIR" \
+            --repo_name="$USER_REPO"

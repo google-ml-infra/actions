@@ -7,8 +7,9 @@ dependencies = [
     "protovalidate == 1.0.0",
     "tensorflow",
     "numpy",
-    "tensorboard",
-    "tensorboardx"
+    "tensorboardx",
+    "google-cloud-pubsub",
+    "tensorboard"
 ]
 
 [project.optional-dependencies]
