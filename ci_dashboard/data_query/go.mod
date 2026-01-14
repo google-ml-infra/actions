@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/bradleyfalzon/ghinstallation/v2 v2.14.0
 	github.com/google/go-github/v52 v52.0.0
-	golang.org/x/oauth2 v0.25.0
+	golang.org/x/oauth2 v0.27.0
 )
 
 require (
