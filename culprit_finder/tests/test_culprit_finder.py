@@ -1,10 +1,12 @@
 """Tests for the CulpritFinder class."""
 
-from culprit_finder import culprit_finder, github
-from culprit_finder import culprit_finder_state
 import re
+
 import pytest
-from datetime import datetime, timezone
+
+from culprit_finder import culprit_finder, culprit_finder_state, github_client
+
+import tests.factories as factories
 
 WORKFLOW_FILE = "test_workflow.yml"
 CULPRIT_WORKFLOW = "culprit_finder.yml"
@@ -14,7 +16,7 @@ REPO = "owner/repo"
 @pytest.fixture
 def mock_gh_client(mocker):
   """Returns a mock GithubClient."""
-  return mocker.create_autospec(github.GithubClient, instance=True)
+  return mocker.create_autospec(github_client.GithubClient, instance=True)
 
 
 @pytest.fixture
@@ -42,7 +44,7 @@ def finder(request, mock_gh_client, mock_state_persister):
     end_sha="end_sha",
     workflow_file=WORKFLOW_FILE,
     has_culprit_finder_workflow=has_culprit_finder_workflow,
-    github_client=mock_gh_client,
+    gh_client=mock_gh_client,
     state=state,
     state_persister=mock_state_persister,
   )
@@ -59,19 +61,12 @@ def test_wait_for_workflow_completion_success(mocker, finder, mock_gh_client):
   commit_sha = "sha1"
   previous_run_id = None
 
-  run_in_progress = {
-    "headSha": commit_sha,
-    "status": "in_progress",
-    "createdAt": datetime.now(timezone.utc).isoformat(),
-    "databaseId": 102,
-  }
-  run_completed = {
-    "headSha": commit_sha,
-    "status": "completed",
-    "conclusion": "success",
-    "createdAt": datetime.now(timezone.utc).isoformat(),
-    "databaseId": 102,
-  }
+  run_in_progress = factories.create_run(
+    mocker, head_sha=commit_sha, status="in_progress"
+  )
+  run_completed = factories.create_run(
+    mocker, head_sha=commit_sha, conclusion="success", status="completed"
+  )
 
   mock_gh_client.get_latest_run.side_effect = [
     None,
@@ -99,7 +94,9 @@ def test_test_commit_success(mocker, finder, mock_gh_client):
   commit_sha = "sha1"
 
   mock_wait = mocker.patch.object(finder, "_wait_for_workflow_completion")
-  mock_wait.return_value = {"conclusion": "success"}
+  mock_wait.return_value = factories.create_run(
+    mocker, head_sha=commit_sha, conclusion="success", status="completed"
+  )
 
   # Mock get_latest_run to return None for the "previous run" check
   mock_gh_client.get_latest_run.return_value = None
@@ -126,7 +123,7 @@ def test_test_commit_success(mocker, finder, mock_gh_client):
 def test_test_commit_failure(mocker, finder, mock_gh_client):
   """Tests that _test_commit returns False if the workflow fails."""
   mock_wait = mocker.patch.object(finder, "_wait_for_workflow_completion")
-  mock_wait.return_value = {"conclusion": "failure"}
+  mock_wait.return_value = factories.create_run(mocker, "sha", "completed", "failure")
 
   # Mock get_latest_run to return None for the "previous run" check
   mock_gh_client.get_latest_run.return_value = None
@@ -134,24 +131,13 @@ def test_test_commit_failure(mocker, finder, mock_gh_client):
   assert finder._test_commit("sha", "branch") is False
 
 
-def _create_commit(sha: str, message: str) -> github.Commit:
-  return {"sha": sha, "message": message}
-
-
 @pytest.mark.parametrize(
-  "commits, test_results, expected_culprit_idx",
+  "commits_data, test_results, expected_culprit_idx",
   [
     # Scenario 1: Culprit found (C1 is bad)
-    # [C0 (Good), C1 (Bad), C2 (Bad)]
-    # Search path: Mid=1 (C1) -> Bad. Mid=0 (C0) -> Good.
-    # Result: C1 (index 1)
     (
-      [
-        _create_commit("c0", "m0"),
-        _create_commit("c1", "m1"),
-        _create_commit("c2", "m2"),
-      ],
-      [False, True],  # Results for checks on C1, then C0
+      [("c0", "m0"), ("c1", "m1"), ("c2", "m2")],
+      [False, True],
       1,
     ),
     # Scenario 2: All commits are good
@@ -159,11 +145,7 @@ def _create_commit(sha: str, message: str) -> github.Commit:
     # Search path: Mid=1 (C1) -> Good. Mid=2 (C2) -> Good.
     # Result: None
     (
-      [
-        _create_commit("c0", "m0"),
-        _create_commit("c1", "m1"),
-        _create_commit("c2", "m2"),
-      ],
+      [("c0", "m0"), ("c1", "m1"), ("c2", "m2")],
       [True, True],  # Results for checks on C1, then C2
       None,
     ),
@@ -172,11 +154,7 @@ def _create_commit(sha: str, message: str) -> github.Commit:
     # Search path: Mid=1 (C1) -> Bad. Mid=0 (C0) -> Bad.
     # Result: C0 (index 0)
     (
-      [
-        _create_commit("c0", "m0"),
-        _create_commit("c1", "m1"),
-        _create_commit("c2", "m2"),
-      ],
+      [("c0", "m0"), ("c1", "m1"), ("c2", "m2")],
       [False, False],  # Results for checks on C1, then C0
       0,
     ),
@@ -188,22 +166,23 @@ def _create_commit(sha: str, message: str) -> github.Commit:
     ),
     # Scenario 5: Single commit is GOOD
     (
-      [_create_commit("c0", "m0")],
+      [("c0", "m0")],
       [True],
       None,
     ),
     # Scenario 6: Single commit is BAD
     (
-      [_create_commit("c0", "m0")],
+      [("c0", "m0")],
       [False],
       0,
     ),
   ],
 )
 def test_run_bisection(
-  mocker, finder, mock_gh_client, commits, test_results, expected_culprit_idx
+  mocker, finder, mock_gh_client, commits_data, test_results, expected_culprit_idx
 ):
   """Tests various bisection scenarios including finding a culprit, no culprit, etc."""
+  commits = [factories.create_commit(mocker, sha, msg) for sha, msg in commits_data]
   mock_gh_client.compare_commits.return_value = commits
   # Mock check_branch_exists to alternate False/True to simulate creation/deletion needs
   # We need enough values for the max possible iterations (2 * len(commits))
@@ -229,7 +208,7 @@ def test_run_bisection(
 
 def test_run_bisection_branch_cleanup_on_failure(mocker, finder, mock_gh_client):
   """Tests that the temporary branch is deleted even if testing the commit fails."""
-  commits = [{"sha": "c0", "commit": {"message": "m0"}}]
+  commits = [factories.create_commit(mocker, "c0", "m0")]
   mock_gh_client.compare_commits.return_value = commits
 
   # Branch doesn't exist initially (so create), but exists when cleaning up
@@ -254,7 +233,7 @@ def test_run_bisection_branch_cleanup_on_failure(mocker, finder, mock_gh_client)
 
 def test_run_bisection_branch_already_exists(mocker, finder, mock_gh_client):
   """Tests that create_branch is skipped if the branch already exists."""
-  commits = [{"sha": "c0", "commit": {"message": "m0"}}]
+  commits = [factories.create_commit(mocker, "c0", "m0")]
   mock_gh_client.compare_commits.return_value = commits
 
   # Branch exists initially (skip create), and exists for cleanup
@@ -282,9 +261,9 @@ def test_run_bisection_updates_and_saves_state_each_iteration(
   - state is saved after each non-cached iteration
   """
   commits = [
-    _create_commit("c0", "m0"),
-    _create_commit("c1", "m1"),
-    _create_commit("c2", "m2"),
+    factories.create_commit(mocker, "c0", "m0"),
+    factories.create_commit(mocker, "c1", "m1"),
+    factories.create_commit(mocker, "c2", "m2"),
   ]
   mock_gh_client.compare_commits.return_value = commits
 
@@ -318,9 +297,9 @@ def test_run_bisection_skips_testing_cached_commit(mocker, finder, mock_gh_clien
   it is not tested (_test_commit is not called for it).
   """
   commits = [
-    _create_commit("c0", "m0"),
-    _create_commit("c1", "m1"),
-    _create_commit("c2", "m2"),
+    factories.create_commit(mocker, "c0", "m0"),
+    factories.create_commit(mocker, "c1", "m1"),
+    factories.create_commit(mocker, "c2", "m2"),
   ]
   mock_gh_client.compare_commits.return_value = commits
 

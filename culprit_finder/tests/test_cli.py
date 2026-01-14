@@ -6,7 +6,10 @@ import logging
 from unittest import mock
 from typing import TypedDict
 
-from culprit_finder import cli, github
+
+from culprit_finder import cli
+
+import tests.factories as factories
 
 
 def _get_culprit_finder_command(
@@ -60,13 +63,18 @@ def test_invalid_repo_format(monkeypatch, capsys, args, expected_error_msg):
 
 
 def _mock_gh_client(
-  mocker, is_authenticated: bool, workflows: list[github.Workflow] | None = None
+  mocker, is_authenticated: bool, workflows: list[dict[str, str]] | None = None
 ):
-  mock_gh_client_class = mocker.patch("culprit_finder.github.GithubClient")
+  mock_gh_client_class = mocker.patch("culprit_finder.github_client.GithubClient")
   mock_gh_client_instance = mock_gh_client_class.return_value
-  mock_gh_client_instance.check_auth_status.return_value = is_authenticated
+  mocker.patch(
+    "culprit_finder.github_client.get_github_token",
+    return_value="fake-token" if is_authenticated else None,
+  )
   if workflows:
-    mock_gh_client_instance.get_workflows.return_value = workflows
+    mock_gh_client_instance.get_workflows.return_value = [
+      factories.create_workflow(mocker, wf["name"], wf["path"]) for wf in workflows
+    ]
   return mock_gh_client_instance
 
 
@@ -112,35 +120,6 @@ def test_cli_not_authenticated(monkeypatch, mocker, caplog):
 
 
 @pytest.mark.parametrize(
-  "cli_auth, token_auth",
-  [
-    (False, "fake_token"),  # Auth via token only
-    (True, None),  # Auth via CLI only
-  ],
-)
-def test_cli_auth_success(monkeypatch, mocker, cli_auth, token_auth):
-  """Tests that the CLI proceeds if authenticated via CLI or GH_TOKEN."""
-  mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
-  _mock_gh_client(mocker, cli_auth, [{"path": "some/path", "name": "Culprit Finder"}])
-  _mock_state(mocker)
-
-  if token_auth:
-    monkeypatch.setenv("GH_TOKEN", token_auth)
-  else:
-    monkeypatch.delenv("GH_TOKEN", raising=False)
-
-  monkeypatch.setattr(
-    sys,
-    "argv",
-    _get_culprit_finder_command("owner/repo", "sha1", "sha2", "test.yml"),
-  )
-
-  cli.main()
-
-  mock_finder.assert_called_once()
-
-
-@pytest.mark.parametrize(
   "workflows_list, has_culprit_workflow, found_culprit_commit, expected_output",
   [
     # Scenario 1: Culprit finder workflow present, Culprit Found
@@ -175,9 +154,9 @@ def test_cli_success(
   monkeypatch,
   mocker,
   capsys,
-  workflows_list: list[github.Workflow],
+  workflows_list: list[dict[str, str]],
   has_culprit_workflow: bool,
-  found_culprit_commit: github.Commit | None,
+  found_culprit_commit: dict[str, str] | None,
   expected_output: str,
 ):
   """
@@ -187,7 +166,13 @@ def test_cli_success(
   """
   mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
   mock_gh_client_instance = _mock_gh_client(mocker, True, workflows_list)
-  mock_finder.return_value.run_bisection.return_value = found_culprit_commit
+  mock_finder.return_value.run_bisection.return_value = (
+    factories.create_commit(
+      mocker, sha=found_culprit_commit["sha"], message=found_culprit_commit["message"]
+    )
+    if found_culprit_commit
+    else None
+  )
 
   monkeypatch.setattr(
     sys,
@@ -215,7 +200,7 @@ def test_cli_success(
     end_sha="sha2",
     workflow_file="test.yml",
     has_culprit_finder_workflow=has_culprit_workflow,
-    github_client=mock_gh_client_instance,
+    gh_client=mock_gh_client_instance,
     state=expected_state,
     state_persister=patches["state_persister_inst"],
   )
@@ -249,7 +234,9 @@ def test_cli_state_management(
   """Tests state loading, user prompt, and cleanup."""
   mock_finder_cls = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
   mock_finder = mock_finder_cls.return_value
-  mock_finder.run_bisection.return_value = {"sha": "found_sha", "message": "msg"}
+  mock_finder.run_bisection.return_value = factories.create_commit(
+    mocker, sha="found_sha", message="msg"
+  )
 
   mock_gh_client_instance = _mock_gh_client(mocker, True)
   existing_state = (
@@ -289,7 +276,7 @@ def test_cli_state_management(
       workflow_file="test.yml",
       has_culprit_finder_workflow=False,
       state=existing_state,
-      github_client=mock_gh_client_instance,
+      gh_client=mock_gh_client_instance,
       state_persister=patches["state_persister_inst"],
     )
   else:
@@ -362,29 +349,15 @@ def test_cli_with_url(monkeypatch, mocker):
   )
   patches = _mock_state(mocker)
 
-  mock_gh_client_instance.get_run_from_url.return_value = {
-    "headSha": "sha_from_url",
-    "status": "failure",
-    "workflowName": "Test Workflow",
-    "workflowDatabaseId": 123,
-    "conclusion": "failure",
-    "headBranch": "main",
-    "event": "push",
-    "createdAt": "2023-01-01T00:00:00Z",
-  }
-  mock_gh_client_instance.get_workflow.return_value = {
-    "path": ".github/workflows/test.yml"
-  }
-  mock_gh_client_instance.get_latest_run.return_value = {
-    "headSha": "sha1",
-    "status": "completed",
-    "workflowName": "Test Workflow",
-    "workflowDatabaseId": 123,
-    "conclusion": "success",
-    "headBranch": "main",
-    "event": "push",
-    "createdAt": "2023-01-01T00:00:00Z",
-  }
+  mock_gh_client_instance.get_run_from_url.return_value = factories.create_run(
+    mocker, head_sha="sha_from_url", conclusion="failure"
+  )
+  mock_gh_client_instance.get_workflow.return_value = factories.create_workflow(
+    mocker, name="Test Workflow", path=".github/workflows/test.yml"
+  )
+  mock_gh_client_instance.get_latest_run.return_value = factories.create_run(
+    mocker, head_sha="sha1", conclusion="success"
+  )
 
   url = "https://github.com/owner/repo/actions/runs/123"
   args = ["culprit_finder", url, "--start", "sha1"]
@@ -409,7 +382,7 @@ def test_cli_with_url(monkeypatch, mocker):
     end_sha=expected_end,
     workflow_file="test.yml",
     has_culprit_finder_workflow=True,
-    github_client=mock_gh_client_instance,
+    gh_client=mock_gh_client_instance,
     state=expected_state,
     state_persister=patches["state_persister_inst"],
   )
