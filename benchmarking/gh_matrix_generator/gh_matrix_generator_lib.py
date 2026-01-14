@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 from google.protobuf import text_format
 from google.protobuf.json_format import MessageToDict
 from benchmarking.proto import benchmark_registry_pb2
+from benchmarking.proto.common import workflow_type_pb2
 from protovalidate import validate, ValidationError
 
 Runner = Dict[str, Any]
@@ -127,7 +128,7 @@ class MatrixGenerator:
   def generate(self, suite, workflow_type_str, repo_name: str) -> List[MatrixEntry]:
     """Generates the full matrix."""
     matrix: List[MatrixEntry] = []
-    workflow_enum = benchmark_registry_pb2.WorkflowType.Value(workflow_type_str.upper())
+    workflow_enum = workflow_type_pb2.WorkflowType.Value(workflow_type_str.upper())
 
     for benchmark in suite.benchmarks:
       for hw_config in benchmark.hardware_configs:
@@ -173,6 +174,7 @@ class MatrixGenerator:
 
         entry: MatrixEntry = {
           "config_id": f"{benchmark.name}_{hw_short}_{topo_short}_{workflow_short}",
+          "workflow_type": workflow_type_str.upper(),
           "runner_label": runner["label"],
           "container_image": container,
           "benchmark_name": benchmark.name,

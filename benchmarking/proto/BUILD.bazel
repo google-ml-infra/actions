@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,8 @@ proto_library(
     deps = [
         "@protovalidate//proto/protovalidate/buf/validate:validate_proto",
         "@protobuf//:wrappers_proto",
-        "//benchmarking/proto/common:stat_proto"
+        "//benchmarking/proto/common:stat_proto",
+        "//benchmarking/proto/common:workflow_type_proto"
     ],
 )
 
@@ -32,7 +33,8 @@ proto_library(
         "@protovalidate//proto/protovalidate/buf/validate:validate_proto",
         "@protobuf//:wrappers_proto",
         "@protobuf//:timestamp_proto",
-        "//benchmarking/proto/common:stat_proto"
+        "//benchmarking/proto/common:stat_proto",
+        "//benchmarking/proto/common:workflow_type_proto"
     ],
 )
 

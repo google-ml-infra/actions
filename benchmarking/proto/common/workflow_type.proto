@@ -16,14 +16,11 @@ syntax = "proto3";
 
 package ml_actions;
 
-// Defines the type of statistic to compute from a raw data vector.
-enum Stat {
-  STAT_UNSPECIFIED = 0;
-  MEAN = 1;
-  MEDIAN = 2;
-  P90 = 3;
-  P95 = 4;
-  P99 = 5;
-  STDDEV = 6;
-  LAST_VALUE = 7; // Last value from a data vector (e.g., final validation loss).
+// Defines the workflow type.
+enum WorkflowType {
+  WORKFLOW_TYPE_UNSPECIFIED = 0;
+  PRESUBMIT = 1;   // Runs on pull requests before merging.
+  POSTSUBMIT = 2;  // Runs after commits are merged to the main branch.
+  SCHEDULED = 3;   // Runs on a regular schedule (e.g., nightly, weekly).
+  MANUAL = 4;      // Triggered manually (e.g., for bisecting).
 }

@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,6 +63,11 @@ def main():
   parser.add_argument("--config_id", required=True)
   parser.add_argument("--commit_sha", required=True)
   parser.add_argument("--github_run_id", required=True)
+  parser.add_argument("--workflow_type", required=True, help="e.g. PRESUBMIT")
+  parser.add_argument("--runner_label", required=True, help="e.g. linux-x86-n2-32")
+  parser.add_argument("--branch", required=True, help="e.g. main")
+  parser.add_argument("--run_url", required=True, help="GitHub Actions Run URL")
+
   args = parser.parse_args()
 
   metric_manifest = _parse_metric_manifest(args.metrics_manifest_json)
@@ -79,6 +84,10 @@ def main():
     run_timestamp=ts,
     stats=computed_stats,
     github_run_id=int(args.github_run_id),
+    workflow_type=args.workflow_type,
+    runner_label=args.runner_label,
+    branch=args.branch,
+    run_url=args.run_url,
   )
 
   try:

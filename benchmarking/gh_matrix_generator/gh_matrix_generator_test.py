@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -200,6 +200,7 @@ def test_generate_matrix_selects_correct_runner(generator):
 
   cpu_entry = next(item for item in matrix if item["benchmark_name"] == "cpu_benchmark")
 
+  assert cpu_entry["workflow_type"] == "PRESUBMIT"
   assert cpu_entry["runner_label"] == "linux-x86-n2-32"
   assert cpu_entry["config_id"] == "cpu_benchmark_x86_1h1d_presubmit"
   assert cpu_entry["container_image"] == "gcr.io/testing/cpu-container:latest"

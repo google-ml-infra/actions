@@ -178,6 +178,10 @@ jobs:
         env:
           BENCHMARK_CONFIG_ID: ${{ matrix.config_id }}
           METRICS_MANIFEST_JSON: '${{ toJson(matrix.metrics) }}'
+          WORKFLOW_TYPE: ${{ matrix.workflow_type }}
+          RUNNER_LABEL: ${{ matrix.runner_label }}
+          BRANCH: ${{ github.ref_name }} 
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         id: parse_tb_logs
         shell: bash
         run: |
@@ -194,7 +198,11 @@ jobs:
             --output_dir="$BENCHMARK_OUTPUT_DIR" \
             --config_id="$BENCHMARK_CONFIG_ID" \
             --commit_sha="$GITHUB_SHA" \
-            --github_run_id="$GITHUB_RUN_ID"
+            --github_run_id="$GITHUB_RUN_ID" \
+            --workflow_type="$WORKFLOW_TYPE" \
+            --runner_label="$RUNNER_LABEL" \
+            --branch="$BRANCH" \
+            --run_url="$RUN_URL"
 
           echo "artifact_path=$ARTIFACT_FILE_PATH" >> "$GITHUB_OUTPUT"
 

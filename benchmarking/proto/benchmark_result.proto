@@ -1,4 +1,4 @@
-// Copyright 2025 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import "google/protobuf/timestamp.proto";
 import "google/protobuf/wrappers.proto";
 import "buf/validate/validate.proto";
 import "benchmarking/proto/common/stat.proto";
+import "benchmarking/proto/common/workflow_type.proto";
 
 // A single computed statistic from a metric's raw data.
 message ComputedStat {
@@ -54,5 +55,16 @@ message BenchmarkResult {
 
   // REQUIRED: The ID of the GitHub Actions workflow run for traceability.
   int64 github_run_id = 5 [(buf.validate.field).int64.gt = 0];
-}
 
+  // REQUIRED: The GitHub Actions runner label (e.g. "linux-x86-n2-32").
+  string runner_label = 6 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: The Git branch name (e.g. "main", "release-1.0").
+  string branch = 7 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: The full URL to the GitHub Actions run summary.
+  string run_url = 8 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: The workflow type (e.g. "PRESUBMIT", "POSTSUBMIT").
+  WorkflowType workflow_type = 9 [(buf.validate.field).enum = { not_in: [0]}];
+}

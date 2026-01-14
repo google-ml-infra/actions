@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,5 +24,17 @@ proto_library(
 py_proto_library(
     name = "stat_py_proto",
     deps = [":stat_proto"],
+    visibility = ["//benchmarking:__subpackages__"],
+)
+
+proto_library(
+    name = "workflow_type_proto",
+    srcs = ["workflow_type.proto"],
+    visibility = ["//benchmarking:__subpackages__"],
+)
+
+py_proto_library(
+    name = "workflow_type_py_proto",
+    deps = [":workflow_type_proto"],
     visibility = ["//benchmarking:__subpackages__"],
 )

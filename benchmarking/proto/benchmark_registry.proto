@@ -1,4 +1,4 @@
-// Copyright 2025 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package ml_actions.benchmarking;
 import "buf/validate/validate.proto";
 import "google/protobuf/wrappers.proto";
 import "benchmarking/proto/common/stat.proto";
+import "benchmarking/proto/common/workflow_type.proto";
 
 // Defines the direction of improvement for a metric.
 enum ImprovementDirection {
@@ -106,15 +107,6 @@ message ResourceSpec {
 
   // Optional: The required TPU topology (e.g., "2x2", "1x1").
   string tpu_topology = 4;
-}
-
-// Defines the workflow type.
-enum WorkflowType {
-  WORKFLOW_TYPE_UNSPECIFIED = 0;
-  PRESUBMIT = 1;   // Runs on pull requests before merging.
-  POSTSUBMIT = 2;  // Runs after commits are merged to the main branch.
-  SCHEDULED = 3;   // Runs on a regular schedule (e.g., nightly, weekly).
-  MANUAL = 4;      // Triggered manually (e.g., for bisecting).
 }
 
 // Defines the execution topology.
