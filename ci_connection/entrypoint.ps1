@@ -13,7 +13,6 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Trim whitespace
 $stateFile = $stateFile.Trim()
 
 if (-not $stateFile) {
@@ -47,16 +46,8 @@ if (Test-Path $stateFile) {
         if (Test-Path $state.directory) {
             Set-Location $state.directory
         } else {
-            Write-Warning "Directory not found: $($state.directory)"
+            Write-Warning "Directory to change to not found: $($state.directory)"
         }
-    }
-
-    # Show failed command
-    if ($state.shell_command) {
-        Write-Host ("=" * 100)
-        Write-Host "Failed command was:"
-        Write-Host $state.shell_command
-        Write-Host ("=" * 100)
     }
 
     # Clean up state file

@@ -221,7 +221,8 @@ async def process_messages(reader, writer):
       logging.info("Remote connection detected.")
     elif message == ConnectionSignals.ENV_STATE_REQUESTED:
       logging.info(
-        "Environment state requested (to disable on next time, add `--no-env` to command)"
+        "Environment state requested "
+        "(to disable on next time, add `--no-env` to command)"
       )
       # Send the JSON dump of os.environ
       env_data = preserve_run_state.save_env_state(out_path=None)
@@ -260,15 +261,20 @@ def construct_connection_command() -> tuple[str, str]:
     actions_path = pathlib.Path(actions_path).as_posix()
     python_bin = pathlib.Path(python_bin).as_posix()
     pwsh = "powershell.exe -NoExit"
+    # Use escaped double quotes for the Python path on Windows.
+    # cmd.exe does not treat single quotes as quoting characters,
+    # so they get passed literally to PowerShell,
+    # which then treats them as part of the string value
     main_connect_command = (
       f'{connect_command} --entrypoint="{pwsh} '
-      f'-File {actions_path}/entrypoint.ps1 '
-      f'-PythonBin {python_bin!r}"'
+      f"-File {actions_path}/entrypoint.ps1 "
+      f'-PythonBin \\"{python_bin}\\""'
     )
     fallback_connect_command = f'{connect_command} --entrypoint="{pwsh}"'
   else:
     main_connect_command = (
-      f'{connect_command} --entrypoint="{python_bin} {actions_path}/notify_connection.py"'
+      f'{connect_command} --entrypoint="{python_bin} '
+      f'{actions_path}/notify_connection.py"'
     )
     fallback_connect_command = f'{connect_command} --entrypoint="bash -i"'
 

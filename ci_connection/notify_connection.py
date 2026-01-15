@@ -85,12 +85,16 @@ def main():
   timer_thread = threading.Thread(target=keep_alive, daemon=True)
   timer_thread.start()
 
-  def fetch_env():
-    return send_message(ConnectionSignals.ENV_STATE_REQUESTED, expect_response=True)
-
   shell_command, directory, env = preserve_run_state.get_execution_state(
-    no_env=args.no_env, fetch_remote_env_callback=fetch_env
+    no_env=args.no_env
   )
+
+  # If env was not retrieved from file, and is not prohibited, fetch it from server
+  if env is None and not args.no_env:
+    env_bytes = send_message(
+      ConnectionSignals.ENV_STATE_REQUESTED, expect_response=True
+    )
+    env = preserve_run_state.parse_env_from_server_response(env_bytes)
 
   # If environment data is provided, use it for the session to be created
   if env is not None:
@@ -103,10 +107,7 @@ def main():
   if directory is not None:
     os.chdir(directory)
 
-  if shell_command:
-    print("=" * 100)
-    print(f"Failed command was:\n{shell_command}\n")
-    print("=" * 100)
+  preserve_run_state.print_failed_command(shell_command)
 
   if utils.is_linux_or_linux_like_shell():
     logging.info("Launching interactive Bash session...")

@@ -27,7 +27,7 @@ import json
 import logging
 import os
 import re
-from typing import Callable, Sequence, TypedDict
+from typing import Sequence, TypedDict
 
 import utils
 
@@ -48,20 +48,17 @@ class StateInfo(TypedDict):
 
 def get_execution_state(
   no_env: bool = False,
-  fetch_remote_env_callback: Callable[[], bytes | None] | None = None,
 ) -> tuple[str | None, str | None, dict[str, str] | None]:
   """
   Returns the shell command, directory, and environment to replicate.
 
   If `no_env` is True, environment is returned as None.
   Otherwise, we prefer the environment data from the saved
-  execution-state file. If that is not present, we attempt
-  to retrieve the environment from the remote waiting server
-  using the provided callback.
+  execution-state file.
   """
+  data = {"shell_command": None, "env": None, "directory": None}
   if not os.path.exists(utils.STATE_INFO_PATH):
     logging.debug(f"Did not find the execution state file at {utils.STATE_INFO_PATH}")
-    data = {}
   else:
     logging.debug(f"Found the execution state file at {utils.STATE_INFO_PATH}")
     with open(utils.STATE_INFO_PATH, "r", encoding="utf-8") as f:
@@ -72,32 +69,25 @@ def get_execution_state(
           f"Could not parse the execution state file:\n{e.msg}\n"
           "Continuing without reproducing the environment..."
         )
-        data = {}
 
   shell_command = data.get("shell_command")
   directory = data.get("directory")
-
-  if no_env:
-    env = None
-  # Prefer `env` data from file over the data available via server,
-  # since its presence there means its was explicitly requested by the user
-  elif "env" in data:
-    env = data.get("env")
-  elif fetch_remote_env_callback:
-    data_bytes = fetch_remote_env_callback()
-    if data_bytes:
-      try:
-        json_data = data_bytes.decode("utf-8").strip()
-        env = json.loads(json_data)
-      except Exception as e:
-        logging.error(f"An error occurred while parsing env state response: {e}")
-        env = None
-    else:
-      env = None
-  else:
-    env = None
+  env = None if no_env else data.get("env")
 
   return shell_command, directory, env
+
+
+def parse_env_from_server_response(data_bytes: bytes | None) -> dict[str, str] | None:
+  """Parses the environment state JSON returned by the server."""
+  if not data_bytes:
+    return None
+
+  try:
+    json_data = data_bytes.decode("utf-8").strip()
+    return json.loads(json_data)
+  except Exception as e:
+    logging.error(f"An error occurred while parsing env state response: {e}")
+    return None
 
 
 def parse_cli_args() -> argparse.Namespace:
@@ -166,7 +156,7 @@ def parse_cli_args() -> argparse.Namespace:
 def _get_names_from_env_vars_list(
   env_var_list: str, raise_on_invalid_value: bool = False
 ) -> list[str]:
-  """Best-effort attempt to validate and parse env var names from a comma-separated string."""
+  """Best-effort attempt to validate and parse env var names from a string."""
   env_vars_list = env_var_list.strip()
   if not env_vars_list:
     return []
@@ -250,6 +240,14 @@ def save_env_state(
   return dict(out_vars)
 
 
+def print_failed_command(shell_command: str | None, file=None):
+  """Prints the failed command banner if a command is provided."""
+  if shell_command:
+    print("=" * 100, file=file)
+    print(f"Failed command was:\n{shell_command}\n", file=file)
+    print("=" * 100, file=file)
+
+
 def save_current_execution_info(
   shell_command: str | None = None,
   directory: str | None = None,
@@ -289,11 +287,13 @@ def save_all_info():
   else:
     env_state = {}
 
+  out_path = os.path.join(out_dir, utils.STATE_INFO_PATH)
+
   save_current_execution_info(
     shell_command=args.shell_command or os.getenv("BASH_COMMAND"),
     directory=args.execution_dir or os.getcwd(),
     env_state=env_state,
-    out_path=os.path.join(out_dir, utils.STATE_INFO_PATH),
+    out_path=out_path,
   )
 
 
