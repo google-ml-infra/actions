@@ -97,7 +97,10 @@ def main() -> None:
       raise ValueError("The provided URL does not point to a failed workflow run.")
 
     if not start:
-      previous_run = gh_client.find_previous_successful_run(run)
+      if job_details:
+        previous_run = gh_client.find_previous_successful_job_run(run, job_details.name)
+      else:
+        previous_run = gh_client.find_previous_successful_run(run)
       start = previous_run.head_sha
     end = run.head_sha
 

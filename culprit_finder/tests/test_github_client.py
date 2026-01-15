@@ -178,3 +178,120 @@ def test_get_run_and_job_from_url_invalid_url():
 
   with pytest.raises(ValueError, match="Could not extract run ID from URL"):
     client.get_run_and_job_from_url(url)
+
+
+@pytest.mark.parametrize(
+  "event_type, runs_data, job_name, expected_sha, expected_calls",
+  [
+    # Case 1: Overall run success (optimization path)
+    (
+      "push",
+      [
+        [{"conclusion": "success", "head_sha": "good_sha", "event": "push"}]
+      ],  # 1st call returns 1 successful run
+      "target_job",
+      "good_sha",
+      1,
+    ),
+    # Case 2: Run failure, but target job success
+    (
+      "push",
+      [
+        [
+          {
+            "conclusion": "failure",
+            "head_sha": "good_sha",
+            "event": "push",
+            "jobs": [
+              {"name": "target_job", "conclusion": "success"},
+              {"name": "other_job", "conclusion": "failure"},
+            ],
+          }
+        ]
+      ],
+      "target_job",
+      "good_sha",
+      1,
+    ),
+    # Case 3: Run failure, target job failure (should skip this run and find next)
+    (
+      "push",
+      [
+        [
+          {
+            "conclusion": "failure",
+            "head_sha": "bad_sha",
+            "event": "push",
+            "jobs": [{"name": "target_job", "conclusion": "failure"}],
+          },
+          {"conclusion": "success", "head_sha": "good_sha", "event": "push"},
+        ]
+      ],  # 1st call returns 2 runs
+      "target_job",
+      "good_sha",
+      1,
+    ),
+    # Case 4: Fallback to 'push' event
+    (
+      "workflow_dispatch",
+      [
+        [],  # 1st call (strict match) returns empty
+        [
+          {"conclusion": "success", "head_sha": "fallback_sha", "event": "push"}
+        ],  # 2nd call (fallback) returns success
+      ],
+      "target_job",
+      "fallback_sha",
+      2,
+    ),
+  ],
+)
+def test_find_previous_successful_job_run(
+  mocker, event_type, runs_data, job_name, expected_sha, expected_calls
+):
+  """Tests find_previous_successful_job_run logic including optimization and fallback."""
+  client = github_client.GithubClient("owner/repo", token="test-token")
+
+  mock_workflow = mocker.Mock()
+  mocker.patch.object(client._repo, "get_workflow", return_value=mock_workflow)
+
+  mock_runs_sequences = []
+  for page in runs_data:
+    page_runs = []
+    for data in page:
+      run = factories.create_run(
+        mocker,
+        event=data.get("event"),
+        conclusion=data.get("conclusion"),
+        head_sha=data.get("head_sha"),
+        jobs=[
+          factories.create_job(mocker, j["name"], j["conclusion"])
+          for j in data.get("jobs", [])
+        ],
+      )
+      page_runs.append(run)
+    mock_runs_sequences.append(page_runs)
+
+  mock_workflow.get_runs.side_effect = mock_runs_sequences
+
+  failed_run = factories.create_run(mocker, event_type, "failure", "current_bad_sha")
+
+  result_run = client.find_previous_successful_job_run(failed_run, job_name)
+
+  assert result_run.head_sha == expected_sha
+  assert mock_workflow.get_runs.call_count == expected_calls
+
+
+def test_find_previous_successful_job_run_not_found(mocker):
+  """Tests that ValueError is raised if no successful job run is found."""
+  client = github_client.GithubClient("owner/repo", token="test-token")
+  mock_workflow = mocker.Mock()
+  mocker.patch.object(client._repo, "get_workflow", return_value=mock_workflow)
+
+  # Simulate no runs found for initial event and fallback event
+  mock_workflow.get_runs.side_effect = [[], []]
+
+  failed_run = factories.create_run(mocker, "workflow_dispatch", "failure", "bad_sha")
+
+  with pytest.raises(ValueError, match="No previous successful run found for job"):
+    client.find_previous_successful_job_run(failed_run, "my_job")

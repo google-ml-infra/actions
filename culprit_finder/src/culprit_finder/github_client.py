@@ -269,6 +269,60 @@ class GithubClient:
 
     return last_successful_run
 
+  def find_previous_successful_job_run(
+    self, run: WorkflowRun, job_name: str
+  ) -> WorkflowRun:
+    """
+    Finds the last successful run for a specific job, considering the same event type and branch.
+    If no successful run is found, falls back to the last successful 'push' event.
+
+    Args:
+      run: The failed run for which to find the previous successful run.
+      job_name: The name of the specific job to check for success.
+
+    Returns:
+      The latest run where the specified job was successful.
+
+    Raises:
+      ValueError: If no successful run is found.
+    """
+
+    def _find_run(event: str) -> WorkflowRun | None:
+      workflow_details = self._repo.get_workflow(run.workflow_id)
+      runs = workflow_details.get_runs(
+        branch=run.head_branch, event=event, created=f"<{run.created_at}"
+      )
+
+      for candidate_run in runs:
+        # If the whole run was successful, we assume our job was too.
+        # This avoids fetching jobs (an extra API call) for every successful run.
+        if candidate_run.conclusion == "success":
+          return candidate_run
+
+        # If the run failed, we must check if our specific job succeeded.
+        # This requires an extra API call to list jobs for this run.
+        for job in candidate_run.jobs():
+          if job.name == job_name and job.conclusion == "success":
+            return candidate_run
+      return None
+
+    last_successful_run = _find_run(run.event)
+
+    if not last_successful_run and run.event != "push":
+      logging.info(
+        "No successful job run found for event '%s'. Falling back to 'push' event.",
+        run.event,
+      )
+      last_successful_run = _find_run("push")
+
+    if not last_successful_run:
+      workflow = self._repo.get_workflow(run.workflow_id)
+      raise ValueError(
+        f"No previous successful run found for job '{job_name}' in workflow '{workflow.name}' on branch {run.head_branch}"
+      )
+
+    return last_successful_run
+
   def get_run_jobs(self, run_id: str | int) -> list[WorkflowJob]:
     """
     Retrieves the list of jobs for a specific workflow run.
