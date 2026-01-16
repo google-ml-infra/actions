@@ -194,7 +194,8 @@ def should_halt_for_connection(
 
 
 class WaitInfo:
-  pre_connect_timeout = 10 * 60  # 10 minutes for initial connection
+  # TODO set back to 10 minutes
+  pre_connect_timeout = 60 * 60  # 10 minutes for initial connection
   # allow for reconnects, in case no 'closed' message is received
   re_connect_timeout = 15 * 60  # 15 minutes for reconnects
   # Dynamic, depending on whether a connection was established, or not
@@ -261,16 +262,16 @@ def construct_connection_command() -> tuple[str, str]:
     actions_path = pathlib.Path(actions_path).as_posix()
     python_bin = pathlib.Path(python_bin).as_posix()
     pwsh = "powershell.exe -NoExit"
-    # Use escaped double quotes for the Python path on Windows.
-    # cmd.exe does not treat single quotes as quoting characters,
-    # so they get passed literally to PowerShell,
-    # which then treats them as part of the string value
     main_connect_command = (
       f'{connect_command} --entrypoint="{pwsh} '
       f"-File {actions_path}/entrypoint.ps1 "
-      f'-PythonBin \\"{python_bin}\\""'
+      f'-PythonBin {python_bin!r}"'
     )
-    fallback_connect_command = f'{connect_command} --entrypoint="{pwsh}"'
+    # TODO remove the backup fallback command
+    fallback_connect_command = (
+        f'{connect_command} --entrypoint="{pwsh}"\n'
+        f'{connect_command} --entrypoint="{actions_path}/notify_connection.py"'
+    )
   else:
     main_connect_command = (
       f'{connect_command} --entrypoint="{python_bin} '

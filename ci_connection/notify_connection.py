@@ -113,9 +113,12 @@ def main():
     logging.info("Launching interactive Bash session...")
     subprocess.run(["bash", "-i"], env=env_data)
   else:
-    logging.info("Launching interactive PowerShell session...")
-    # -NoExit keeps the shell open after running any profile scripts
-    subprocess.run(["powershell.exe", "-NoExit"], env=env_data)
+    logging.info("Launching interactive Bash session...")
+    subprocess.run(["bash", "-i"], env=env_data)
+    # TODO revert
+    # logging.info("Launching interactive PowerShell session...")
+    # # -NoExit keeps the shell open after running any profile scripts
+    # subprocess.run(["powershell.exe", "-NoExit"], env=env_data)
 
   send_message(ConnectionSignals.CONNECTION_CLOSED)
 
