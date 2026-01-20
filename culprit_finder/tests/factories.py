@@ -37,7 +37,7 @@ def create_run(
   run.workflow_id = random.randint(1000, 9999)
   run.head_branch = "main"
   run.event = event
-  run.created_at = datetime.now(timezone.utc).isoformat()
+  run.created_at = datetime.now(timezone.utc)
   run.head_sha = head_sha
   run.status = status
   run.conclusion = conclusion

@@ -201,6 +201,13 @@ class CulpritFinder:
       logging.error("Workflow failed to complete")
       return False
 
+    if run.conclusion == "skipped" and self._has_culprit_finder_workflow:
+      raise ValueError(
+        f"Bisection stopped: The culprit finder workflow was skipped while testing '{self._workflow_file}'.\n"
+        f"Please ensure that 'culprit_finder.yml' is configured to trigger on '{self._workflow_file}' "
+        f"and that all required permissions are set."
+      )
+
     if self._job:
       jobs = self._gh_client.get_run_jobs(run.id)
       target_job = self._get_target_job(jobs)

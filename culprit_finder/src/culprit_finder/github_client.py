@@ -243,7 +243,7 @@ class GithubClient:
       run.workflow_id,
       run.head_branch,
       run.event,
-      created=f"<{run.created_at}",
+      created=f"<{run.created_at.isoformat()}",
       status="success",
     )
 
@@ -257,7 +257,7 @@ class GithubClient:
         run.workflow_id,
         run.head_branch,
         event="push",
-        created=f"<{run.created_at}",
+        created=f"<{run.created_at.isoformat()}",
         status="success",
       )
 
@@ -290,7 +290,7 @@ class GithubClient:
     def _find_run(event: str) -> WorkflowRun | None:
       workflow_details = self._repo.get_workflow(run.workflow_id)
       runs = workflow_details.get_runs(
-        branch=run.head_branch, event=event, created=f"<{run.created_at}"
+        branch=run.head_branch, event=event, created=f"<{run.created_at.isoformat()}"
       )
 
       for candidate_run in runs:
