@@ -1,12 +1,92 @@
 benchmarks {
-  name: "e2e_python_benchmark"
-  description: "A test benchmark for a Python-based project."
+  name: "e2e_python_benchmark_summary_v1"
+  description: "A test benchmark for a Python-based project using TF 1.x Summary for logging metrics."
   owner: "e2e-test-team"
   workload {
     # Must start with ./ml_actions because of the checkout path
     # in our reusable workflow.
     action: "./ml_actions/benchmarking/actions/workload_executors/python"
-    action_inputs { key: "script_path" value: "benchmarking/e2e_test/run_benchmark.py" }
+    action_inputs { key: "script_path" value: "benchmarking/e2e_test/run_benchmark_summary_v1.py" }
+    action_inputs { key: "python_version" value: "3.11" }
+    action_inputs { key: "project_path" value: "benchmarking/" }
+    action_inputs { key: "extras" value: "test"}
+  }
+  hardware_configs {
+    hardware_category: CPU_X86
+    topology { num_hosts: 1, num_devices_per_host: 1 }
+    workflow_type: [PRESUBMIT]
+    resource_spec {
+      os: LINUX
+      min_vcpu_count: 16
+    }
+  }
+  update_frequency_policy: QUARTERLY
+  metrics {
+    name: "wall_time"
+    unit: "ms"
+    stats {
+      stat: MEAN
+      comparison: {
+        baseline { value: 100.0 }
+        threshold { value: 0.1 }
+        improvement_direction: LESS
+      }
+    }
+    stats {
+      stat: P99
+    }
+  }
+}
+
+benchmarks {
+  name: "e2e_python_benchmark_summary_v2"
+  description: "A test benchmark for a Python-based project using TF 2.x Summary for logging metrics."
+  owner: "e2e-test-team"
+  workload {
+    # Must start with ./ml_actions because of the checkout path
+    # in our reusable workflow.
+    action: "./ml_actions/benchmarking/actions/workload_executors/python"
+    action_inputs { key: "script_path" value: "benchmarking/e2e_test/run_benchmark_summary_v2.py" }
+    action_inputs { key: "python_version" value: "3.11" }
+    action_inputs { key: "project_path" value: "benchmarking/" }
+    action_inputs { key: "extras" value: "test"}
+  }
+  hardware_configs {
+    hardware_category: CPU_X86
+    topology { num_hosts: 1, num_devices_per_host: 1 }
+    workflow_type: [PRESUBMIT]
+    resource_spec {
+      os: LINUX
+      min_vcpu_count: 16
+    }
+  }
+  update_frequency_policy: QUARTERLY
+  metrics {
+    name: "wall_time"
+    unit: "ms"
+    stats {
+      stat: MEAN
+      comparison: {
+        baseline { value: 100.0 }
+        threshold { value: 0.1 }
+        improvement_direction: LESS
+      }
+    }
+    stats {
+      stat: P99
+    }
+  }
+}
+
+benchmarks {
+  name: "e2e_python_benchmark_tensorboardx"
+  description: "A test benchmark for a Python-based project using tensorboardX for logging metrics."
+  owner: "e2e-test-team"
+  workload {
+    # Must start with ./ml_actions because of the checkout path
+    # in our reusable workflow.
+    action: "./ml_actions/benchmarking/actions/workload_executors/python"
+    action_inputs { key: "script_path" value: "benchmarking/e2e_test/run_benchmark_tensorboardx.py" }
     action_inputs { key: "python_version" value: "3.11" }
     action_inputs { key: "project_path" value: "benchmarking/" }
     action_inputs { key: "extras" value: "test"}
@@ -46,7 +126,7 @@ benchmarks {
     # Must start with ./ml_actions because of the checkout path
     # in our reusable workflow.
     action: "./ml_actions/benchmarking/actions/workload_executors/bazel"
-    action_inputs { key: "target" value: "//benchmarking/e2e_test:test_benchmark" }
+    action_inputs { key: "target" value: "//benchmarking/e2e_test:test_benchmark_summary_v2" }
   }
   hardware_configs {
     hardware_category: CPU_X86

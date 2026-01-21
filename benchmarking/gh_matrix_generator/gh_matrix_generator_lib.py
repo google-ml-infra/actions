@@ -151,7 +151,8 @@ class MatrixGenerator:
           sys.exit(1)
 
         hw_short = (
-          hw_category.lower()
+          hw_category
+          .lower()
           .replace("gpu_", "")
           .replace("cpu_", "")
           .replace("tpu_", "")

@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Fake benchmark script for E2E testing the reusable workflow."""
+"""Fake benchmark script for E2E testing the reusable workflow. Logs metrics using tensorboardX."""
 
 import os
 import sys
-import tensorflow as tf
+from tensorboardX import SummaryWriter
 
 
 def main():
@@ -35,13 +35,11 @@ def main():
   print(f"Fake metrics generated: {fake_metrics}.")
 
   try:
-    writer = tf.summary.create_file_writer(tblog_dir)
+    writer = SummaryWriter(log_dir=tblog_dir)
 
-    with writer.as_default():
-      for i, value in enumerate(fake_metrics):
-        tf.summary.scalar("wall_time", value, step=i)
+    for i, value in enumerate(fake_metrics):
+      writer.add_scalar("wall_time", value, global_step=i)
 
-    writer.flush()
     writer.close()
 
     print(f"Successfully wrote 5 wall_time metrics to {tblog_dir}")

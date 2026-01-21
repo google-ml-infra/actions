@@ -262,7 +262,9 @@ class EnvironmentSeeder:
           os.path.join(self.output_dir, "requirements-gen.txt"),
           os.path.join(
             self.output_dir,
-            f"requirements-{''.join(map(lambda _: hexdigits[randint(0, 16)], range(5)))}.txt",
+            f"requirements-{
+              ''.join(map(lambda _: hexdigits[randint(0, 16)], range(5)))
+            }.txt",
           ),
         )
         raise FileNotFoundError(

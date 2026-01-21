@@ -20,6 +20,8 @@ dependencies = [
     "bufbuild-protovalidate-protocolbuffers-python",
     "tensorflow",
     "numpy",
+    "tensorboard",
+    "tensorboardx"
 ]
 
 [project.optional-dependencies]

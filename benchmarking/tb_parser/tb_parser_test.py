@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,10 @@ import sys
 import pytest
 import numpy as np
 import tensorflow as tf
-from tensorboard.backend.event_processing.event_accumulator import TensorEvent
+from tensorboard.backend.event_processing.event_accumulator import (
+  TensorEvent,
+  ScalarEvent,
+)
 from benchmarking.proto import benchmark_registry_pb2
 from benchmarking.proto.common import stat_pb2
 from benchmarking.tb_parser import tb_parser_lib
@@ -41,12 +44,17 @@ def _create_metric_manifest(
 
 
 def _create_fake_tensor_event(value: float) -> TensorEvent:
-  """Creates a fake TensorEvent, mocking the object returned by EventAccumulator."""
+  """Creates a fake TensorEvent (V2), mocking the object returned by EventAccumulator."""
   return TensorEvent(
     wall_time=0.0,
     step=0,
     tensor_proto=tf.make_tensor_proto(value, dtype=tf.float32),
   )
+
+
+def _create_fake_scalar_event(value: float) -> ScalarEvent:
+  """Creates a fake ScalarEvent (V1), mocking the object returned by EventAccumulator."""
+  return ScalarEvent(wall_time=0.0, step=0, value=value)
 
 
 # --- Pytest Fixtures ---
@@ -60,23 +68,24 @@ def mock_event_accumulator():
   ) as mock_accumulator_cls:
     mock_accumulator = mock_accumulator_cls.return_value
     mock_accumulator.Reload.return_value = None
-    mock_accumulator.Tags.return_value = {"tensors": []}
+    mock_accumulator.Tags.return_value = {"tensors": [], "scalars": []}
     mock_accumulator.Tensors.return_value = []
+    mock_accumulator.Scalars.return_value = []
     yield mock_accumulator
 
 
 # --- Tests ---
 
 
-def test_parse_and_compute_success(mock_event_accumulator):
-  """Tests the full end-to-end parsing and computation logic."""
+def test_parse_and_compute_success_v2_tensors(mock_event_accumulator):
+  """Tests parsing logic for V2 (TensorFlow) logs."""
   manifest = _create_metric_manifest(
     name="wall_time",
     unit="ms",
-    stats=[stat_pb2.Stat.MEAN, stat_pb2.Stat.LAST_VALUE],
+    stats=[stat_pb2.Stat.MEAN],
   )
 
-  mock_event_accumulator.Tags.return_value = {"tensors": ["wall_time"]}
+  mock_event_accumulator.Tags.return_value = {"tensors": ["wall_time"], "scalars": []}
   mock_event_accumulator.Tensors.return_value = [
     _create_fake_tensor_event(10.0),
     _create_fake_tensor_event(20.0),
@@ -86,17 +95,36 @@ def test_parse_and_compute_success(mock_event_accumulator):
   parser = tb_parser_lib.TensorBoardParser(manifest)
   results = parser.parse_and_compute("fake_log_dir")
 
-  assert len(results) == 2
-
-  mean_stat = next(s for s in results if s.stat == stat_pb2.Stat.MEAN)
-  last_val_stat = next(s for s in results if s.stat == stat_pb2.Stat.LAST_VALUE)
+  assert len(results) == 1
+  mean_stat = results[0]
 
   assert mean_stat.metric_name == "wall_time"
-  assert mean_stat.unit == "ms"
   assert mean_stat.value.value == 20.0  # Mean of (10, 20, 30).
 
-  assert last_val_stat.metric_name == "wall_time"
-  assert last_val_stat.value.value == 30.0  # Last value.
+
+def test_parse_and_compute_success_v1_scalars(mock_event_accumulator):
+  """Tests parsing logic for V1 (tensorboardX/Legacy) logs."""
+  manifest = _create_metric_manifest(
+    name="wall_time",
+    unit="ms",
+    stats=[stat_pb2.Stat.MEAN],
+  )
+
+  mock_event_accumulator.Tags.return_value = {"tensors": [], "scalars": ["wall_time"]}
+  mock_event_accumulator.Scalars.return_value = [
+    _create_fake_scalar_event(10.0),
+    _create_fake_scalar_event(20.0),
+    _create_fake_scalar_event(30.0),
+  ]
+
+  parser = tb_parser_lib.TensorBoardParser(manifest)
+  results = parser.parse_and_compute("fake_log_dir")
+
+  assert len(results) == 1
+  mean_stat = results[0]
+
+  assert mean_stat.metric_name == "wall_time"
+  assert mean_stat.value.value == 20.0  # Mean of (10, 20, 30).
 
 
 @pytest.mark.parametrize(
@@ -117,9 +145,9 @@ def test_all_stats_computed_correctly(
   """Verifies that every statistic in the STAT_FN_MAP is computed correctly."""
   manifest = _create_metric_manifest("test_metric", "units", [stat_enum])
 
-  # Create a simple [1, 2, 3, 4, 5] data vector.
+  # Create a simple [1, 2, 3, 4, 5] data vector (using V2 tensors for this test).
   fake_data = [_create_fake_tensor_event(float(i)) for i in range(1, 6)]
-  mock_event_accumulator.Tags.return_value = {"tensors": ["test_metric"]}
+  mock_event_accumulator.Tags.return_value = {"tensors": ["test_metric"], "scalars": []}
   mock_event_accumulator.Tensors.return_value = fake_data
 
   parser = tb_parser_lib.TensorBoardParser(manifest)
@@ -145,18 +173,6 @@ def test_read_metrics_handles_io_error(mock_event_accumulator, capsys):
   assert "Fake I/O error" in captured.err
 
 
-def test_read_metrics_handles_key_error(mock_event_accumulator, capsys):
-  """Tests that the script exits if the tensors key is missing."""
-  mock_event_accumulator.Tags.return_value = {"scalars": []}  # Missing tensors key.
-
-  parser = tb_parser_lib.TensorBoardParser([])
-  with pytest.raises(SystemExit):
-    parser._read_tensorboard_metrics("log_dir_with_no_tensors")
-
-  captured = capsys.readouterr()
-  assert "Error: No tensors data found in TensorBoard logs" in captured.err
-
-
 def test_parse_and_compute_skips_missing_metric(mock_event_accumulator, capsys):
   """Tests that a metric in the manifest but not the logs is skipped."""
   # Manifest asks for metric_a and metric_b.
@@ -169,8 +185,8 @@ def test_parse_and_compute_skips_missing_metric(mock_event_accumulator, capsys):
     )
   )
 
-  # Logs only contain data for metric_a.
-  mock_event_accumulator.Tags.return_value = {"tensors": ["metric_a"]}
+  # Logs only contain data for metric_a (V2).
+  mock_event_accumulator.Tags.return_value = {"tensors": ["metric_a"], "scalars": []}
   mock_event_accumulator.Tensors.return_value = [_create_fake_tensor_event(10.0)]
 
   parser = tb_parser_lib.TensorBoardParser(manifest)

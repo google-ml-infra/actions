@@ -235,13 +235,17 @@ Your benchmark script will need to log metrics via TensorBoard to integrate with
 
 This environment variable is automatically injected into the execution environment of any workload action (standard or custom). If you define your own workload executor, you simply need to ensure your script reads this variable.
 
-### API Requirement
-You must use a library that writes in the standard TensorBoard format.
+### Supported Libraries
 
-- **Required API**: The TensorFlow 2.x Summary API (e.g., tf.summary.create_file_writer).
-- **Supported Package**: This API is available in both the full [TensorFlow](https://pypi.org/project/tensorflow) package and the lightweight, standalone [TensorBoard](https://pypi.org/project/tensorboard) package. *Do not use the legacy TensorFlow 1.x tf.summary.FileWriter API, as it is incompatible*.
+The infrastructure parses both V1 (Scalar) and V2 (Tensor) event formats. You can use any standard writer library:
 
-Example script:
+- [TensorFlow](https://pypi.org/project/tensorflow/)(`tf.summary`): Writes V2 Tensor events.
+- [tensorboardX](https://pypi.org/project/tensorboardX/): Writes V1 Scalar events (Ideal for PyTorch users).
+- [TensorBoard](https://pypi.org/project/tensorboard/): Writes V1 Scalar events (Lightweight, no TensorFlow dependency).
+
+### Option 1: Using TensorFlow (V2)
+
+Standard approach if your workload already uses TensorFlow.
 
 ```python
 import tensorflow as tf
@@ -256,11 +260,10 @@ if not tblog_dir:
     print("Error: TENSORBOARD_OUTPUT_DIR env var not set.", file=sys.stderr)
     sys.exit(1)
 
-print("Running benchmark...")
 fake_data = np.array([101.2, 100.5, 102.1, 99.8, 101.5])
 
-# Write the raw data to TensorBoard.
 try:
+    # Uses the V2 'tensor' bucket
     writer = tf.summary.create_file_writer(tblog_dir)
     with writer.as_default():
         for i, value in enumerate(fake_data):
@@ -268,6 +271,79 @@ try:
             tf.summary.scalar("wall_time", value, step=i)
 
     writer.flush()
+    writer.close()
+    print("Successfully wrote metrics.")
+
+except Exception as e:
+    print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
+    sys.exit(1)
+```
+
+### Option 2: Using tensorboardX (V1)
+
+Recommended for PyTorch users or lightweight scripts avoiding a heavy TensorFlow installation.
+
+```python
+import os
+import sys
+from tensorboardX import SummaryWriter
+
+tblog_dir = os.environ.get("TENSORBOARD_OUTPUT_DIR")
+
+if not tblog_dir:
+    print("Error: TENSORBOARD_OUTPUT_DIR env var not set.", file=sys.stderr)
+    sys.exit(1)
+
+fake_data = [101.2, 100.5, 102.1, 99.8, 101.5]
+
+try:
+    # Uses the V1 'simple_value' bucket
+    writer = SummaryWriter(log_dir=tblog_dir)
+    
+    for i, value in enumerate(fake_data):
+        # The tag "wall_time" MUST match the "name" in your MetricSpec.
+        writer.add_scalar("wall_time", value, global_step=i)
+
+    writer.close()
+    print("Successfully wrote metrics.")
+
+except Exception as e:
+    print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
+    sys.exit(1)
+```
+
+### Option 3: Using TensorBoard (V1)
+
+Recommended if you want zero heavy dependencies (no tensorflow and no torch). This uses the low-level protobufs directly.
+
+```python
+import os
+import sys
+import time
+from tensorboard.compat.proto import event_pb2, summary_pb2
+from tensorboard.summary.writer.event_file_writer import EventFileWriter
+
+tblog_dir = os.environ.get("TENSORBOARD_OUTPUT_DIR")
+if not tblog_dir:
+    sys.exit("Error: TENSORBOARD_OUTPUT_DIR env var not set.")
+
+fake_data = [101.2, 100.5, 102.1, 99.8, 101.5]
+
+try:
+    # Manually writes V1 'simple_value' events
+    writer = EventFileWriter(tblog_dir)
+
+    for i, value in enumerate(fake_data):
+        event = event_pb2.Event(
+            step=i,
+            wall_time=time.time(),
+            summary=summary_pb2.Summary(
+              # The tag "wall_time" MUST match the "name" in your MetricSpec.
+              value=[summary_pb2.Summary.Value(tag="wall_time", simple_value=value)]
+            )
+        )
+        writer.add_event(event)
+
     writer.close()
     print("Successfully wrote metrics.")
 

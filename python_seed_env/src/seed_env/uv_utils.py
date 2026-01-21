@@ -350,7 +350,8 @@ def _get_required_dependencies_from_pyproject_toml(file_path="pyproject.toml"):
       for dep in data["project"]["dependencies"]:
         # Extract the package name before any version specifiers
         package_name = (
-          dep.split("==")[0]
+          dep
+          .split("==")[0]
           .split(">=")[0]
           .split("<=")[0]
           .split("~=")[0]

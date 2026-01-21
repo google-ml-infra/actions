@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,7 +38,17 @@ STAT_FN_MAP = {
 
 
 class TensorBoardParser:
-  """Parses TB logs based on a metric manifest and creates a benchmark result artifact."""
+  """Parses TB logs based on a metric manifest and creates a benchmark result artifact.
+
+  Supported Summary Formats:
+    1. V1 (Legacy/Scalar): Used by `tensorboardX`, and TF 1.x.
+       Data is stored in the `simple_value` float field.
+    2. V2 (TensorFlow 2.x): Used by native TensorFlow 2.x.
+       Data is stored in the `tensor` field (serialized TensorProto).
+
+  Note: This parser ONLY supports scalar metrics (single floating-point numbers).
+  It ignores histograms, images, audio, and other complex data types.
+  """
 
   def __init__(self, metric_manifest: MetricManifest):
     """Initializes the parser with the metric manifest.
@@ -50,13 +60,19 @@ class TensorBoardParser:
     self.metric_names_to_track = {m.name for m in metric_manifest}
 
   def _read_tensorboard_metrics(self, tblog_dir: str) -> dict[str, list[float]]:
-    """Reads all scalar data vectors for the metrics we are tracking."""
+    """Reads scalar data for tracked metrics from both V1 and V2 buckets.
+
+    We explicitly check both 'scalars' and 'tensors' buckets because:
+    - `tensorboardX` (and TF 1.x) writes to the `simple_value` field -> 'scalars' bucket.
+    - TF 2.x writes to the `tensor` field -> 'tensors' bucket.
+    """
     raw_data = {name: [] for name in self.metric_names_to_track}
 
     try:
+      # Load both 'tensors' (TF V2) and 'scalars' (TBX/TF V1)
       accumulator = EventAccumulator(
-        tblog_dir, size_guidance={"tensors": 0}
-      )  # 0 means load all
+        tblog_dir, size_guidance={"tensors": 0, "scalars": 0}
+      )
       accumulator.Reload()
     except Exception as e:
       print(
@@ -66,28 +82,34 @@ class TensorBoardParser:
       )
       sys.exit(1)
 
-    try:
-      # Retrieve all tags and filter for tags only in manifest.
-      all_tensor_tags = accumulator.Tags()["tensors"]
-      tags_to_load = [
-        tag for tag in all_tensor_tags if tag in self.metric_names_to_track
-      ]
+    # Get available tags from both sources
+    tags = accumulator.Tags()
+    available_scalars = set(tags.get("scalars", []))
+    available_tensors = set(tags.get("tensors", []))
 
-      for tag in tags_to_load:
-        events = accumulator.Tensors(tag)
-        raw_data[tag] = [tf.make_ndarray(event.tensor_proto).item() for event in events]
-    except KeyError as e:
-      print(
-        f"Error: No tensors data found in TensorBoard logs at {tblog_dir}. "
-        f"Ensure the benchmark is logging metrics as TF 2.x tensors. Error: {e}",
-        file=sys.stderr,
-      )
-      sys.exit(1)
-    except Exception as e:
-      print(
-        f"Error: Failed to parse tensor data from logs. Error: {e}", file=sys.stderr
-      )
-      sys.exit(1)
+    for metric_name in self.metric_names_to_track:
+      try:
+        # V1 / Legacy / tensorboardX
+        # Stored in `simple_value` field, accessed via .Scalars()
+        if metric_name in available_scalars:
+          events = accumulator.Scalars(metric_name)
+          raw_data[metric_name] = [e.value for e in events]
+
+        # V2 / TensorFlow 2.x
+        # Stored in `tensor` field, accessed via .Tensors()
+        elif metric_name in available_tensors:
+          events = accumulator.Tensors(metric_name)
+          # Must deserialize the TensorProto to get the scalar value
+          raw_data[metric_name] = [
+            tf.make_ndarray(e.tensor_proto).item() for e in events
+          ]
+
+      except Exception as e:
+        print(
+          f"Warning: Failed to parse metric '{metric_name}' from logs. Error: {e}",
+          file=sys.stderr,
+        )
+        continue
 
     return raw_data
 
