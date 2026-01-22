@@ -193,6 +193,7 @@ def test_find_job(
   mocker, mock_gh_client, has_culprit_workflow, mock_state, mock_state_persister
 ):
   """Tests that _find_job correctly finds a job with or without culprit workflow."""
+  target_job = "Pytest CPU / linux x86"
   finder = culprit_finder.CulpritFinder(
     repo=REPO,
     start_sha="start_sha",
@@ -200,7 +201,7 @@ def test_find_job(
     workflow_file=WORKFLOW_FILE,
     has_culprit_finder_workflow=has_culprit_workflow,
     gh_client=mock_gh_client,
-    job="target-job",
+    job=target_job,
     state=mock_state,
     state_persister=mock_state_persister,
   )
@@ -208,7 +209,7 @@ def test_find_job(
   prefix = "Caller Job / " if has_culprit_workflow else ""
   jobs = [
     factories.create_job(mocker, f"{prefix}other-job", "success"),
-    factories.create_job(mocker, f"{prefix}target-job", "failure"),
+    factories.create_job(mocker, f"{prefix}{target_job}", "failure"),
     factories.create_job(mocker, f"{prefix}another-job", "success"),
   ]
 

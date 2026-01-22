@@ -133,7 +133,7 @@ class CulpritFinder:
       if self._has_culprit_finder_workflow:
         # when calling a workflow from another workflow, the job name is
         # in the format "Caller Job Name / Called Job Name"
-        return name.split("/")[-1].strip()
+        return name.split("/", 1)[-1].strip()
       return name
 
     target_job = next(

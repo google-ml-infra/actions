@@ -16,7 +16,7 @@ def _isolate_state_home(monkeypatch, tmp_path):
   "job",
   [
     None,
-    "test/job",
+    "Test / Job",
   ],
 )
 def test_save_then_load_state_round_trip(monkeypatch, tmp_path, job: str | None):

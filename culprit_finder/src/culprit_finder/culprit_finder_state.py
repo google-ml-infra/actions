@@ -44,6 +44,8 @@ def _sanitize_component(value: str) -> str:
     value.strip()
     .replace("..", ".")
     .replace("\\", "_")
+    .replace("/", "_")
+    .replace(" ", "_")
     .replace(":", "_")
     .replace("|", "_")
   )
