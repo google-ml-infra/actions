@@ -1,18 +1,18 @@
-# Onboarding Guide: ML Benchmark
+# Onboarding Guide: BAP (Benchmarking Automation Platform)
 
-This guide provides the steps to add a project's benchmarks to the ML Benchmark platform. ML Benchmark is GitHub-native and makes use of GitHub Actions to administer benchmarks.
+This guide provides the steps to add a project's benchmarks to BAP (Benchmarking Automation Platform). BAP is GitHub-native and makes use of GitHub Actions to administer benchmarks.
 
 The system is designed to execute any GitHub Action as a workload (e.g., standard Python scripts, Bazel targets, or custom user-defined actions), provided it adheres to the metric reporting contract.
 
 The system follows two simple contracts:
 
-1. **Input**: A benchmark registry (e.g., benchmark_registry.pbtxt) defining the workload action and its inputs, along with hardware requirements and other metadata.
+1. **Input**: A benchmark registry (e.g., benchmark_registry.pbtxt) defining the workload action and its inputs, along with environment requirements and other metadata.
 2. **Output**: Metric data written via TensorBoard to the standard output directory.
 
 Our infrastructure handles the following:
 
 - Provisioning the correct GitHub Actions runners.
-- Converting defined benchmarks and hardware requirements into GitHub Actions jobs.
+- Converting defined benchmarks and environment requirements into GitHub Actions jobs.
 - Securely executing the specified workload action.
 - TensorBoard log parsing and statistic computation.
 - Static threshold analysis.
@@ -85,11 +85,11 @@ Each of the standard executors can be referenced either via a remote reference o
 
 #### Workload inputs
 
-You can define base inputs in the `workload` block of the benchmark registry and hardware-specific overrides or extensions in the `hardware_configs` block using `workload_action_inputs`.
+You can define base inputs in the `workload` block of the benchmark registry and environment-specific overrides or extensions in the `environment_configs` block using `workload_action_inputs`.
 
 For our standard executors, we support "extension" inputs (suffixed with _hw) that allow you to append flags instead of overwriting them.
 
-Note: The infrastructure performs a simple dictionary merge on inputs. If a key in `hardware_configs.workload_action_inputs` matches a key in the base `workload.action_inputs`,  the hardware value will completely overwrite the base value. For best practice, if you are creating your own custom action and want to support appending values (like adding extra flags instead of replacing them), you should define distinct input keys in your action definition (e.g., flags and flags_hw). Your action's script is then responsible for concatenating them.
+Note: The infrastructure performs a simple dictionary merge on inputs. If a key in `environment_configs.workload_action_inputs` matches a key in the base `workload.action_inputs`, the value from `environment_configs.workload_action_inputs` will completely overwrite the base value. For best practice, if you are creating your own custom action and want to support appending values (like adding extra flags instead of replacing them), you should define distinct input keys in your action definition (e.g., flags and flags_hw). Your action's script is then responsible for concatenating them.
 
 ### Defining metrics
 
@@ -123,15 +123,16 @@ benchmarks {
     action_inputs { key: "runtime_flags" value: "--model_name=resnet" }
   }
 
-  hardware_configs {
-    hardware_category: CPU_X86
-    topology { num_hosts: 1, num_devices_per_host: 1 }
+  environment_configs {
+    id: "cpu_standard"
+    runner_label: "linux-x86-n2-32"
+    container_image: "us-docker.pkg.dev/my-project/images/cpu-test:latest"
     workflow_type: [PRESUBMIT]
 
-    # Hardware-specific build flags
+    # Environment-specific build flags
     workload_action_inputs { key: "bazel_run_flags_hw" value: "--config=linux_cpu_opt" }
     
-    # Hardware-specific runtime flags
+    # Environment-specific runtime flags
     workload_action_inputs { key: "runtime_flags_hw" value: "--precision=fp32" }
   }
 
@@ -161,7 +162,7 @@ benchmarks {
 
 ### Example 2: Python workload
 
-This example uses the standard Python executor. It defines base dependencies (`test`) and appends hardware-specific dependencies (`cuda`) and flags (`--use_gpu`) for the GPU config.
+This example uses the standard Python executor. It defines base dependencies (`test`) and appends environment-specific dependencies (`cuda`) and flags (`--use_gpu`) for the GPU config.
 
 Available inputs for Python:
 
@@ -193,16 +194,17 @@ benchmarks {
     action_inputs { key: "runtime_flags" value: "--model_name=my_kernel" }
   }
   
-  hardware_configs {
-    hardware_category: GPU_L4
-    topology { num_hosts: 1, num_devices_per_host: 1 }
+  environment_configs {
+    id: "gpu_l4"
+    runner_label: "linux-x86-a4-224-l4-gpu"
+    container_image: "us-docker.pkg.dev/my-project/images/gpu-test:latest"
     workflow_type: [PRESUBMIT]
     
-    # Hardware extensions (merged into the inputs above)
+    # Environment extensions (merged into the inputs above)
     # Appends 'cuda' -> pip install .[test,cuda]
     workload_action_inputs { key: "extras_hw" value: "cuda" }
 
-    # Appends flag -> python script.py --model_name=my_kernel --use_gpu
+    # Appends flag -> python script.py ... --use_gpu
     workload_action_inputs { key: "runtime_flags_hw" value: "--use_gpu" }
   }
 
@@ -352,13 +354,7 @@ except Exception as e:
     sys.exit(1)
 ```
 
-## Step 4: Add repository to runner registry
-
-Finally, the infrastructure needs to know what hardware is available to your repository. This is defined in a central "allowlist" file: [gha_runners.json](https://github.com/google-ml-infra/actions/blob/main/benchmarking/config/gha_runners.json).
-
-If your workflow fails with an error like `Error: No runner pool defined for repository 'my-org/my-repo'`, please file a bug to have your repository and its available runners added to this file.
-
-## Step 5: Testing
+## Step 4: Testing
 
 When adding or modifying benchmarks, it is often useful to verify the configuration in the GitHub environment before merging. To avoid creating unnecessary PRs (which can clutter history) just to trigger a run, we recommend using a push-based workflow for testing.
 

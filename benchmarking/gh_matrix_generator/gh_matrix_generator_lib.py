@@ -23,10 +23,6 @@ from benchmarking.proto import benchmark_registry_pb2
 from benchmarking.proto.common import workflow_type_pb2
 from protovalidate import validate, ValidationError
 
-Runner = Dict[str, Any]
-RunnerPool = Dict[str, List[Runner]]
-RunnerMap = Dict[str, RunnerPool]
-ContainerMap = Dict[str, str]
 MatrixEntry = Dict[str, Any]
 
 
@@ -71,117 +67,43 @@ def load_and_validate_suite_from_pbtxt(
 class MatrixGenerator:
   """Generates a GitHub Actions matrix from a benchmark registry."""
 
-  def __init__(self, gha_runners: RunnerMap, containers: ContainerMap):
-    """Initializes the generator with configuration data.
-
-    Args:
-      gha_runners: A nested dictionary defining the available runners, keyed
-        by repository name and then by HardwareCategory.
-      containers: A dictionary mapping HardwareCategory strings to the
-        container image URL.
-    """
-    self.gha_runners = gha_runners
-    self.containers = containers
-
-  def _find_gha_runner(
-    self, hw_config: benchmark_registry_pb2.HardwareConfig, repo_name: str
-  ) -> Runner | None:
-    """Finds the best GHA runner for a given hardware config."""
-    if repo_name not in self.gha_runners:
-      print(
-        f"Error: No runner pool defined for repository '{repo_name}' in gha_runners.json.",
-        file=sys.stderr,
-      )
-      sys.exit(1)
-
-    pool = self.gha_runners[repo_name]
-    spec = hw_config.resource_spec
-    hw_category = benchmark_registry_pb2.HardwareCategory.Name(
-      hw_config.hardware_category
-    )
-    candidates = pool.get(hw_category, [])
-
-    # Default OS is LINUX
-    target_os = benchmark_registry_pb2.OS.Name(
-      spec.os or benchmark_registry_pb2.OS.LINUX
-    )
-    candidates = [r for r in candidates if r.get("os") == target_os]
-
-    if spec.min_vcpu_count:
-      candidates = [r for r in candidates if r.get("vcpu", 0) >= spec.min_vcpu_count]
-    if spec.gpu_count:
-      candidates = [r for r in candidates if r.get("gpu_count", 0) == spec.gpu_count]
-    if spec.tpu_topology:
-      candidates = [r for r in candidates if r.get("tpu_topology") == spec.tpu_topology]
-
-    if not candidates:
-      return None
-
-    # Return the best runner that meets the requirements.
-    # 1. For CPU requests (`min_vcpu_count`), it correctly selects the runner
-    #    with the fewest vCPUs that still meets the requirement.
-    # 2. For non-CPU requests (GPU/TPU), it picks the one
-    #    that appears first in the JSON file or has the fewest vCPUs if
-    #    that key is present.
-    return sorted(candidates, key=lambda r: r.get("vcpu", float("inf")))[0]
-
-  def generate(self, suite, workflow_type_str, repo_name: str) -> List[MatrixEntry]:
+  def generate(self, suite, workflow_type_str) -> List[MatrixEntry]:
     """Generates the full matrix."""
     matrix: List[MatrixEntry] = []
     workflow_enum = workflow_type_pb2.WorkflowType.Value(workflow_type_str.upper())
 
     for benchmark in suite.benchmarks:
-      for hw_config in benchmark.hardware_configs:
-        if workflow_enum not in hw_config.workflow_type:
+      for env_config in benchmark.environment_configs:
+        if workflow_enum not in env_config.workflow_type:
           continue
 
-        runner = self._find_gha_runner(hw_config, repo_name)
-        hw_category = benchmark_registry_pb2.HardwareCategory.Name(
-          hw_config.hardware_category
-        )
-        container = self.containers.get(hw_category)
+        runner_label = env_config.runner_label
+        container_image = env_config.container_image
 
-        if not runner or not container:
-          print(
-            f"Error: Could not find a matching runner or container for "
-            f"benchmark '{benchmark.name}' with hardware '{hw_category}' "
-            f"in runner pool for repository '{repo_name}'. "
-            f"Please check config files.",
-            file=sys.stderr,
-          )
-          sys.exit(1)
+        # Config ID (e.g., 'resnet50_basic_gpu') is constructed from the benchmark name
+        # plus the specific environment ID.
+        config_id = f"{benchmark.name}_{env_config.id}"
 
-        hw_short = (
-          hw_category
-          .lower()
-          .replace("gpu_", "")
-          .replace("cpu_", "")
-          .replace("tpu_", "")
-        )
-        topo = hw_config.topology
-        topo_short = f"{topo.num_hosts}h{topo.num_devices_per_host}d"
-        workflow_short = workflow_type_str.lower()
-        hw_config_dict = MessageToDict(hw_config, preserving_proto_field_name=True)
+        env_config_dict = MessageToDict(env_config, preserving_proto_field_name=True)
         workload_dict = MessageToDict(
           benchmark.workload, preserving_proto_field_name=True
         )
         workload_base_inputs = workload_dict.get("action_inputs", {})
-        hw_workload_inputs = hw_config_dict.get("workload_action_inputs", {})
+        env_workload_inputs = env_config_dict.get("workload_action_inputs", {})
 
-        # Hardware workload inputs overwrite/append base workload inputs
-        workload_base_inputs.update(hw_workload_inputs)
+        # Environment workload inputs overwrite/append base workload inputs
+        workload_base_inputs.update(env_workload_inputs)
         workload_dict["action_inputs"] = workload_base_inputs
 
         entry: MatrixEntry = {
-          "config_id": f"{benchmark.name}_{hw_short}_{topo_short}_{workflow_short}",
+          "config_id": config_id,
           "workflow_type": workflow_type_str.upper(),
-          "runner_label": runner["label"],
-          "container_image": container,
+          "runner_label": runner_label,
+          "container_image": container_image,
           "benchmark_name": benchmark.name,
           "description": benchmark.description,
           "owner": benchmark.owner,
           "workload": workload_dict,
-          "hardware_config": hw_config_dict,
           "github_labels": list(benchmark.github_labels),
           "metrics": [
             MessageToDict(m, preserving_proto_field_name=True)

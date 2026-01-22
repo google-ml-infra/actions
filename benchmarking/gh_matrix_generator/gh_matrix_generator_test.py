@@ -23,28 +23,6 @@ from benchmarking.proto import benchmark_registry_pb2
 
 # --- Test Data ---
 
-TEST_RUNNERS_CONFIG = {
-  "openxla/xla": {
-    "CPU_X86": [
-      {"label": "linux-x86-n2-16", "os": "LINUX", "vcpu": 16},
-      {"label": "linux-x86-n2-32", "os": "LINUX", "vcpu": 32},
-    ],
-    "GPU_A100": [
-      {"label": "linux-x86-a2-48-a100-4gpu", "os": "LINUX", "gpu_count": 4, "vcpu": 48},
-    ],
-  },
-  "google-ml-infra/actions": {
-    "CPU_X86": [
-      {"label": "windows-x86-n2-16", "os": "WINDOWS", "vcpu": 16},
-    ]
-  },
-}
-
-TEST_CONTAINERS_CONFIG = {
-  "CPU_X86": "gcr.io/testing/cpu-container:latest",
-  "GPU_A100": "gcr.io/testing/gpu-container:latest",
-}
-
 VALID_SUITE_PBTXT = """
     benchmarks {
       name: "cpu_benchmark"
@@ -55,11 +33,11 @@ VALID_SUITE_PBTXT = """
         action_inputs { key: "target" value: "//b:cpu" }
         action_inputs { key: "runtime_flags" value: "--model_name=cpu_model" }
       }
-      hardware_configs {
-        hardware_category: CPU_X86
-        topology { num_hosts: 1, num_devices_per_host: 1 }
+      environment_configs {
+        id: "basic_cpu"
+        runner_label: "linux-x86-n2-32"
+        container_image: "gcr.io/testing/cpu-container:latest"
         workflow_type: [PRESUBMIT, POSTSUBMIT]
-        resource_spec { min_vcpu_count: 32, os: LINUX }
         workload_action_inputs { key: "runtime_flags_hw" value: "--precision=fp32" }
       }
       update_frequency_policy: QUARTERLY
@@ -85,43 +63,27 @@ VALID_SUITE_PBTXT = """
         action_inputs { key: "gcs_path" value: "gs://bucket/model.hlo" }
         action_inputs { key: "iterations" value: "100" }
       }
-      hardware_configs {
-        hardware_category: GPU_A100
-        topology { num_hosts: 1, num_devices_per_host: 4 }
+      environment_configs {
+        id: "a100_4gpu"
+        runner_label: "linux-x86-a2-48-a100-4gpu"
+        container_image: "gcr.io/testing/gpu-container:latest"
         workflow_type: [PRESUBMIT]
-        resource_spec { gpu_count: 4 }
       }
       update_frequency_policy: WEEKLY
     }
-    benchmarks {
-        name: "windows_benchmark"
-        description: "A valid Windows benchmark."
-        owner: "windows-team"
-        workload {
-          action: "./ml_actions/benchmarking/actions/workload_executors/bazel"
-          action_inputs { key: "target" value: "//b:win" }
-        }
-        hardware_configs {
-            hardware_category: CPU_X86
-            topology { num_hosts: 1, num_devices_per_host: 1 }
-            workflow_type: [SCHEDULED]
-            resource_spec { os: WINDOWS }
-        }
-        update_frequency_policy: MONTHLY
-    }
     """
 
-INVALID_SUITE_MISSING_NAME_PBTXT = """
+INVALID_SUITE_MISSING_ID_PBTXT = """
     benchmarks {
-      description: "A benchmark with a missing name."
+      name: "broken_benchmark"
+      description: "Missing environment_config ID."
       owner: "cpu-team"
       workload {
         action: "./ml_actions/benchmarking/actions/workload_executors/bazel"
-        action_inputs { key: "target" value: "//b:target" }
       }
-      hardware_configs {
-        hardware_category: CPU_X86
-        topology { num_hosts: 1, num_devices_per_host: 1 }
+      environment_configs {
+        runner_label: "linux-x86-n2-32"
+        container_image: "gcr.io/testing/cpu-container:latest"
         workflow_type: [PRESUBMIT]
       }
       update_frequency_policy: QUARTERLY
@@ -133,11 +95,8 @@ INVALID_SUITE_MISSING_NAME_PBTXT = """
 
 @pytest.fixture
 def generator() -> gh_matrix_generator_lib.MatrixGenerator:
-  """Returns a MatrixGenerator instance initialized with test data."""
-  return gh_matrix_generator_lib.MatrixGenerator(
-    gha_runners=TEST_RUNNERS_CONFIG,
-    containers=TEST_CONTAINERS_CONFIG,
-  )
+  """Returns a MatrixGenerator instance."""
+  return gh_matrix_generator_lib.MatrixGenerator()
 
 
 # --- Tests for Validation Logic ---
@@ -148,106 +107,86 @@ def generator() -> gh_matrix_generator_lib.MatrixGenerator:
 def test_load_and_validate_suite_success(_mock_isabs, _mock_open):
   """Tests that a valid pbtxt file is loaded and validated correctly."""
   suite = gh_matrix_generator_lib.load_and_validate_suite_from_pbtxt("dummy_path.pbtxt")
-  assert len(suite.benchmarks) == 3
+  assert len(suite.benchmarks) == 2
   assert suite.benchmarks[0].name == "cpu_benchmark"
 
 
 @mock.patch(
   "builtins.open",
   new_callable=mock.mock_open,
-  read_data=INVALID_SUITE_MISSING_NAME_PBTXT,
+  read_data=INVALID_SUITE_MISSING_ID_PBTXT,
 )
 @mock.patch("os.path.isabs", return_value=True)
 def test_load_and_validate_suite_fails_on_invalid_pbtxt(
   _mock_isabs, _mock_open, capsys
 ):
-  """Tests that an invalid pbtxt (missing a required field) fails validation."""
+  """Tests that an invalid pbtxt (missing required environment_config ID) fails validation."""
   with pytest.raises(SystemExit):
     gh_matrix_generator_lib.load_and_validate_suite_from_pbtxt("invalid.pbtxt")
 
   captured = capsys.readouterr()
-  assert "benchmarks.name" in captured.err
+  assert "benchmarks.environment_configs.id" in captured.err
 
 
 # --- Tests for Matrix Generation Logic ---
 
 
 @pytest.mark.parametrize(
-  "repo_name, workflow_type, expected_count, expected_names",
+  "workflow_type, expected_count, expected_names",
   [
-    ("openxla/xla", "PRESUBMIT", 2, {"cpu_benchmark", "gpu_benchmark"}),
-    ("openxla/xla", "POSTSUBMIT", 1, {"cpu_benchmark"}),
-    ("google-ml-infra/actions", "SCHEDULED", 1, {"windows_benchmark"}),
-    ("openxla/xla", "MANUAL", 0, set()),
+    ("PRESUBMIT", 2, {"cpu_benchmark", "gpu_benchmark"}),
+    ("POSTSUBMIT", 1, {"cpu_benchmark"}),
+    ("SCHEDULED", 0, set()),
+    ("MANUAL", 0, set()),
   ],
 )
-def test_generate_matrix_for_workflows(
-  generator, repo_name, workflow_type, expected_count, expected_names
+def test_generate_matrix_filtering(
+  generator, workflow_type, expected_count, expected_names
 ):
   """Tests that the matrix is correctly filtered for different workflow types."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
-  matrix = generator.generate(suite, workflow_type, repo_name)
+  matrix = generator.generate(suite, workflow_type)
 
   assert len(matrix) == expected_count
   generated_names = {entry["benchmark_name"] for entry in matrix}
   assert generated_names == expected_names
 
 
-def test_generate_matrix_selects_correct_runner(generator):
-  """Tests that the correct runner and config are selected based on resource_spec."""
+def test_generate_matrix_content_correctness(generator):
+  """Tests that the matrix entry contains the correct fields and config IDs."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
-  matrix = generator.generate(suite, "PRESUBMIT", "openxla/xla")
+  matrix = generator.generate(suite, "PRESUBMIT")
 
   cpu_entry = next(item for item in matrix if item["benchmark_name"] == "cpu_benchmark")
 
+  assert cpu_entry["config_id"] == "cpu_benchmark_basic_cpu"
   assert cpu_entry["workflow_type"] == "PRESUBMIT"
   assert cpu_entry["runner_label"] == "linux-x86-n2-32"
-  assert cpu_entry["config_id"] == "cpu_benchmark_x86_1h1d_presubmit"
   assert cpu_entry["container_image"] == "gcr.io/testing/cpu-container:latest"
 
-
-def test_generate_matrix_fails_on_unmatchable_runner(generator, capsys):
-  """Tests that the script exits if no runner matches a resource spec."""
-  unmatchable_suite_pbtxt = """
-      benchmarks {
-        name: "unmatchable_gpu_benchmark"
-        description: "A benchmark that requires 8 GPUs."
-        owner: "gpu-team"
-        workload {
-          action: "./user_repo/benchmarking/actions/hlo"
-          action_inputs { key: "gcs_path" value: "gs://bucket/model.hlo" }
-        }
-        hardware_configs {
-          hardware_category: GPU_A100
-          topology { num_hosts: 1, num_devices_per_host: 8 }
-          workflow_type: [PRESUBMIT]
-          resource_spec { gpu_count: 8 } # No 8-GPU runner in our test data
-        }
-        update_frequency_policy: WEEKLY
-      }
-  """
-  suite = text_format.Parse(
-    unmatchable_suite_pbtxt, benchmark_registry_pb2.BenchmarkSuite()
-  )
-
-  with pytest.raises(SystemExit):
-    # We test against a valid repo that has GPU_A100 runners, but none
-    # thatcan satisfy the gpu_count: 8 requirement.
-    generator.generate(suite, "PRESUBMIT", "openxla/xla")
-
-  captured = capsys.readouterr()
-  assert "Error: Could not find a matching runner" in captured.err
-  assert "GPU_A100" in captured.err
+  action_inputs = cpu_entry["workload"]["action_inputs"]
+  assert action_inputs["target"] == "//b:cpu"
+  assert action_inputs["runtime_flags_hw"] == "--precision=fp32"
 
 
-def test_generate_matrix_fails_on_unknown_repo(generator, capsys):
-  """Tests that the script exits if the repo is not in the runner config."""
+def test_config_id_persistence_across_workflow_types(generator):
+  """Verifies that config_id remains the same across different workflow types."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
-  with pytest.raises(SystemExit):
-    generator.generate(suite, "PRESUBMIT", "unknown/repo")
 
-  captured = capsys.readouterr()
-  assert "Error: No runner pool defined for repository 'unknown/repo'" in captured.err
+  # Generate for PRESUBMIT
+  matrix_pre = generator.generate(suite, "PRESUBMIT")
+  cpu_pre = next(i for i in matrix_pre if i["benchmark_name"] == "cpu_benchmark")
+
+  # Generate for POSTSUBMIT
+  matrix_post = generator.generate(suite, "POSTSUBMIT")
+  cpu_post = next(i for i in matrix_post if i["benchmark_name"] == "cpu_benchmark")
+
+  # IDs match
+  assert cpu_pre["config_id"] == cpu_post["config_id"]
+
+  # Metadata differs
+  assert cpu_pre["workflow_type"] == "PRESUBMIT"
+  assert cpu_post["workflow_type"] == "POSTSUBMIT"
 
 
 if __name__ == "__main__":

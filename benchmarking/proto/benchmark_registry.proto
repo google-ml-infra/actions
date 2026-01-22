@@ -67,53 +67,6 @@ message MetricSpec {
   repeated StatSpec stats = 3 [(buf.validate.field).repeated.min_items = 1];
 }
 
-// Defines the target hardware platform category.
-enum HardwareCategory {
-  HARDWARE_CATEGORY_UNSPECIFIED = 0;
-
-  // -- CPUs --
-  CPU_X86 = 1;
-  CPU_ARM64 = 2;
-
-  // -- GPUs --
-  GPU_L4 = 3;
-  GPU_A100 = 4;
-  GPU_H100 = 5;
-  GPU_B200 = 6;
-
-  // -- TPUs --
-  TPU_V4 = 7;
-  TPU_V5E = 8;
-  TPU_V6E = 9;
-}
-
-// Defines the target operating system.
-enum OS {
-  OS_UNSPECIFIED = 0;
-  LINUX = 1;
-  WINDOWS = 2;
-}
-
-// Defines the required hardware resources.
-message ResourceSpec {
-  // Optional: Operating system required.
-  OS os = 1;
-
-  // Optional: Minimum number of vCPUs required.
-  int32 min_vcpu_count = 2 [(buf.validate.field).int32.gte = 0];
-
-  // Optional: The exact number of GPUs required.
-  int32 gpu_count = 3 [(buf.validate.field).int32.gte = 0];
-
-  // Optional: The required TPU topology (e.g., "2x2", "1x1").
-  string tpu_topology = 4;
-}
-
-// Defines the execution topology.
-message ExecutionTopology {
-  int32 num_hosts = 1 [(buf.validate.field).int32.gt = 0];             // REQUIRED: Number of hosts.
-  int32 num_devices_per_host = 2 [(buf.validate.field).int32.gt = 0];  // REQUIRED: Number of devices per host.
-}
 
 // Defines how frequently the benchmark should be reviewed and/or updated 
 // for retention purposes.
@@ -124,26 +77,23 @@ enum UpdateFrequency {
   QUARTERLY = 3;
 }
 
-// Defines the configuration for a run on a specific hardware category.
-message HardwareConfig {
-  // REQUIRED: Specifies the primary hardware category needed (e.g., GPU_L4).
-  HardwareCategory hardware_category = 1 [(buf.validate.field).enum = { not_in: [0]}];
+// Defines the specific execution environment (runner, container image) and stable identity for a benchmark variant.
+message EnvironmentConfig {
+  // REQUIRED: A unique, stable identifier for this environment configuration (e.g. "gpu_l4_standard").
+  string id = 1 [(buf.validate.field).string.min_len = 1];
 
-  // REQUIRED: Defines the execution topology for the run.
-  ExecutionTopology topology = 2 [(buf.validate.field).required = true];
+  // REQUIRED: The GitHub Actions runner label to request (e.g. "linux-x86-n2-32").
+  string runner_label = 2 [(buf.validate.field).string.min_len = 1];
 
-  // REQUIRED: Specifies which workflows this config applies to.
-  repeated WorkflowType workflow_type = 3 [(buf.validate.field).repeated.min_items = 1];
+  // REQUIRED: The container image to execute the workload inside.
+  string container_image = 3 [(buf.validate.field).string.min_len = 1];
 
-  // Optional: Resource specification.
-  // If not provided, a default small runner for the category will be chosen.
-  ResourceSpec resource_spec = 5;
-
-  // Optional: Hardware-specific inputs for the workload executor action.
-  map<string, string> workload_action_inputs = 7;
-
-  // Prevent reuse of deleted tags.
-  reserved 4, 6;
+  // REQUIRED: The workflow types that this environment should run in (e.g. PRESUBMIT).
+  repeated WorkflowType workflow_type = 4 [(buf.validate.field).repeated.min_items = 1];
+  
+  // Environment-specific overrides for workload inputs.
+  // These values merge with or override the base workload inputs.
+  map<string, string> workload_action_inputs = 5;
 }
 
 // Defines the configuration for the workload executor action.
@@ -169,9 +119,6 @@ message BenchmarkConfig {
   // REQUIRED: Configuration for the workload executor action.
   WorkloadAction workload = 4 [(buf.validate.field).required = true];
 
-  // REQUIRED: List of hardware configurations.
-  repeated HardwareConfig hardware_configs = 5 [(buf.validate.field).repeated.min_items = 1];
-
   // REQUIRED: How often this benchmark definition should be reviewed.
   UpdateFrequency update_frequency_policy = 6 [(buf.validate.field).enum = { not_in: [0]}];
 
@@ -180,6 +127,12 @@ message BenchmarkConfig {
 
   // Optional: List of metrics to track.
   repeated MetricSpec metrics = 8;
+
+  // REQUIRED: List of environment configurations.
+  repeated EnvironmentConfig environment_configs = 9 [(buf.validate.field).repeated.min_items = 1];
+
+  // Prevent reuse of deleted tags.
+  reserved 5;
 }
 
 // Represents a collection of benchmark configurations.

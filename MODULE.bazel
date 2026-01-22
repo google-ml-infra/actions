@@ -22,8 +22,6 @@ bazel_dep(name = "protobuf", version = "32.1")
 bazel_dep(name = "protovalidate", version = "1.0.0")
 
 # --- Python Toolchain Setup ---
-# Pinned to Python 3.11 since "bufbuild-protovalidate-protocolbuffers-python" 
-# does not yet have a pre-built wheel for Python 3.12.
 python = use_extension("@rules_python//python:extensions.bzl", "python")
 python.toolchain(
     python_version = "3.11",

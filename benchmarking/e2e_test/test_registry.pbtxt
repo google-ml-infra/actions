@@ -11,14 +11,11 @@ benchmarks {
     action_inputs { key: "project_path" value: "benchmarking/" }
     action_inputs { key: "extras" value: "test"}
   }
-  hardware_configs {
-    hardware_category: CPU_X86
-    topology { num_hosts: 1, num_devices_per_host: 1 }
+  environment_configs {
+    id: "cpu_standard"
+    runner_label: "linux-x86-n2-16"
+    container_image: "us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00",
     workflow_type: [PRESUBMIT]
-    resource_spec {
-      os: LINUX
-      min_vcpu_count: 16
-    }
   }
   update_frequency_policy: QUARTERLY
   metrics {
@@ -51,14 +48,11 @@ benchmarks {
     action_inputs { key: "project_path" value: "benchmarking/" }
     action_inputs { key: "extras" value: "test"}
   }
-  hardware_configs {
-    hardware_category: CPU_X86
-    topology { num_hosts: 1, num_devices_per_host: 1 }
+  environment_configs {
+    id: "cpu_standard"
+    runner_label: "linux-x86-n2-16"
+    container_image: "us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00",
     workflow_type: [PRESUBMIT]
-    resource_spec {
-      os: LINUX
-      min_vcpu_count: 16
-    }
   }
   update_frequency_policy: QUARTERLY
   metrics {
@@ -91,14 +85,11 @@ benchmarks {
     action_inputs { key: "project_path" value: "benchmarking/" }
     action_inputs { key: "extras" value: "test"}
   }
-  hardware_configs {
-    hardware_category: CPU_X86
-    topology { num_hosts: 1, num_devices_per_host: 1 }
+  environment_configs {
+    id: "cpu_standard"
+    runner_label: "linux-x86-n2-16"
+    container_image: "us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00",
     workflow_type: [PRESUBMIT]
-    resource_spec {
-      os: LINUX
-      min_vcpu_count: 16
-    }
   }
   update_frequency_policy: QUARTERLY
   metrics {
@@ -128,14 +119,11 @@ benchmarks {
     action: "./ml_actions/benchmarking/actions/workload_executors/bazel"
     action_inputs { key: "target" value: "//benchmarking/e2e_test:test_benchmark_summary_v2" }
   }
-  hardware_configs {
-    hardware_category: CPU_X86
-    topology { num_hosts: 1, num_devices_per_host: 1 }
+  environment_configs {
+    id: "cpu_standard"
+    runner_label: "linux-x86-n2-16"
+    container_image: "us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00",
     workflow_type: [PRESUBMIT]
-    resource_spec {
-      os: LINUX
-      min_vcpu_count: 16
-    }
   }
   update_frequency_policy: QUARTERLY
   metrics {
