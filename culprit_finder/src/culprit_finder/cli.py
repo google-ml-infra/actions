@@ -10,6 +10,7 @@ import argparse
 import logging
 import sys
 import re
+from typing import Sequence
 
 from culprit_finder import culprit_finder
 from culprit_finder import culprit_finder_state
@@ -26,6 +27,28 @@ def _validate_repo(repo: str) -> str:
     raise argparse.ArgumentTypeError(f"Invalid repo format: {repo}")
 
   return repo
+
+
+def _parse_env_vars(env_vars: Sequence[str]) -> dict[str, str]:
+  """Parses a list of environment variables into a dictionary.
+
+  Args:
+      env_vars: A list of environment variables in KEY=VALUE format.
+
+  Returns:
+      A dictionary mapping variable names to their values.
+  """
+  parsed_env_vars = {}
+  for env_pair in env_vars:
+    if "=" in env_pair:
+      key, value = env_pair.split("=", 1)
+      parsed_env_vars[key] = value
+    else:
+      logging.warning(
+        "Invalid environment variable format: %s. Expected KEY=VALUE.",
+        env_pair,
+      )
+  return parsed_env_vars
 
 
 def _get_repo_from_url(url: str) -> str:
@@ -66,6 +89,12 @@ def main() -> None:
     "--clear-cache",
     action="store_true",
     help="Deletes the local state file before execution",
+  )
+  parser.add_argument(
+    "--env",
+    required=False,
+    nargs="+",
+    help="Environment variables to set for the workflow run (e.g., KEY1=VALUE1 KEY2=VALUE2)",
   )
 
   args = parser.parse_args()
@@ -166,6 +195,8 @@ def main() -> None:
 
   logging.info("Using culprit finder workflow: %s", has_culprit_finder_workflow)
 
+  env_vars = _parse_env_vars(args.env) if args.env else None
+
   finder = culprit_finder.CulpritFinder(
     repo=repo,
     start_sha=start,
@@ -176,6 +207,7 @@ def main() -> None:
     state=state,
     state_persister=state_persister,
     job=job_name,
+    env_vars=env_vars,
   )
 
   try:

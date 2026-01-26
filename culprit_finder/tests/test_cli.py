@@ -18,6 +18,7 @@ def _get_culprit_finder_command(
   end_sha: str | None,
   workflow_file: str | None,
   clear_cache: bool = False,
+  env_vars: list[str] | None = None,
 ) -> list[str]:
   command = ["culprit_finder"]
   if repo:
@@ -30,6 +31,8 @@ def _get_culprit_finder_command(
     command.extend(["--workflow", workflow_file])
   if clear_cache:
     command.append("--clear-cache")
+  if env_vars:
+    command.extend(["--env", *env_vars])
   return command
 
 
@@ -205,6 +208,7 @@ def test_cli_success(
     job=None,
     state=expected_state,
     state_persister=patches["state_persister_inst"],
+    env_vars=None,
   )
   mock_finder.return_value.run_bisection.assert_called_once()
 
@@ -281,6 +285,7 @@ def test_cli_state_management(
       gh_client=mock_gh_client_instance,
       state_persister=patches["state_persister_inst"],
       job=None,
+      env_vars=None,
     )
   else:
     # If not exists or discarded, new state created
@@ -390,6 +395,7 @@ def test_cli_with_url(monkeypatch, mocker):
     state=expected_state,
     state_persister=patches["state_persister_inst"],
     job=None,
+    env_vars=None,
   )
 
 
@@ -444,3 +450,27 @@ def test_missing_args_standard_authenticated(
 
   captured = capsys.readouterr()
   assert expected_error_msg in captured.err
+
+
+def test_cli_with_env_vars(monkeypatch, mocker):
+  """Tests that environment variables are correctly parsed and passed to CulpritFinder."""
+  mock_finder = mocker.patch("culprit_finder.cli.culprit_finder.CulpritFinder")
+  _mock_gh_client(mocker, True, [])
+  _mock_state(mocker)
+
+  env_args = ["KEY1=VALUE1", "KEY2=VALUE2"]
+  monkeypatch.setattr(
+    sys,
+    "argv",
+    _get_culprit_finder_command(
+      "owner/repo", "sha1", "sha2", "test.yml", env_vars=env_args
+    ),
+  )
+
+  cli.main()
+
+  mock_finder.assert_called_once()
+  assert mock_finder.call_args.kwargs["env_vars"] == {
+    "KEY1": "VALUE1",
+    "KEY2": "VALUE2",
+  }
