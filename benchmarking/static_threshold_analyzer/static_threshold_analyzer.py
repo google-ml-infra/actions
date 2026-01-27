@@ -21,31 +21,31 @@ import json
 import sys
 from typing import List
 from google.protobuf import json_format
-from benchmarking.proto import benchmark_registry_pb2
 from benchmarking.proto import benchmark_result_pb2
+from benchmarking.proto.common import metric_pb2
 from benchmarking.static_threshold_analyzer.static_threshold_analyzer_lib import (
   StaticAnalyzer,
 )
 
 
-def _parse_metric_manifest(
-  metrics_manifest_json: str,
-) -> List[benchmark_registry_pb2.MetricSpec]:
-  """Parses the JSON metrics manifest into a list of MetricSpec protos."""
+def _parse_metric_specs(
+  metric_specs_json: str,
+) -> List[metric_pb2.MetricSpec]:
+  """Parses the JSON metric specifications list into a list of MetricSpec protos."""
   try:
-    metrics_manifest_dicts = json.loads(metrics_manifest_json)
+    metric_specs_list = json.loads(metric_specs_json)
   except json.JSONDecodeError as e:
-    print(f"Error: Failed to parse --metrics_manifest_json: {e}", file=sys.stderr)
+    print(f"Error: Failed to parse --metric_specs_json: {e}", file=sys.stderr)
     sys.exit(1)
 
-  # Convert list of metric spec dicts to a list of MetricSpec protos
-  metric_manifest = []
-  for metric_dict in metrics_manifest_dicts:
-    metric_spec = benchmark_registry_pb2.MetricSpec()
+  # Convert list of dicts to a list of MetricSpec protos
+  metric_specs = []
+  for metric_dict in metric_specs_list:
+    metric_spec = metric_pb2.MetricSpec()
     json_format.ParseDict(metric_dict, metric_spec)
-    metric_manifest.append(metric_spec)
+    metric_specs.append(metric_spec)
 
-  return metric_manifest
+  return metric_specs
 
 
 def _load_benchmark_result(
@@ -70,13 +70,15 @@ def _load_benchmark_result(
 
 def main():
   parser = argparse.ArgumentParser(description="Analyze benchmark results.")
-  parser.add_argument("--metrics_manifest_json", required=True)
+  parser.add_argument(
+    "--metric_specs_json", required=True, help="JSON list of MetricSpecs"
+  )
   parser.add_argument("--benchmark_result_file", required=True)
   args = parser.parse_args()
 
-  metric_manifest = _parse_metric_manifest(args.metrics_manifest_json)
+  metric_specs = _parse_metric_specs(args.metric_specs_json)
   benchmark_result = _load_benchmark_result(args.benchmark_result_file)
-  analyzer = StaticAnalyzer(metric_manifest)
+  analyzer = StaticAnalyzer(metric_specs)
   analyzer.run_analysis(benchmark_result)
   analyzer.report_results()
 

@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package ml_actions;
+package bap.common;
 
 // Defines the workflow type.
 enum WorkflowType {

@@ -12,18 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Library for generating GitHub Actions matrices from benchmark registries."""
+"""Library for generating a GitHub Actions matrix from a benchmark registry."""
 
 import os
 import sys
 from typing import Any, Dict, List
 from google.protobuf import text_format
 from google.protobuf.json_format import MessageToDict
-from benchmarking.proto import benchmark_registry_pb2
-from benchmarking.proto.common import workflow_type_pb2
 from protovalidate import validate, ValidationError
-
-MatrixEntry = Dict[str, Any]
+from benchmarking.proto import benchmark_registry_pb2
+from benchmarking.proto import benchmark_job_pb2
+from benchmarking.proto.common import workload_action_pb2
+from benchmarking.proto.common import workflow_type_pb2
 
 
 def _format_validation_error(violation) -> str:
@@ -55,11 +55,9 @@ def load_and_validate_suite_from_pbtxt(
     validate(suite)
   except ValidationError as e:
     error_messages = "\n".join(_format_validation_error(v) for v in e.violations)
-    print(
+    raise ValueError(
       f"Error: Registry file '{path}' is invalid.\nValidation Errors:\n{error_messages}",
-      file=sys.stderr,
     )
-    sys.exit(1)
 
   return suite
 
@@ -67,9 +65,9 @@ def load_and_validate_suite_from_pbtxt(
 class MatrixGenerator:
   """Generates a GitHub Actions matrix from a benchmark registry."""
 
-  def generate(self, suite, workflow_type_str) -> List[MatrixEntry]:
-    """Generates the full matrix."""
-    matrix: List[MatrixEntry] = []
+  def generate(self, suite, workflow_type_str: str) -> List[Dict[str, Any]]:
+    """Generates the full matrix using the BenchmarkJob proto to enforce strict validation."""
+    matrix = []
     workflow_enum = workflow_type_pb2.WorkflowType.Value(workflow_type_str.upper())
 
     for benchmark in suite.benchmarks:
@@ -77,38 +75,38 @@ class MatrixGenerator:
         if workflow_enum not in env_config.workflow_type:
           continue
 
-        runner_label = env_config.runner_label
-        container_image = env_config.container_image
+        workload_action = workload_action_pb2.WorkloadAction()
+        workload_action.CopyFrom(benchmark.workload)
+
+        # Environment workload inputs overwrite/append base workload inputs
+        for key, value in env_config.workload_action_inputs.items():
+          workload_action.action_inputs[key] = value
+
+        # Build the BenchmarkJob proto
+        job = benchmark_job_pb2.BenchmarkJob()
 
         # Config ID (e.g., 'resnet50_basic_gpu') is constructed from the benchmark name
         # plus the specific environment ID.
-        config_id = f"{benchmark.name}_{env_config.id}"
+        job.config_id = f"{benchmark.name}_{env_config.id}"
+        job.workflow_type = workflow_enum
+        job.runner_label = env_config.runner_label
+        job.container_image = env_config.container_image
+        job.benchmark_name = benchmark.name
+        job.description = benchmark.description
+        job.owner = benchmark.owner
+        job.workload.CopyFrom(workload_action)
+        job.github_labels.extend(benchmark.github_labels)
+        job.metrics.extend(benchmark.metrics)
 
-        env_config_dict = MessageToDict(env_config, preserving_proto_field_name=True)
-        workload_dict = MessageToDict(
-          benchmark.workload, preserving_proto_field_name=True
-        )
-        workload_base_inputs = workload_dict.get("action_inputs", {})
-        env_workload_inputs = env_config_dict.get("workload_action_inputs", {})
+        # Validate
+        try:
+          validate(job)
+        except ValidationError as e:
+          error_msg = _format_validation_error(e.violations[0])
+          raise ValueError(
+            f"Generated invalid benchmark job for '{job.config_id}':\n{error_msg}"
+          )
 
-        # Environment workload inputs overwrite/append base workload inputs
-        workload_base_inputs.update(env_workload_inputs)
-        workload_dict["action_inputs"] = workload_base_inputs
+        matrix.append(MessageToDict(job, preserving_proto_field_name=True))
 
-        entry: MatrixEntry = {
-          "config_id": config_id,
-          "workflow_type": workflow_type_str.upper(),
-          "runner_label": runner_label,
-          "container_image": container_image,
-          "benchmark_name": benchmark.name,
-          "description": benchmark.description,
-          "owner": benchmark.owner,
-          "workload": workload_dict,
-          "github_labels": list(benchmark.github_labels),
-          "metrics": [
-            MessageToDict(m, preserving_proto_field_name=True)
-            for m in benchmark.metrics
-          ],
-        }
-        matrix.append(entry)
     return matrix

@@ -12,16 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_python//python:py_binary.bzl", "py_binary")
-load("@rules_python//python:py_library.bzl", "py_library")
-load("@rules_python//python:py_test.bzl", "py_test")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+
+package(default_visibility = ["//visibility:public"])
 
 py_library(
     name = "gh_matrix_generator_lib",
     srcs = ["gh_matrix_generator_lib.py"],
     deps = [
         "//benchmarking/proto:benchmark_registry_py_proto",
+        "//benchmarking/proto:benchmark_job_py_proto",
         "//benchmarking/proto/common:workflow_type_py_proto",
+        "//benchmarking/proto/common:workload_action_py_proto",
         "@pypi//protovalidate",
     ],
 )

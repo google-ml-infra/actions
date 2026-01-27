@@ -15,14 +15,16 @@
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@protobuf//bazel:py_proto_library.bzl", "py_proto_library")
 
+package(default_visibility = ["//visibility:public"])
+
 proto_library(
     name = "benchmark_registry_proto",
     srcs = ["benchmark_registry.proto"],
     deps = [
         "@protovalidate//proto/protovalidate/buf/validate:validate_proto",
-        "@protobuf//:wrappers_proto",
-        "//benchmarking/proto/common:stat_proto",
-        "//benchmarking/proto/common:workflow_type_proto"
+        "//benchmarking/proto/common:metric_proto",
+        "//benchmarking/proto/common:workflow_type_proto",
+        "//benchmarking/proto/common:workload_action_proto",
     ],
 )
 
@@ -33,19 +35,33 @@ proto_library(
         "@protovalidate//proto/protovalidate/buf/validate:validate_proto",
         "@protobuf//:wrappers_proto",
         "@protobuf//:timestamp_proto",
-        "//benchmarking/proto/common:stat_proto",
+        "//benchmarking/proto/common:metric_proto",
         "//benchmarking/proto/common:workflow_type_proto"
+    ],
+)
+
+proto_library(
+    name = "benchmark_job_proto",
+    srcs = ["benchmark_job.proto"],
+    deps = [
+        "@protovalidate//proto/protovalidate/buf/validate:validate_proto",
+        "//benchmarking/proto/common:metric_proto",
+        "//benchmarking/proto/common:workflow_type_proto",
+        "//benchmarking/proto/common:workload_action_proto",
     ],
 )
 
 py_proto_library(
     name = "benchmark_registry_py_proto",
     deps = [":benchmark_registry_proto"],
-    visibility = ["//benchmarking:__subpackages__"],
 )
 
 py_proto_library(
     name = "benchmark_result_py_proto",
     deps = [":benchmark_result_proto"],
-    visibility = ["//benchmarking:__subpackages__"],
+)
+
+py_proto_library(
+    name = "benchmark_job_py_proto",
+    deps = [":benchmark_job_proto"],
 )

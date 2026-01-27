@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Script for generating GitHub Actions matrices from benchmark registries."""
+"""Script for generating a GitHub Actions matrix from a benchmark registry."""
 
 import argparse
 import json

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Script to parse TensorBoard benchmark results and produce a BenchmarkResult JSON file."""
+"""Script to extract statistics from TensorFlow event files and produce a BenchmarkResult JSON artifact."""
 
 import argparse
 import json
@@ -20,30 +20,30 @@ import os
 import sys
 from typing import List
 from google.protobuf import json_format, timestamp_pb2
-from benchmarking.proto import benchmark_registry_pb2
-from benchmarking.proto import benchmark_result_pb2
 from benchmarking.tb_parser import tb_parser_lib
+from benchmarking.proto.common import metric_pb2
+from benchmarking.proto import benchmark_result_pb2
 from protovalidate import validate, ValidationError
 
 
-def _parse_metric_manifest(
-  metrics_manifest_json: str,
-) -> List[benchmark_registry_pb2.MetricSpec]:
-  """Parses the JSON metrics manifest into a list of MetricSpec protos."""
+def _parse_metric_specs(
+  metric_specs_json: str,
+) -> List[metric_pb2.MetricSpec]:
+  """Parses the JSON metric specifications list into a list of MetricSpec protos."""
   try:
-    metrics_manifest_dicts = json.loads(metrics_manifest_json)
+    metric_specs_list = json.loads(metric_specs_json)
   except json.JSONDecodeError as e:
-    print(f"Error: Failed to parse --metrics_manifest_json: {e}", file=sys.stderr)
+    print(f"Error: Failed to parse --metric_specs_json: {e}", file=sys.stderr)
     sys.exit(1)
 
   # Convert list of metric spec dicts to a list of MetricSpec protos
-  metric_manifest = []
-  for metric_dict in metrics_manifest_dicts:
-    metric_spec = benchmark_registry_pb2.MetricSpec()
+  metric_specs = []
+  for metric_dict in metric_specs_list:
+    metric_spec = metric_pb2.MetricSpec()
     json_format.ParseDict(metric_dict, metric_spec)
-    metric_manifest.append(metric_spec)
+    metric_specs.append(metric_spec)
 
-  return metric_manifest
+  return metric_specs
 
 
 def _format_validation_error(violation) -> str:
@@ -57,7 +57,9 @@ def _format_validation_error(violation) -> str:
 
 def main():
   parser = argparse.ArgumentParser(description="Parse TensorBoard logs.")
-  parser.add_argument("--metrics_manifest_json", required=True)
+  parser.add_argument(
+    "--metric_specs_json", required=True, help="JSON list of MetricSpecs"
+  )
   parser.add_argument("--tblog_dir", required=True)
   parser.add_argument("--output_dir", required=True)
   parser.add_argument("--config_id", required=True)
@@ -70,8 +72,8 @@ def main():
 
   args = parser.parse_args()
 
-  metric_manifest = _parse_metric_manifest(args.metrics_manifest_json)
-  tb_parser = tb_parser_lib.TensorBoardParser(metric_manifest)
+  metric_specs = _parse_metric_specs(args.metric_specs_json)
+  tb_parser = tb_parser_lib.TensorBoardParser(metric_specs)
   computed_stats = tb_parser.parse_and_compute(args.tblog_dir)
 
   ts = timestamp_pb2.Timestamp()

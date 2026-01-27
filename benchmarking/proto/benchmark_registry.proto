@@ -14,59 +14,12 @@
 
 syntax = "proto3";
 
-package ml_actions.benchmarking;
+package bap;
 
 import "buf/validate/validate.proto";
-import "google/protobuf/wrappers.proto";
-import "benchmarking/proto/common/stat.proto";
+import "benchmarking/proto/common/metric.proto";
 import "benchmarking/proto/common/workflow_type.proto";
-
-// Defines the direction of improvement for a metric.
-enum ImprovementDirection {
-  IMPROVEMENT_DIRECTION_UNSPECIFIED = 0;
-
-  // Indicates that a smaller value is better (e.g., latency, error rate).
-  LESS = 1;
-
-  // Indicates that a larger value is better (e.g., throughput, accuracy).
-  GREATER = 2;
-}
-
-// Defines the static threshold analysis rules for a given statistic.
-message ComparisonSpec {
-  // REQUIRED: The expected baseline value.
-  google.protobuf.DoubleValue baseline = 1 [(buf.validate.field).required = true];
-  
-  // REQUIRED: The allowed percent deviation from the baseline.
-  google.protobuf.DoubleValue threshold = 2 [(buf.validate.field).required = true];
-
-  // Optional: The direction of improvement for this statistic.
-  ImprovementDirection improvement_direction = 3;
-}
-
-// Defines a specific statistic to compute.
-message StatSpec {
-  // REQUIRED: The statistic to compute from the raw data.
-  Stat stat = 1 [(buf.validate.field).enum = {not_in: [0]}];
-
-  // Optional: Enable and configure static threshold analysis.
-  optional ComparisonSpec comparison = 2;
-}
-
-// Defines a specific metric to be tracked.
-message MetricSpec {
-  // REQUIRED: The name of the metric. This MUST exactly match the
-  // tag used when logging to TensorBoard (e.g., "wall_time").
-  string name = 1 [(buf.validate.field).string.min_len = 1];
-
-  // REQUIRED: The unit of measurement (e.g., "ms", "percent", "gb").
-  string unit = 2 [(buf.validate.field).string.min_len = 1];
-
-  // REQUIRED: A list of statistics to compute and optionally validate
-  // for this metric.
-  repeated StatSpec stats = 3 [(buf.validate.field).repeated.min_items = 1];
-}
-
+import "benchmarking/proto/common/workload_action.proto";
 
 // Defines how frequently the benchmark should be reviewed and/or updated 
 // for retention purposes.
@@ -89,22 +42,12 @@ message EnvironmentConfig {
   string container_image = 3 [(buf.validate.field).string.min_len = 1];
 
   // REQUIRED: The workflow types that this environment should run in (e.g. PRESUBMIT).
-  repeated WorkflowType workflow_type = 4 [(buf.validate.field).repeated.min_items = 1];
+  repeated bap.common.WorkflowType workflow_type = 4 [(buf.validate.field).repeated.min_items = 1];
   
   // Environment-specific overrides for workload inputs.
   // These values merge with or override the base workload inputs.
   map<string, string> workload_action_inputs = 5;
 }
-
-// Defines the configuration for the workload executor action.
-message WorkloadAction {
-  // REQUIRED: Specifies the action to be used to execute the workload (e.g., my_repo/hlo_workload_executor@v4).
-  string action = 1 [(buf.validate.field).string.min_len = 1];
-
-  // Optional: Generic map of inputs to the action.
-  map<string, string> action_inputs = 2;
-}
-
 // Defines a specific benchmark configuration.
 message BenchmarkConfig {
   // REQUIRED: A unique name for the benchmark (e.g., "resnet50_jax_train").
@@ -117,7 +60,7 @@ message BenchmarkConfig {
   string owner = 3 [(buf.validate.field).string.min_len = 1];
 
   // REQUIRED: Configuration for the workload executor action.
-  WorkloadAction workload = 4 [(buf.validate.field).required = true];
+  bap.common.WorkloadAction workload = 4 [(buf.validate.field).required = true];
 
   // REQUIRED: How often this benchmark definition should be reviewed.
   UpdateFrequency update_frequency_policy = 6 [(buf.validate.field).enum = { not_in: [0]}];
@@ -126,7 +69,7 @@ message BenchmarkConfig {
   repeated string github_labels = 7;
 
   // Optional: List of metrics to track.
-  repeated MetricSpec metrics = 8;
+  repeated bap.common.MetricSpec metrics = 8;
 
   // REQUIRED: List of environment configurations.
   repeated EnvironmentConfig environment_configs = 9 [(buf.validate.field).repeated.min_items = 1];

@@ -19,9 +19,8 @@ from typing import List
 from unittest import mock
 import pytest
 from google.protobuf import timestamp_pb2
-from benchmarking.proto import benchmark_registry_pb2
 from benchmarking.proto import benchmark_result_pb2
-from benchmarking.proto.common import stat_pb2
+from benchmarking.proto.common import metric_pb2
 from benchmarking.static_threshold_analyzer.static_threshold_analyzer_lib import (
   StaticAnalyzer,
 )
@@ -29,12 +28,12 @@ from benchmarking.static_threshold_analyzer.static_threshold_analyzer_lib import
 # --- Helper Functions ---
 
 
-def _create_metric_manifest(
-  stats: List[benchmark_registry_pb2.StatSpec],
-) -> List[benchmark_registry_pb2.MetricSpec]:
-  """Helper to build a simple MetricManifest."""
+def _create_metric_specs(
+  stats: List[metric_pb2.StatSpec],
+) -> List[metric_pb2.MetricSpec]:
+  """Helper to build a simple MetricSpecs list."""
   return [
-    benchmark_registry_pb2.MetricSpec(
+    metric_pb2.MetricSpec(
       name="wall_time",
       unit="ms",
       stats=stats,
@@ -58,7 +57,7 @@ def _create_benchmark_result(
 
 
 def _create_computed_stat(
-  name: str, stat: stat_pb2.Stat, value: float
+  name: str, stat: metric_pb2.Stat, value: float
 ) -> benchmark_result_pb2.ComputedStat:
   """Helper to build a single ComputedStat."""
   return benchmark_result_pb2.ComputedStat(
@@ -76,32 +75,32 @@ def _create_computed_stat(
   "current_value, direction, should_regress",
   [
     # --- LESS is better (e.g., latency) ---
-    (111.0, benchmark_registry_pb2.ImprovementDirection.LESS, True),
-    (109.0, benchmark_registry_pb2.ImprovementDirection.LESS, False),
-    (90.0, benchmark_registry_pb2.ImprovementDirection.LESS, False),
+    (111.0, metric_pb2.ImprovementDirection.LESS, True),
+    (109.0, metric_pb2.ImprovementDirection.LESS, False),
+    (90.0, metric_pb2.ImprovementDirection.LESS, False),
     # --- GREATER is better (e.g., throughput) ---
-    (89.0, benchmark_registry_pb2.ImprovementDirection.GREATER, True),
-    (91.0, benchmark_registry_pb2.ImprovementDirection.GREATER, False),
-    (110.0, benchmark_registry_pb2.ImprovementDirection.GREATER, False),
+    (89.0, metric_pb2.ImprovementDirection.GREATER, True),
+    (91.0, metric_pb2.ImprovementDirection.GREATER, False),
+    (110.0, metric_pb2.ImprovementDirection.GREATER, False),
     # --- No direction ---
     (
       111.0,
-      benchmark_registry_pb2.ImprovementDirection.IMPROVEMENT_DIRECTION_UNSPECIFIED,
+      metric_pb2.ImprovementDirection.IMPROVEMENT_DIRECTION_UNSPECIFIED,
       True,
     ),
     (
       89.0,
-      benchmark_registry_pb2.ImprovementDirection.IMPROVEMENT_DIRECTION_UNSPECIFIED,
+      metric_pb2.ImprovementDirection.IMPROVEMENT_DIRECTION_UNSPECIFIED,
       True,
     ),
     (
       109.0,
-      benchmark_registry_pb2.ImprovementDirection.IMPROVEMENT_DIRECTION_UNSPECIFIED,
+      metric_pb2.ImprovementDirection.IMPROVEMENT_DIRECTION_UNSPECIFIED,
       False,
     ),
     (
       91.0,
-      benchmark_registry_pb2.ImprovementDirection.IMPROVEMENT_DIRECTION_UNSPECIFIED,
+      metric_pb2.ImprovementDirection.IMPROVEMENT_DIRECTION_UNSPECIFIED,
       False,
     ),
   ],
@@ -109,14 +108,14 @@ def _create_computed_stat(
 def test_is_regression_logic(current_value, direction, should_regress):
   """Verifies that the core _is_regression logic is correct."""
   # Test against a baseline of 100 with a 10% threshold
-  metric_manifest = [
-    benchmark_registry_pb2.MetricSpec(
+  metric_specs = [
+    metric_pb2.MetricSpec(
       name="wall_time",
       unit="ms",
       stats=[
-        benchmark_registry_pb2.StatSpec(
-          stat=stat_pb2.Stat.MEAN,
-          comparison=benchmark_registry_pb2.ComparisonSpec(
+        metric_pb2.StatSpec(
+          stat=metric_pb2.Stat.MEAN,
+          comparison=metric_pb2.ComparisonSpec(
             baseline={"value": 100.0},
             threshold={"value": 0.1},
             improvement_direction=direction,
@@ -128,11 +127,11 @@ def test_is_regression_logic(current_value, direction, should_regress):
 
   result = _create_benchmark_result(
     computed_stats=[
-      _create_computed_stat("wall_time", stat_pb2.Stat.MEAN, current_value)
+      _create_computed_stat("wall_time", metric_pb2.Stat.MEAN, current_value)
     ]
   )
 
-  analyzer = StaticAnalyzer(metric_manifest)
+  analyzer = StaticAnalyzer(metric_specs)
   analyzer.run_analysis(result)
 
   assert (len(analyzer.regressions) == 1) == should_regress
@@ -140,40 +139,40 @@ def test_is_regression_logic(current_value, direction, should_regress):
 
 def test_no_comparison_spec_is_skipped():
   """Tests that a stat with no comparison block is skipped."""
-  manifest = _create_metric_manifest(
-    stats=[benchmark_registry_pb2.StatSpec(stat=stat_pb2.Stat.MEAN)]  # No comparison
+  metric_specs = _create_metric_specs(
+    stats=[metric_pb2.StatSpec(stat=metric_pb2.Stat.MEAN)]  # No comparison
   )
   result = _create_benchmark_result(
-    computed_stats=[_create_computed_stat("wall_time", stat_pb2.Stat.MEAN, 150.0)]
+    computed_stats=[_create_computed_stat("wall_time", metric_pb2.Stat.MEAN, 150.0)]
   )
 
-  analyzer = StaticAnalyzer(manifest)
+  analyzer = StaticAnalyzer(metric_specs)
   analyzer.run_analysis(result)
 
   assert len(analyzer.regressions) == 0
 
 
 def test_stat_not_found_in_result(capsys):
-  """Tests that a stat in the manifest but not in the result is skipped."""
-  manifest = _create_metric_manifest(
+  """Tests that a stat in the specs but not in the result is skipped."""
+  metric_specs = _create_metric_specs(
     stats=[
-      benchmark_registry_pb2.StatSpec(
-        stat=stat_pb2.Stat.MEAN,  # This is missing from the result
-        comparison=benchmark_registry_pb2.ComparisonSpec(
+      metric_pb2.StatSpec(
+        stat=metric_pb2.Stat.MEAN,  # This is missing from the result
+        comparison=metric_pb2.ComparisonSpec(
           baseline={"value": 100.0},
           threshold={"value": 0.1},
-          improvement_direction=benchmark_registry_pb2.ImprovementDirection.LESS,
+          improvement_direction=metric_pb2.ImprovementDirection.LESS,
         ),
       )
     ]
   )
   result = _create_benchmark_result(
     computed_stats=[
-      _create_computed_stat("wall_time", stat_pb2.Stat.P99, 150.0)
+      _create_computed_stat("wall_time", metric_pb2.Stat.P99, 150.0)
     ]  # Only P99
   )
 
-  analyzer = StaticAnalyzer(manifest)
+  analyzer = StaticAnalyzer(metric_specs)
   analyzer.run_analysis(result)
 
   assert len(analyzer.regressions) == 0
@@ -188,7 +187,7 @@ def test_stat_not_found_in_result(capsys):
 
 def test_report_results_success(capsys):
   """Tests that a successful run prints the PASSED message to stdout."""
-  analyzer = StaticAnalyzer(metric_manifest=[])
+  analyzer = StaticAnalyzer(metric_specs=[])
   analyzer.run_analysis(_create_benchmark_result([]))
   analyzer.report_results()
 
@@ -199,23 +198,23 @@ def test_report_results_success(capsys):
 
 def test_report_results_failure(capsys):
   """Tests that a failed run prints error messages and exits with code 1."""
-  metric_manifest = _create_metric_manifest(
+  metric_specs = _create_metric_specs(
     stats=[
-      benchmark_registry_pb2.StatSpec(
-        stat=stat_pb2.Stat.MEAN,
-        comparison=benchmark_registry_pb2.ComparisonSpec(
+      metric_pb2.StatSpec(
+        stat=metric_pb2.Stat.MEAN,
+        comparison=metric_pb2.ComparisonSpec(
           baseline={"value": 100.0},
           threshold={"value": 0.1},
-          improvement_direction=benchmark_registry_pb2.ImprovementDirection.LESS,
+          improvement_direction=metric_pb2.ImprovementDirection.LESS,
         ),
       )
     ]
   )
   result = _create_benchmark_result(
-    computed_stats=[_create_computed_stat("wall_time", stat_pb2.Stat.MEAN, 150.0)]
+    computed_stats=[_create_computed_stat("wall_time", metric_pb2.Stat.MEAN, 150.0)]
   )
 
-  analyzer = StaticAnalyzer(metric_manifest)
+  analyzer = StaticAnalyzer(metric_specs)
   analyzer.run_analysis(result)
 
   # Mock sys.exit to prevent the test runner from stopping.

@@ -18,12 +18,11 @@ Library for performing static threshold analysis on a benchmark result.
 
 import sys
 from typing import Dict, List, Union, TypedDict
-from benchmarking.proto import benchmark_registry_pb2
 from benchmarking.proto import benchmark_result_pb2
-from benchmarking.proto.common import stat_pb2
+from benchmarking.proto.common import metric_pb2
 
 ResultMap = Dict[tuple[str, str], benchmark_result_pb2.ComputedStat]
-MetricManifest = List[benchmark_registry_pb2.MetricSpec]
+MetricSpecs = List[metric_pb2.MetricSpec]
 
 
 class Regression(TypedDict):
@@ -42,42 +41,43 @@ def _is_regression(
   current_value: float,
   baseline: float,
   threshold: float,
-  direction: benchmark_registry_pb2.ImprovementDirection,
+  direction: metric_pb2.ImprovementDirection,
 ) -> bool:
   """Checks if a metric value constitutes a performance regression."""
   tolerance = baseline * threshold
 
-  if direction == benchmark_registry_pb2.ImprovementDirection.LESS:
+  if direction == metric_pb2.ImprovementDirection.LESS:
     return current_value > (baseline + tolerance)
 
-  elif direction == benchmark_registry_pb2.ImprovementDirection.GREATER:
+  elif direction == metric_pb2.ImprovementDirection.GREATER:
     return current_value < (baseline - tolerance)
 
   else:
+    # If direction is unspecified, we treat it as a strict equality check with tolerance
     return abs(current_value - baseline) > tolerance
 
 
 class StaticAnalyzer:
   """Performs static threshold analysis on a benchmark result."""
 
-  def __init__(self, metric_manifest: MetricManifest):
-    """Initializes the analyzer with the metric manifest."""
-    self.metric_manifest = metric_manifest
+  def __init__(self, metric_specs: MetricSpecs):
+    """Initializes the analyzer with the metric specifications."""
+    self.metric_specs = metric_specs
     self.regressions: List[Regression] = []
 
   def run_analysis(self, benchmark_result: benchmark_result_pb2.BenchmarkResult):
     """Run the threshold comparison."""
     result_map: ResultMap = {
-      (stat.metric_name, stat_pb2.Stat.Name(stat.stat)): stat
+      (stat.metric_name, metric_pb2.Stat.Name(stat.stat)): stat
       for stat in benchmark_result.stats
     }
 
-    for metric_spec in self.metric_manifest:
+    for metric_spec in self.metric_specs:
       for stat_spec in metric_spec.stats:
         # Only perform the check if comparison rules are defined.
         if stat_spec.HasField("comparison"):
           comparison = stat_spec.comparison
-          stat_name = stat_pb2.Stat.Name(stat_spec.stat)
+          stat_name = metric_pb2.Stat.Name(stat_spec.stat)
           key = (metric_spec.name, stat_name)
 
           if key not in result_map:

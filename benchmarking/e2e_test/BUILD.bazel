@@ -14,13 +14,14 @@
 
 load("@rules_python//python:py_binary.bzl", "py_binary")
 
+package(default_visibility = ["//visibility:public"])
+
 py_binary(
     name = "test_benchmark_summary_v1",
     main = "run_benchmark_summary_v1.py",
     srcs = ["run_benchmark_summary_v1.py"],
     deps = [
         "@pypi//tensorboard",
-        "@pypi//setuptools"
     ],
 )
 
@@ -40,6 +41,5 @@ py_binary(
     srcs = ["run_benchmark_tensorboardx.py"],
     deps = [
         "@pypi//tensorboardx",
-        "@pypi//setuptools"
     ],
 )

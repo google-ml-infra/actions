@@ -15,26 +15,41 @@
 load("@protobuf//bazel:proto_library.bzl", "proto_library")
 load("@protobuf//bazel:py_proto_library.bzl", "py_proto_library")
 
-proto_library(
-    name = "stat_proto",
-    srcs = ["stat.proto"],
-    visibility = ["//benchmarking:__subpackages__"],
-)
+package(default_visibility = ["//benchmarking:__subpackages__"])
 
-py_proto_library(
-    name = "stat_py_proto",
-    deps = [":stat_proto"],
-    visibility = ["//benchmarking:__subpackages__"],
+proto_library(
+    name = "metric_proto",
+    srcs = ["metric.proto"],
+    deps = [
+        "@protovalidate//proto/protovalidate/buf/validate:validate_proto",
+        "@protobuf//:wrappers_proto"
+    ]
 )
 
 proto_library(
     name = "workflow_type_proto",
     srcs = ["workflow_type.proto"],
-    visibility = ["//benchmarking:__subpackages__"],
+)
+
+proto_library(
+    name = "workload_action_proto",
+    srcs = ["workload_action.proto"],
+    deps = [
+        "@protovalidate//proto/protovalidate/buf/validate:validate_proto"
+    ]
+)
+
+py_proto_library(
+    name = "metric_py_proto",
+    deps = [":metric_proto"],
 )
 
 py_proto_library(
     name = "workflow_type_py_proto",
     deps = [":workflow_type_proto"],
-    visibility = ["//benchmarking:__subpackages__"],
+)
+
+py_proto_library(
+    name = "workload_action_py_proto",
+    deps = [":workload_action_proto"],
 )

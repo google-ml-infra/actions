@@ -90,15 +90,6 @@ INVALID_SUITE_MISSING_ID_PBTXT = """
     }
     """
 
-# --- Pytest Fixtures ---
-
-
-@pytest.fixture
-def generator() -> gh_matrix_generator_lib.MatrixGenerator:
-  """Returns a MatrixGenerator instance."""
-  return gh_matrix_generator_lib.MatrixGenerator()
-
-
 # --- Tests for Validation Logic ---
 
 
@@ -117,15 +108,14 @@ def test_load_and_validate_suite_success(_mock_isabs, _mock_open):
   read_data=INVALID_SUITE_MISSING_ID_PBTXT,
 )
 @mock.patch("os.path.isabs", return_value=True)
-def test_load_and_validate_suite_fails_on_invalid_pbtxt(
-  _mock_isabs, _mock_open, capsys
-):
+def test_load_and_validate_suite_fails_on_invalid_pbtxt(_mock_isabs, _mock_open):
   """Tests that an invalid pbtxt (missing required environment_config ID) fails validation."""
-  with pytest.raises(SystemExit):
+  with pytest.raises(ValueError) as excinfo:
     gh_matrix_generator_lib.load_and_validate_suite_from_pbtxt("invalid.pbtxt")
 
-  captured = capsys.readouterr()
-  assert "benchmarks.environment_configs.id" in captured.err
+  error_msg = str(excinfo.value)
+  assert "benchmarks.environment_configs.id" in error_msg
+  assert "Registry file 'invalid.pbtxt' is invalid" in error_msg
 
 
 # --- Tests for Matrix Generation Logic ---
@@ -140,11 +130,11 @@ def test_load_and_validate_suite_fails_on_invalid_pbtxt(
     ("MANUAL", 0, set()),
   ],
 )
-def test_generate_matrix_filtering(
-  generator, workflow_type, expected_count, expected_names
-):
+def test_generate_matrix_filtering(workflow_type, expected_count, expected_names):
   """Tests that the matrix is correctly filtered for different workflow types."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
+
+  generator = gh_matrix_generator_lib.MatrixGenerator()
   matrix = generator.generate(suite, workflow_type)
 
   assert len(matrix) == expected_count
@@ -152,9 +142,11 @@ def test_generate_matrix_filtering(
   assert generated_names == expected_names
 
 
-def test_generate_matrix_content_correctness(generator):
+def test_generate_matrix_content_correctness():
   """Tests that the matrix entry contains the correct fields and config IDs."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
+
+  generator = gh_matrix_generator_lib.MatrixGenerator()
   matrix = generator.generate(suite, "PRESUBMIT")
 
   cpu_entry = next(item for item in matrix if item["benchmark_name"] == "cpu_benchmark")
@@ -169,9 +161,10 @@ def test_generate_matrix_content_correctness(generator):
   assert action_inputs["runtime_flags_hw"] == "--precision=fp32"
 
 
-def test_config_id_persistence_across_workflow_types(generator):
+def test_config_id_persistence_across_workflow_types():
   """Verifies that config_id remains the same across different workflow types."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
+  generator = gh_matrix_generator_lib.MatrixGenerator()
 
   # Generate for PRESUBMIT
   matrix_pre = generator.generate(suite, "PRESUBMIT")

@@ -1,0 +1,78 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package bap.common;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/wrappers.proto";
+
+// Defines the type of statistic to compute from a raw data vector.
+enum Stat {
+  STAT_UNSPECIFIED = 0;
+  MEAN = 1;
+  MEDIAN = 2;
+  P90 = 3;
+  P95 = 4;
+  P99 = 5;
+  STDDEV = 6;
+  LAST_VALUE = 7; // Last value from a data vector (e.g., final validation loss).
+}
+
+// Defines the direction of improvement for a metric.
+enum ImprovementDirection {
+  IMPROVEMENT_DIRECTION_UNSPECIFIED = 0;
+
+  // Indicates that a smaller value is better (e.g., latency, error rate).
+  LESS = 1;
+
+  // Indicates that a larger value is better (e.g., throughput, accuracy).
+  GREATER = 2;
+}
+
+// Defines the static threshold analysis rules for a given statistic.
+message ComparisonSpec {
+  // REQUIRED: The expected baseline value.
+  google.protobuf.DoubleValue baseline = 1 [(buf.validate.field).required = true];
+  
+  // REQUIRED: The allowed percent deviation from the baseline.
+  google.protobuf.DoubleValue threshold = 2 [(buf.validate.field).required = true];
+
+  // Optional: The direction of improvement for this statistic.
+  ImprovementDirection improvement_direction = 3;
+}
+
+// Defines a specific statistic to compute.
+message StatSpec {
+  // REQUIRED: The statistic to compute from the raw data.
+  Stat stat = 1 [(buf.validate.field).enum = {not_in: [0]}];
+
+  // Optional: Enable and configure static threshold analysis.
+  optional ComparisonSpec comparison = 2;
+}
+
+// Defines a specific metric to be tracked.
+message MetricSpec {
+  // REQUIRED: The name of the metric. This MUST exactly match the
+  // tag used when logging to TensorBoard (e.g., "wall_time").
+  string name = 1 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: The unit of measurement (e.g., "ms", "percent", "gb").
+  string unit = 2 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: A list of statistics to compute and optionally validate
+  // for this metric.
+  repeated StatSpec stats = 3 [(buf.validate.field).repeated.min_items = 1];
+}

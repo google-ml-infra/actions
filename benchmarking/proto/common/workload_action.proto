@@ -14,16 +14,15 @@
 
 syntax = "proto3";
 
-package ml_actions;
+package bap.common;
 
-// Defines the type of statistic to compute from a raw data vector.
-enum Stat {
-  STAT_UNSPECIFIED = 0;
-  MEAN = 1;
-  MEDIAN = 2;
-  P90 = 3;
-  P95 = 4;
-  P99 = 5;
-  STDDEV = 6;
-  LAST_VALUE = 7; // Last value from a data vector (e.g., final validation loss).
+import "buf/validate/validate.proto";
+
+// Defines the configuration for the workload executor action.
+message WorkloadAction {
+  // REQUIRED: Specifies the action to be used to execute the workload (e.g., my_repo/hlo_workload_executor@v4).
+  string action = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Optional: Generic map of inputs to the action.
+  map<string, string> action_inputs = 2;
 }

@@ -12,18 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Library for parsing TensorBoard benchmark results."""
+"""Library for extracting statistics from TensorFlow event files.
+
+This library parses raw scalar data from TensorFlow event files (tfevents) and
+computes summary statistics (e.g., Mean, P99) as defined in the provided
+MetricSpecs. It outputs a list of ComputedStat protos.
+"""
 
 import sys
-from typing import List
+from typing import List, Dict
 import numpy as np
 import tensorflow as tf
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-from benchmarking.proto import benchmark_registry_pb2
 from benchmarking.proto import benchmark_result_pb2
-from benchmarking.proto.common import stat_pb2
+from benchmarking.proto.common import metric_pb2
 
-MetricManifest = List[benchmark_registry_pb2.MetricSpec]
+MetricSpecs = List[metric_pb2.MetricSpec]
 
 # A map from the Stat enum string name to the corresponding numpy function.
 STAT_FN_MAP = {
@@ -38,7 +42,7 @@ STAT_FN_MAP = {
 
 
 class TensorBoardParser:
-  """Parses TB logs based on a metric manifest and creates a benchmark result artifact.
+  """Parses TB logs based on metric specifications and creates a benchmark result artifact.
 
   Supported Summary Formats:
     1. V1 (Legacy/Scalar): Used by `tensorboardX`, and TF 1.x.
@@ -50,16 +54,16 @@ class TensorBoardParser:
   It ignores histograms, images, audio, and other complex data types.
   """
 
-  def __init__(self, metric_manifest: MetricManifest):
-    """Initializes the parser with the metric manifest.
+  def __init__(self, metric_specs: MetricSpecs):
+    """Initializes the parser with the metric specifications.
 
     Args:
-      metric_manifest: A list of `MetricSpec` Protobuf messages.
+      metric_specs: A list of `MetricSpec` Protobuf messages.
     """
-    self.metric_manifest = metric_manifest
-    self.metric_names_to_track = {m.name for m in metric_manifest}
+    self.metric_specs = metric_specs
+    self.metric_names_to_track = {m.name for m in metric_specs}
 
-  def _read_tensorboard_metrics(self, tblog_dir: str) -> dict[str, list[float]]:
+  def _read_tensorboard_metrics(self, tblog_dir: str) -> Dict[str, List[float]]:
     """Reads scalar data for tracked metrics from both V1 and V2 buckets.
 
     We explicitly check both 'scalars' and 'tensors' buckets because:
@@ -115,12 +119,12 @@ class TensorBoardParser:
 
   def parse_and_compute(
     self, tblog_dir: str
-  ) -> list[benchmark_result_pb2.ComputedStat]:
+  ) -> List[benchmark_result_pb2.ComputedStat]:
     """Reads event logs, computes stats, and returns a list of ComputedStat messages."""
     raw_data = self._read_tensorboard_metrics(tblog_dir)
     computed_stats = []
 
-    for metric in self.metric_manifest:
+    for metric in self.metric_specs:
       metric_name = metric.name
       metric_unit = metric.unit
       data_vector = raw_data.get(metric_name)
@@ -134,7 +138,7 @@ class TensorBoardParser:
 
       for stat in metric.stats:
         stat_enum = stat.stat
-        stat_name = stat_pb2.Stat.Name(stat_enum)
+        stat_name = metric_pb2.Stat.Name(stat_enum)
 
         if stat_name not in STAT_FN_MAP:
           print(f"Warning: Unknown statistic {stat_name}. Skipping.", file=sys.stderr)

@@ -14,12 +14,12 @@
 
 syntax = "proto3";
 
-package ml_actions.benchmarking;
+package bap;
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/wrappers.proto";
 import "buf/validate/validate.proto";
-import "benchmarking/proto/common/stat.proto";
+import "benchmarking/proto/common/metric.proto";
 import "benchmarking/proto/common/workflow_type.proto";
 
 // A single computed statistic from a metric's raw data.
@@ -28,7 +28,7 @@ message ComputedStat {
   string metric_name = 1 [(buf.validate.field).string.min_len = 1];
   
   // REQUIRED: The statistic that was computed (e.g., MEAN, P99).
-  Stat stat = 2 [(buf.validate.field).enum = {not_in: [0]}];
+  bap.common.Stat stat = 2 [(buf.validate.field).enum = {not_in: [0]}];
 
   // REQUIRED: The numeric value of the computed statistic.
   google.protobuf.DoubleValue value = 3 [(buf.validate.field).required = true];
@@ -66,5 +66,5 @@ message BenchmarkResult {
   string run_url = 8 [(buf.validate.field).string.min_len = 1];
 
   // REQUIRED: The workflow type (e.g. "PRESUBMIT", "POSTSUBMIT").
-  WorkflowType workflow_type = 9 [(buf.validate.field).enum = { not_in: [0]}];
+  bap.common.WorkflowType workflow_type = 9 [(buf.validate.field).enum = { not_in: [0]}];
 }

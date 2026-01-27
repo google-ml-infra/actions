@@ -12,17 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_python//python:py_binary.bzl", "py_binary")
-load("@rules_python//python:py_test.bzl", "py_test")
-load("@rules_python//python:py_library.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+
+package(default_visibility = ["//visibility:public"])
 
 py_library(
     name = "tb_parser_lib",
     srcs = ["tb_parser_lib.py"],
     deps = [
-        "//benchmarking/proto:benchmark_registry_py_proto",
         "//benchmarking/proto:benchmark_result_py_proto",
-        "//benchmarking/proto/common:stat_py_proto",
+        "//benchmarking/proto/common:metric_py_proto",
         "@pypi//numpy",
         "@pypi//tensorflow",
         "@pypi//setuptools"
@@ -36,8 +35,6 @@ py_binary(
     deps = [
         ":tb_parser_lib",
         "@pypi//protovalidate",
-        "//benchmarking/proto:benchmark_registry_py_proto",
-        "//benchmarking/proto:benchmark_result_py_proto",
     ],
 )
 

@@ -23,22 +23,21 @@ from tensorboard.backend.event_processing.event_accumulator import (
   TensorEvent,
   ScalarEvent,
 )
-from benchmarking.proto import benchmark_registry_pb2
-from benchmarking.proto.common import stat_pb2
+from benchmarking.proto.common import metric_pb2
 from benchmarking.tb_parser import tb_parser_lib
 
 # --- Helper Functions ---
 
 
-def _create_metric_manifest(
-  name: str, unit: str, stats: list[stat_pb2.Stat.ValueType]
-) -> list[benchmark_registry_pb2.MetricSpec]:
-  """Helper to create a MetricManifest list for a single metric."""
+def _create_metric_specs(
+  name: str, unit: str, stats: list[int]
+) -> list[metric_pb2.MetricSpec]:
+  """Helper to create a MetricSpecs list for a single metric."""
   return [
-    benchmark_registry_pb2.MetricSpec(
+    metric_pb2.MetricSpec(
       name=name,
       unit=unit,
-      stats=[benchmark_registry_pb2.StatSpec(stat=stat) for stat in stats],
+      stats=[metric_pb2.StatSpec(stat=stat) for stat in stats],
     )
   ]
 
@@ -79,10 +78,10 @@ def mock_event_accumulator():
 
 def test_parse_and_compute_success_v2_tensors(mock_event_accumulator):
   """Tests parsing logic for V2 (TensorFlow) logs."""
-  manifest = _create_metric_manifest(
+  specs = _create_metric_specs(
     name="wall_time",
     unit="ms",
-    stats=[stat_pb2.Stat.MEAN],
+    stats=[metric_pb2.Stat.MEAN],
   )
 
   mock_event_accumulator.Tags.return_value = {"tensors": ["wall_time"], "scalars": []}
@@ -92,7 +91,7 @@ def test_parse_and_compute_success_v2_tensors(mock_event_accumulator):
     _create_fake_tensor_event(30.0),
   ]
 
-  parser = tb_parser_lib.TensorBoardParser(manifest)
+  parser = tb_parser_lib.TensorBoardParser(specs)
   results = parser.parse_and_compute("fake_log_dir")
 
   assert len(results) == 1
@@ -104,10 +103,10 @@ def test_parse_and_compute_success_v2_tensors(mock_event_accumulator):
 
 def test_parse_and_compute_success_v1_scalars(mock_event_accumulator):
   """Tests parsing logic for V1 (tensorboardX/Legacy) logs."""
-  manifest = _create_metric_manifest(
+  specs = _create_metric_specs(
     name="wall_time",
     unit="ms",
-    stats=[stat_pb2.Stat.MEAN],
+    stats=[metric_pb2.Stat.MEAN],
   )
 
   mock_event_accumulator.Tags.return_value = {"tensors": [], "scalars": ["wall_time"]}
@@ -117,7 +116,7 @@ def test_parse_and_compute_success_v1_scalars(mock_event_accumulator):
     _create_fake_scalar_event(30.0),
   ]
 
-  parser = tb_parser_lib.TensorBoardParser(manifest)
+  parser = tb_parser_lib.TensorBoardParser(specs)
   results = parser.parse_and_compute("fake_log_dir")
 
   assert len(results) == 1
@@ -130,27 +129,27 @@ def test_parse_and_compute_success_v1_scalars(mock_event_accumulator):
 @pytest.mark.parametrize(
   "stat_enum, stat_name, expected_value",
   [
-    (stat_pb2.Stat.MEAN, "MEAN", 3.0),
-    (stat_pb2.Stat.MEDIAN, "MEDIAN", 3.0),
-    (stat_pb2.Stat.P90, "P90", 4.6),
-    (stat_pb2.Stat.P95, "P95", 4.8),
-    (stat_pb2.Stat.P99, "P99", 4.96),
-    (stat_pb2.Stat.STDDEV, "STDDEV", round(np.std(np.array([1, 2, 3, 4, 5])), 2)),
-    (stat_pb2.Stat.LAST_VALUE, "LAST_VALUE", 5.0),
+    (metric_pb2.Stat.MEAN, "MEAN", 3.0),
+    (metric_pb2.Stat.MEDIAN, "MEDIAN", 3.0),
+    (metric_pb2.Stat.P90, "P90", 4.6),
+    (metric_pb2.Stat.P95, "P95", 4.8),
+    (metric_pb2.Stat.P99, "P99", 4.96),
+    (metric_pb2.Stat.STDDEV, "STDDEV", round(np.std(np.array([1, 2, 3, 4, 5])), 2)),
+    (metric_pb2.Stat.LAST_VALUE, "LAST_VALUE", 5.0),
   ],
 )
 def test_all_stats_computed_correctly(
   mock_event_accumulator, stat_enum, stat_name, expected_value
 ):
   """Verifies that every statistic in the STAT_FN_MAP is computed correctly."""
-  manifest = _create_metric_manifest("test_metric", "units", [stat_enum])
+  specs = _create_metric_specs("test_metric", "units", [stat_enum])
 
   # Create a simple [1, 2, 3, 4, 5] data vector (using V2 tensors for this test).
   fake_data = [_create_fake_tensor_event(float(i)) for i in range(1, 6)]
   mock_event_accumulator.Tags.return_value = {"tensors": ["test_metric"], "scalars": []}
   mock_event_accumulator.Tensors.return_value = fake_data
 
-  parser = tb_parser_lib.TensorBoardParser(manifest)
+  parser = tb_parser_lib.TensorBoardParser(specs)
   results = parser.parse_and_compute("fake_log_dir")
 
   assert len(results) == 1
@@ -174,14 +173,14 @@ def test_read_metrics_handles_io_error(mock_event_accumulator, capsys):
 
 
 def test_parse_and_compute_skips_missing_metric(mock_event_accumulator, capsys):
-  """Tests that a metric in the manifest but not the logs is skipped."""
+  """Tests that a metric in the specs but not the logs is skipped."""
   # Manifest asks for metric_a and metric_b.
-  manifest = _create_metric_manifest("metric_a", "ms", [stat_pb2.Stat.MEAN])
-  manifest.append(
-    benchmark_registry_pb2.MetricSpec(
+  specs = _create_metric_specs("metric_a", "ms", [metric_pb2.Stat.MEAN])
+  specs.append(
+    metric_pb2.MetricSpec(
       name="metric_b",
       unit="ms",
-      stats=[benchmark_registry_pb2.StatSpec(stat=stat_pb2.Stat.MEAN)],
+      stats=[metric_pb2.StatSpec(stat=metric_pb2.Stat.MEAN)],
     )
   )
 
@@ -189,7 +188,7 @@ def test_parse_and_compute_skips_missing_metric(mock_event_accumulator, capsys):
   mock_event_accumulator.Tags.return_value = {"tensors": ["metric_a"], "scalars": []}
   mock_event_accumulator.Tensors.return_value = [_create_fake_tensor_event(10.0)]
 
-  parser = tb_parser_lib.TensorBoardParser(manifest)
+  parser = tb_parser_lib.TensorBoardParser(specs)
   results = parser.parse_and_compute("fake_log_dir")
 
   # The parser should successfully compute stats for metric_a.
