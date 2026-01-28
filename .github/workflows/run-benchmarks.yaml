@@ -57,9 +57,35 @@ on:
         required: false
         type: string
         default: "public-results-prod"
+      ab_mode:
+        description: "If true, runs A/B comparison (baseline vs experiment) and generates an A/B report."
+        required: false
+        type: boolean
+        default: false
+      experiment_ref:
+        description: "Git ref for the experiment. Defaults to current commit SHA."
+        required: false
+        type: string
+        default: ""
+      baseline_ref:
+        description: "Git ref for the baseline. Defaults to PR base or main."
+        required: false
+        type: string
+        default: ""
+      post_pr_comment:
+        description: "If true (and ab_mode is enabled), posts the A/B report as a sticky comment on the PR."
+        required: false
+        type: boolean
+        default: true
+      job_id:
+        description: "A unique identifier for the top-level job (e.g. 'e2e-test'). Used to namespace artifacts. If empty, a random ID is generated."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read # Required for actions/checkout.
+  pull-requests: write # Required for posting PR comments.
 
 jobs:
   generate_matrix:
@@ -69,6 +95,8 @@ jobs:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
+      ml_actions_ref: ${{ steps.resolve_refs.outputs.ml_actions_ref }}
+      job_id: ${{ steps.gen_job_id.outputs.job_id }}
     steps:
       - name: Check out user repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
@@ -78,33 +106,67 @@ jobs:
           path: user_repo
           persist-credentials: false
 
-      - name: Extract ML actions repo ref
-        env:
-          USER_REPO: ${{ github.repository }}
-          USER_REPO_SHA: ${{ github.sha }}
-          ML_ACTIONS_REF_INPUT: ${{ inputs.ml_actions_ref }}
-          ML_ACTIONS_REPO: google-ml-infra/actions
-        id: extract_ml_actions_repo_ref
+      - name: Generate Job ID
+        id: gen_job_id
         shell: bash
+        env:
+          INPUT_JOB_ID: ${{ inputs.job_id }}
         run: |
-          set -euo pipefail
-          REPO_REF=""
-
-          if [[ "$USER_REPO" == "$ML_ACTIONS_REPO" ]]; then
-            # Use SHA for ML Actions PRs for reproducibility.
-            REPO_REF="$USER_REPO_SHA"
+          # If user provided a job_id, use it. Otherwise, generate one.
+          if [[ -n "$INPUT_JOB_ID" ]]; then
+            echo "job_id=$INPUT_JOB_ID" >> "$GITHUB_OUTPUT"
           else
-            # For external repos, use provided ref.
-            REPO_REF="$ML_ACTIONS_REF_INPUT"
+            # Generates 16 bytes of hex (32 chars), equivalent to a UUID length.
+            JOB_ID="$(openssl rand -hex 16)"
+            echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
           fi
 
-          echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
+      - name: Resolve Git refs
+        id: resolve_refs
+        shell: bash
+        env:
+          INPUT_BASELINE: ${{ inputs.baseline_ref }}
+          INPUT_EXPERIMENT: ${{ inputs.experiment_ref }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+          PR_BASE: ${{ github.base_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          # If we are in the actions repo itself, use the current SHA. Otherwise, use the input ref.
+          ML_ACTIONS_REF: ${{ github.repository == 'google-ml-infra/actions' && github.sha || inputs.ml_actions_ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          # Resolve ML Actions ref
+          echo "ml_actions_ref=$ML_ACTIONS_REF" >> "$GITHUB_OUTPUT"
+
+          # Resolve experiment ref.
+          # Default to current SHA if not provided.
+          if [[ -z "$INPUT_EXPERIMENT" ]]; then
+            EXPERIMENT_REF="$SHA"
+          else
+            EXPERIMENT_REF="$INPUT_EXPERIMENT"
+          fi
+
+          # Resolve baseline ref.
+          # Priority order:
+          # 1. Manual input (if provided by user)
+          # 2. PR base (if triggered by a PR)
+          # 3. Default branch (fallback, usually 'main')
+          if [[ -n "$INPUT_BASELINE" ]]; then
+             BASELINE_REF="$INPUT_BASELINE"
+          elif [[ "$IS_PR" == "true" ]]; then
+             BASELINE_REF="$PR_BASE"
+          else
+             BASELINE_REF="$DEFAULT_BRANCH"
+          fi
+
+          echo "Resolved git refs: baseline=$BASELINE_REF, experiment=$EXPERIMENT_REF"
+          echo "baseline_ref=$BASELINE_REF" >> "$GITHUB_OUTPUT"
+          echo "experiment_ref=$EXPERIMENT_REF" >> "$GITHUB_OUTPUT"
 
       - name: Check out ML actions repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
-          ref: ${{ steps.extract_ml_actions_repo_ref.outputs.repo_ref}}
+          ref: ${{ steps.resolve_refs.outputs.ml_actions_ref }}
           path: ml_actions
           persist-credentials: false
 
@@ -112,18 +174,23 @@ jobs:
         env:
           REGISTRY_FILE: ${{ inputs.registry_file }}
           WORKFLOW_TYPE: ${{ inputs.workflow_type }}
+          AB_MODE: ${{ inputs.ab_mode }}
+          BASELINE_REF: ${{ steps.resolve_refs.outputs.baseline_ref }}
+          EXPERIMENT_REF: ${{ steps.resolve_refs.outputs.experiment_ref }}
         id: generate
         shell: bash
+        working-directory: ml_actions
         run: |
           set -euo pipefail
-          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
           REGISTRY_PATH="$GITHUB_WORKSPACE/user_repo/$REGISTRY_FILE"
           MATRIX_JSON_PATH="$GITHUB_WORKSPACE/matrix.json"
-          cd "$ML_ACTIONS_REPO" || exit 1
 
           MATRIX_JSON="$(bazel run //benchmarking/gh_matrix_generator -- \
           --registry_file="$REGISTRY_PATH" \
-          --workflow_type="$WORKFLOW_TYPE" | jq -c '.')"
+          --workflow_type="$WORKFLOW_TYPE" \
+          --ab_mode="$AB_MODE" \
+          --baseline_ref="$BASELINE_REF" \
+          --experiment_ref="$EXPERIMENT_REF" | jq -c '.')"
 
           echo "$MATRIX_JSON" | jq '.' > "$MATRIX_JSON_PATH"
           echo "matrix_json_path=$MATRIX_JSON_PATH" >> "$GITHUB_OUTPUT"
@@ -132,13 +199,20 @@ jobs:
       - name: Upload matrix JSON artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
         with:
-          name: matrix-json
+          name: matrix-json-${{ steps.gen_job_id.outputs.job_id }}
           path: ${{ steps.generate.outputs.matrix_json_path }}
 
   run_benchmarks:
-    name: Run benchmark (${{ matrix.config_id }})
+    # For A/B mode, append mode to the job name.
+    name: Run benchmark (${{ matrix.config_id }}${{ matrix.ab_test_group && format(' - {0}', matrix.ab_test_group) || '' }})
     needs: generate_matrix
     if: needs.generate_matrix.outputs.matrix != '[]'
+
+    # For A/B mode, conditionally soft fail:
+    # If this is a baseline job, continue even if it fails,
+    # If this is an experiment job (or standard run), failure is fatal.
+    continue-on-error: ${{ matrix.ab_test_group == 'BASELINE' }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -153,37 +227,27 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
         with:
           repository: ${{ github.repository }}
-          ref: ${{ github.sha }}
+          # For A/B mode, use the checkout ref. Otherwise fall back to SHA.
+          ref: ${{ matrix.checkout_ref || github.sha }}
           path: user_repo
           persist-credentials: false
 
-      - name: Extract ML actions repo ref
-        env:
-          USER_REPO: ${{ github.repository }}
-          USER_REPO_SHA: ${{ github.sha }}
-          ML_ACTIONS_REF_INPUT: ${{ inputs.ml_actions_ref }}
-          ML_ACTIONS_REPO: google-ml-infra/actions
-        id: extract_ml_actions_repo_ref
+      - name: Get workload commit info
+        id: commit_info
         shell: bash
+        working-directory: user_repo
+        env:
+          # For A/B mode, use the checkout ref. Otherwise fall back to standard ref.
+          RESOLVED_REF: ${{ matrix.checkout_ref || github.ref_name }}
         run: |
-          set -euo pipefail
-          REPO_REF=""
-
-          if [[ "$USER_REPO" == "$ML_ACTIONS_REPO" ]]; then
-            # Use SHA for ML Actions PRs for reproducibility.
-            REPO_REF="$USER_REPO_SHA"
-          else
-            # For external repos, use provided ref.
-            REPO_REF="$ML_ACTIONS_REF_INPUT"
-          fi
-
-          echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "ref=$RESOLVED_REF" >> "$GITHUB_OUTPUT"
 
       - name: Check out ML actions repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
-          ref: ${{ steps.extract_ml_actions_repo_ref.outputs.repo_ref}}
+          ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
           path: ml_actions
           persist-credentials: false
 
@@ -209,49 +273,59 @@ jobs:
           METRIC_SPECS_JSON: '${{ toJson(matrix.metrics) }}'
           WORKFLOW_TYPE: ${{ matrix.workflow_type }}
           RUNNER_LABEL: ${{ matrix.runner_label }}
-          BRANCH: ${{ github.ref_name }}
           RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          COMMIT_SHA: ${{ steps.commit_info.outputs.sha }}
+          BRANCH: ${{ steps.commit_info.outputs.ref }}
+          BENCHMARK_RESULTS_DIR: "${{ github.workspace }}/results"
+          # Format: benchmark-result-{CONFIG}[-{AB_MODE}]-{JOB_ID}.json
+          BENCHMARK_RESULT_FILENAME: >-
+            benchmark-result-${{ matrix.config_id }}${{ matrix.ab_test_group && format('-{0}', matrix.ab_test_group) || '' }}-${{ needs.generate_matrix.outputs.job_id }}.json
         id: parse_tb_logs
+        working-directory: ml_actions
         shell: bash
         run: |
           set -euo pipefail
-          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
-          BENCHMARK_RESULTS_DIR="$GITHUB_WORKSPACE/results"
-          BENCHMARK_RESULT_FILE="$BENCHMARK_RESULTS_DIR/benchmark_result.json"
-          mkdir -p "$BENCHMARK_RESULTS_DIR"
-          cd "$ML_ACTIONS_REPO" || exit 1
+          mkdir -p "$BENCHMARK_RESULTS_DIR"          
+          TARGET_BENCHMARK_RESULT_FILE_PATH="$BENCHMARK_RESULTS_DIR/$BENCHMARK_RESULT_FILENAME"
 
           bazel run //benchmarking/tb_parser -- \
             --metric_specs_json="$METRIC_SPECS_JSON" \
             --tblog_dir="$TENSORBOARD_OUTPUT_DIR" \
             --output_dir="$BENCHMARK_RESULTS_DIR" \
             --config_id="$BENCHMARK_CONFIG_ID" \
-            --commit_sha="$GITHUB_SHA" \
+            --commit_sha="$COMMIT_SHA" \
             --github_run_id="$GITHUB_RUN_ID" \
             --workflow_type="$WORKFLOW_TYPE" \
             --runner_label="$RUNNER_LABEL" \
             --branch="$BRANCH" \
             --run_url="$RUN_URL"
 
-          echo "benchmark_result_file=$BENCHMARK_RESULT_FILE" >> "$GITHUB_OUTPUT"
-          echo "benchmark_results_dir=$BENCHMARK_RESULTS_DIR" >> "$GITHUB_OUTPUT"
+          # Rename the default output to our specific, unique artifact name
+          mv "$BENCHMARK_RESULTS_DIR/benchmark_result.json" "$TARGET_BENCHMARK_RESULT_FILE_PATH"
+
+          {
+            echo "benchmark_results_dir=$BENCHMARK_RESULTS_DIR"
+            echo "benchmark_result_file=$TARGET_BENCHMARK_RESULT_FILE_PATH"
+            echo "benchmark_result_artifact_name=${BENCHMARK_RESULT_FILENAME%.json}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload benchmark result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
         with:
-          name: benchmark-result-${{ matrix.config_id }}
+          name: ${{ steps.parse_tb_logs.outputs.benchmark_result_artifact_name }}
           path: ${{ steps.parse_tb_logs.outputs.benchmark_result_file }}
 
       - name: Run static threshold analyzer
+        # For A/B mode, skip static analysis. The ab_analysis job will handle pass/fail logic.
+        if: ${{ ! inputs.ab_mode }}
         env:
           METRIC_SPECS_JSON: '${{ toJson(matrix.metrics) }}'
           BENCHMARK_RESULT_FILE: ${{ steps.parse_tb_logs.outputs.benchmark_result_file }}
         id: static_threshold_analyzer
         shell: bash
+        working-directory: ml_actions
         run: |
           set -euo pipefail
-          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
-          cd "$ML_ACTIONS_REPO" || exit 1
 
           bazel run //benchmarking/static_threshold_analyzer -- \
             --metric_specs_json="$METRIC_SPECS_JSON" \
@@ -265,10 +339,9 @@ jobs:
           BENCHMARK_RESULTS_DIR: ${{ steps.parse_tb_logs.outputs.benchmark_results_dir }}
           USER_REPO: ${{ github.repository }}
         shell: bash
+        working-directory: ml_actions
         run: |
           set -euo pipefail
-          ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
-          cd "$ML_ACTIONS_REPO" || exit 1
 
           bazel run \
             --noshow_progress \
@@ -277,3 +350,73 @@ jobs:
             --topic_id="$TOPIC_ID" \
             --benchmark_results_dir="$BENCHMARK_RESULTS_DIR" \
             --repo_name="$USER_REPO"
+
+  ab_analysis:
+    name: A/B Analysis
+    needs: [generate_matrix, run_benchmarks]
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+    if: inputs.ab_mode == true && !cancelled()
+    steps:
+      - name: Check out ML actions repo
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        with:
+          repository: 'google-ml-infra/actions'
+          ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
+          path: ml_actions
+          persist-credentials: false
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ratchet:actions/download-artifact@v4
+        with:
+          # Only download artifacts created in this specific job
+          pattern: benchmark-result-*-${{ needs.generate_matrix.outputs.job_id }}
+          path: all_results
+          merge-multiple: true
+
+      - name: Run A/B Analyzer
+        env:
+          MATRIX_JSON_STR: ${{ needs.generate_matrix.outputs.matrix }}
+          REPO_URL: "${{ github.server_url }}/${{ github.repository }}"
+          WORKFLOW_NAME: ${{ github.workflow }}
+        shell: bash
+        working-directory: ml_actions
+        run: |
+          set -euo pipefail
+
+          RESULTS_DIR="$GITHUB_WORKSPACE/all_results"
+          REPORT_FILE="$GITHUB_WORKSPACE/ab_report.md"
+
+          # Catch non-zero exit code to allow the workflow to proceed to the PR comment step.
+          bazel run //benchmarking/ab_analyzer -- \
+             --results_dir="$RESULTS_DIR" \
+             --matrix_json="$MATRIX_JSON_STR" \
+             --output_file="$REPORT_FILE" \
+             --repo_url="$REPO_URL" \
+             --workflow_name="$WORKFLOW_NAME" || echo "AB_STATUS=FAILURE" >> "$GITHUB_ENV"
+
+          # Set A/B report as job summary          
+          cat "$REPORT_FILE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload A/B Report Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        with:
+          name: ab-report-${{ needs.generate_matrix.outputs.job_id }}
+          path: ${{ github.workspace }}/ab_report.md
+
+      - name: Post PR Comment
+        if: inputs.post_pr_comment == true && github.event_name == 'pull_request' && !cancelled()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # ratchet:actions/github-script@v7
+        with:
+          script: |
+            const scriptPath = require('path').resolve('./ml_actions/benchmarking/post_pr_comment/post_pr_comment.js');
+            const postComment = require(scriptPath);
+            await postComment({ github, context });
+
+      - name: Check Final Status
+        run: |
+          if [[ "$AB_STATUS" == "FAILURE" ]]; then
+            echo "[FAILURE] A/B Analyzer detected regressions or missing experiments."
+            exit 1
+          fi
