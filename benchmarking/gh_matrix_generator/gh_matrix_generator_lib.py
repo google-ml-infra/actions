@@ -6,7 +6,7 @@
 #
 #     https://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law of a greedor agreed to in writing, software
+# Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
@@ -65,7 +65,14 @@ def load_and_validate_suite_from_pbtxt(
 class MatrixGenerator:
   """Generates a GitHub Actions matrix from a benchmark registry."""
 
-  def generate(self, suite, workflow_type_str: str) -> List[Dict[str, Any]]:
+  def generate(
+    self,
+    suite,
+    workflow_type_str: str,
+    ab_mode: bool = False,
+    baseline_ref: str = "main",
+    experiment_ref: str = "",
+  ) -> List[Dict[str, Any]]:
     """Generates the full matrix using the BenchmarkJob proto to enforce strict validation."""
     matrix = []
     workflow_enum = workflow_type_pb2.WorkflowType.Value(workflow_type_str.upper())
@@ -82,31 +89,53 @@ class MatrixGenerator:
         for key, value in env_config.workload_action_inputs.items():
           workload_action.action_inputs[key] = value
 
-        # Build the BenchmarkJob proto
-        job = benchmark_job_pb2.BenchmarkJob()
+        # Build the base BenchmarkJob proto
+        base_job = benchmark_job_pb2.BenchmarkJob()
 
         # Config ID (e.g., 'resnet50_basic_gpu') is constructed from the benchmark name
         # plus the specific environment ID.
-        job.config_id = f"{benchmark.name}_{env_config.id}"
-        job.workflow_type = workflow_enum
-        job.runner_label = env_config.runner_label
-        job.container_image = env_config.container_image
-        job.benchmark_name = benchmark.name
-        job.description = benchmark.description
-        job.owner = benchmark.owner
-        job.workload.CopyFrom(workload_action)
-        job.github_labels.extend(benchmark.github_labels)
-        job.metrics.extend(benchmark.metrics)
+        base_job.config_id = f"{benchmark.name}_{env_config.id}"
 
-        # Validate
-        try:
-          validate(job)
-        except ValidationError as e:
-          error_msg = _format_validation_error(e.violations[0])
-          raise ValueError(
-            f"Generated invalid benchmark job for '{job.config_id}':\n{error_msg}"
-          )
+        base_job.workflow_type = workflow_enum
+        base_job.runner_label = env_config.runner_label
+        base_job.container_image = env_config.container_image
+        base_job.benchmark_name = benchmark.name
+        base_job.description = benchmark.description
+        base_job.owner = benchmark.owner
+        base_job.workload.CopyFrom(workload_action)
+        base_job.github_labels.extend(benchmark.github_labels)
+        base_job.metrics.extend(benchmark.metrics)
 
-        matrix.append(MessageToDict(job, preserving_proto_field_name=True))
+        jobs_to_emit = []
+
+        if ab_mode:
+          # Baseline job
+          baseline_job = benchmark_job_pb2.BenchmarkJob()
+          baseline_job.CopyFrom(base_job)
+          baseline_job.ab_test_group = benchmark_job_pb2.BenchmarkJob.BASELINE
+          baseline_job.checkout_ref = baseline_ref
+          jobs_to_emit.append(baseline_job)
+
+          # Experiment job
+          experiment_job = benchmark_job_pb2.BenchmarkJob()
+          experiment_job.CopyFrom(base_job)
+          experiment_job.ab_test_group = benchmark_job_pb2.BenchmarkJob.EXPERIMENT
+          experiment_job.checkout_ref = experiment_ref
+          jobs_to_emit.append(experiment_job)
+        else:
+          # Standard mode (single job)
+          jobs_to_emit.append(base_job)
+
+        # Validate and append
+        for job in jobs_to_emit:
+          try:
+            validate(job)
+          except ValidationError as e:
+            error_msg = _format_validation_error(e.violations[0])
+            raise ValueError(
+              f"Generated invalid benchmark job for '{job.config_id}':\n{error_msg}"
+            )
+
+          matrix.append(MessageToDict(job, preserving_proto_field_name=True))
 
     return matrix

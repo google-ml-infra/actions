@@ -29,17 +29,17 @@ on:
       - '.github/workflows/run-benchmarks.yaml'
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 # Cancel any previous runs on the same branch when a new commit is pushed.
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  run_e2e_test:
-    name: Benchmarking workflow e2e test
+  run_standard_e2e_test:
+    name: Standard E2E Test
+    permissions:
+      contents: read
+      pull-requests: write
     uses: ./.github/workflows/run-benchmarks.yaml
     with:
       registry_file: "benchmarking/e2e_test/test_registry.pbtxt"
@@ -47,3 +47,16 @@ jobs:
       publish_metrics: false
       pub_sub_gcp_project_id: "ml-oss-benchmarking-testing"
       pub_sub_gcp_topic_id: "public-results-dev"
+
+  run_ab_e2e_test:
+    name: A/B Mode E2E Test
+    permissions:
+      contents: read
+      pull-requests: write 
+    uses: ./.github/workflows/run-benchmarks.yaml
+    with:
+      registry_file: "benchmarking/e2e_test/test_registry.pbtxt"
+      workflow_type: "PRESUBMIT"
+      ab_mode: true
+      post_pr_comment: true
+      publish_metrics: false
