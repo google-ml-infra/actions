@@ -6,7 +6,7 @@
 #
 #     https://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law of a greedor agreed to in writing, software
+# Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
@@ -151,6 +151,11 @@ def test_generate_matrix_content_correctness():
 
   cpu_entry = next(item for item in matrix if item["benchmark_name"] == "cpu_benchmark")
 
+  # Ensure standard mode DOES NOT have A/B testing keys
+  # (MessageToDict omits empty/default string fields by default)
+  assert "ab_test_group" not in cpu_entry
+  assert "checkout_ref" not in cpu_entry
+
   assert cpu_entry["config_id"] == "cpu_benchmark_basic_cpu"
   assert cpu_entry["workflow_type"] == "PRESUBMIT"
   assert cpu_entry["runner_label"] == "linux-x86-n2-32"
@@ -180,6 +185,64 @@ def test_config_id_persistence_across_workflow_types():
   # Metadata differs
   assert cpu_pre["workflow_type"] == "PRESUBMIT"
   assert cpu_post["workflow_type"] == "POSTSUBMIT"
+
+
+# --- Tests for A/B Testing Logic ---
+
+
+def test_generate_matrix_ab_mode():
+  """Tests that A/B mode duplicates entries and assigns correct refs."""
+  suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
+
+  generator = gh_matrix_generator_lib.MatrixGenerator()
+  # Run in A/B Mode with custom refs
+  matrix = generator.generate(
+    suite,
+    "POSTSUBMIT",  # Contains 1 benchmark (cpu_benchmark)
+    ab_mode=True,
+    baseline_ref="main",
+    experiment_ref="feat-123",
+  )
+
+  # Expect 2 entries (1 benchmark * 2 modes)
+  assert len(matrix) == 2
+
+  baseline = matrix[0]
+  experiment = matrix[1]
+
+  # Verify baseline
+  assert baseline["benchmark_name"] == "cpu_benchmark"
+  assert baseline["ab_test_group"] == "BASELINE"
+  assert baseline["checkout_ref"] == "main"
+  assert baseline["config_id"] == "cpu_benchmark_basic_cpu"
+
+  # Verify experiment
+  assert experiment["benchmark_name"] == "cpu_benchmark"
+  assert experiment["ab_test_group"] == "EXPERIMENT"
+  assert experiment["checkout_ref"] == "feat-123"
+  assert experiment["config_id"] == "cpu_benchmark_basic_cpu"
+
+
+def test_generate_matrix_ab_mode_presubmit():
+  """Tests A/B mode with multiple benchmarks (PRESUBMIT has CPU and GPU)."""
+  suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
+
+  generator = gh_matrix_generator_lib.MatrixGenerator()
+  matrix = generator.generate(
+    suite, "PRESUBMIT", ab_mode=True, baseline_ref="main", experiment_ref="HEAD"
+  )
+
+  # Expect 4 entries (2 benchmarks * 2 modes)
+  assert len(matrix) == 4
+
+  # Check we have baseline/experiment for BOTH benchmarks
+  groups = [entry["ab_test_group"] for entry in matrix]
+  names = [entry["benchmark_name"] for entry in matrix]
+
+  assert groups.count("BASELINE") == 2
+  assert groups.count("EXPERIMENT") == 2
+  assert names.count("cpu_benchmark") == 2
+  assert names.count("gpu_benchmark") == 2
 
 
 if __name__ == "__main__":

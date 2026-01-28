@@ -23,6 +23,16 @@ import "benchmarking/proto/common/workflow_type.proto";
 
 // Represents a single, fully resolved job in the GitHub Actions matrix.
 message BenchmarkJob {
+  // Defines the group assignment for A/B testing scenarios.
+  enum AbTestGroup {
+    // Default: Standard single execution.
+    AB_TEST_GROUP_UNSPECIFIED = 0;
+    // The Control group (Baseline/Reference).
+    BASELINE = 1;
+    // The Treatment group (Experiment/Candidate).
+    EXPERIMENT = 2;
+  }
+
   // REQUIRED: Unique identifier for this specific combination of benchmark configuration
   // and environment configuration (e.g. "resnet50_gpu_v100").
   string config_id = 1 [(buf.validate.field).string.min_len = 1];
@@ -53,4 +63,12 @@ message BenchmarkJob {
   
   // Optional: List of metrics to track.
   repeated bap.common.MetricSpec metrics = 10;
+
+  // OPTIONAL: The A/B test group this job belongs to.
+  // Defaults to AB_TEST_GROUP_UNSPECIFIED (standard run).
+  AbTestGroup ab_test_group = 11;
+
+  // OPTIONAL: The specific Git reference (SHA, branch, tag) to checkout for this job.
+  // Generally required if ab_test_group is BASELINE or EXPERIMENT.
+  string checkout_ref = 12;
 }
