@@ -435,3 +435,42 @@ def test_run_bisection_skips_testing_cached_commit(mocker, finder, mock_gh_clien
   finder._state_persister.save.assert_called_once()
   saved_state = finder._state_persister.save.call_args[0][0]
   assert saved_state["cache"]["c2"] == "FAIL"
+
+
+def test_run_bisection_dry_run(
+  mocker, mock_gh_client, mock_state, mock_state_persister
+):
+  """Tests that run_bisection in dry_run mode avoids real write API calls."""
+  commits = [
+    factories.create_commit(mocker, "c0", "m0"),
+    factories.create_commit(mocker, "c1", "m1"),
+    factories.create_commit(mocker, "c2", "m2"),
+  ]
+  mock_gh_client.compare_commits.return_value = commits
+
+  dry_client = github_client.DryRunGithubClient(mock_gh_client)
+
+  finder = culprit_finder.CulpritFinder(
+    repo=REPO,
+    start_sha="start_sha",
+    end_sha="end_sha",
+    workflow_file=WORKFLOW_FILE,
+    has_culprit_finder_workflow=True,
+    gh_client=dry_client,
+    state=mock_state,
+    state_persister=mock_state_persister,
+  )
+
+  # In dry run, mocked runs are successful, so no culprit should be found.
+  result = finder.run_bisection()
+
+  assert result is None
+
+  # Verify real client write methods were NOT called.
+  mock_gh_client.create_branch.assert_not_called()
+  mock_gh_client.delete_branch.assert_not_called()
+  mock_gh_client.trigger_workflow.assert_not_called()
+  mock_gh_client.check_branch_exists.assert_not_called()
+
+  # Verify read-only calls were made via the real client.
+  mock_gh_client.compare_commits.assert_called_once()

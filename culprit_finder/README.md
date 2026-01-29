@@ -64,6 +64,8 @@ If provided, the tool infers the repository, workflow name, job name (if applica
 - `--job` (Optional): The specific job name within the workflow to monitor for pass/fail.
 If not provided, the tool checks the overall workflow conclusion.
 - `--clear-cache`: (Optional) Deletes the local state file before execution to start a fresh bisection.
+- `--dry-run`: (Optional) Simulates the bisection process by printing the API calls
+that would be made without actually executing them.
 
 ### State Persistence and Resuming
 
