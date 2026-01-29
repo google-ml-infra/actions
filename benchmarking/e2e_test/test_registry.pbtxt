@@ -113,6 +113,7 @@ benchmarks {
       stat: MEAN
       comparison: {
         baseline { value: 100.0 }
+        # revert back to see green 
         threshold { value: 0.1 }
         improvement_direction: LESS
       }
