@@ -44,3 +44,6 @@ jobs:
     with:
       registry_file: "benchmarking/e2e_test/test_registry.pbtxt"
       workflow_type: "PRESUBMIT"
+      publish_metrics: false
+      pub_sub_gcp_project_id: "ml-oss-benchmarking-testing"
+      pub_sub_gcp_topic_id: "public-results-dev"

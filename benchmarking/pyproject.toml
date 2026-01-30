@@ -8,7 +8,8 @@ dependencies = [
     "tensorflow",
     "numpy",
     "tensorboard",
-    "tensorboardx"
+    "tensorboardx",
+    "google-cloud-pubsub",
 ]
 
 [project.optional-dependencies]

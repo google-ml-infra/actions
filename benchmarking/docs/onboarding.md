@@ -1,5 +1,17 @@
 # Onboarding Guide: BAP (Benchmarking Automation Platform)
 
+## Quick Links
+
+-   [GitHub Repository](https://github.com/google-ml-infra/actions)
+-   [Reusable Workflow](https://github.com/google-ml-infra/actions/blob/main/.github/workflows/run-benchmarks.yaml)
+
+### Schema Definitions
+
+-   [benchmark_registry.proto](https://github.com/google-ml-infra/actions/blob/main/benchmarking/proto/benchmark_registry.proto)
+-   [benchmark_result.proto](https://github.com/google-ml-infra/actions/blob/main/benchmarking/proto/benchmark_result.proto)
+
+## Overview
+
 This guide provides the steps to add a project's benchmarks to BAP (Benchmarking Automation Platform). BAP is GitHub-native and makes use of GitHub Actions to administer benchmarks.
 
 The system is designed to execute any GitHub Action as a workload (e.g., standard Python scripts, Bazel targets, or custom user-defined actions), provided it adheres to the metric reporting contract.
@@ -16,6 +28,7 @@ Our infrastructure handles the following:
 - Securely executing the specified workload action.
 - TensorBoard log parsing and statistic computation.
 - Static threshold analysis.
+- Publishing results to Google Cloud Pub/Sub for downstream consumption.
 
 ## Step 1: Create a workflow file
 
@@ -39,19 +52,25 @@ jobs:
       registry_file: "benchmarking/my_registry.pbtxt"
       workflow_type: "PRESUBMIT"
       ml_actions_ref: <commit | branch | tag>
+      publish_metrics: true
 ```
 
 ### Required permissions
 
 `permissions: contents: read` permission is required in the caller workflow. The reusable workflow's access token inherits permissions from the caller, so the caller must explicitly grant the read rights needed for actions/checkout to succeed.
 
-### ml_actions_ref
+### Workflow Inputs
 
-You must specify the `ml_actions_ref` input, otherwise it will default to `main`.
+The reusable workflow supports the following inputs:
 
-This value tells the reusable workflow which version (branch, tag, or SHA) of the google-ml-infra/actions repository to check out for its internal scripts.
-
-For production, use the same stable tag or SHA that's used to pin the reusable workflow file version (e.g. "v1.5.0" for "google-ml-infra/actions/.github/workflows/run_benchmarks.yml@v1.5.0").
+| Input | Required | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `registry_file` | **Yes** | - | Path to the `.pbtxt` benchmark registry file relative to the repository root. |
+| `workflow_type` | **Yes** | - | The workflow type to run (e.g., `PRESUBMIT`, `NIGHTLY`). Matches the configuration in your registry. |
+| `ml_actions_ref` | No | `main` | The branch, tag, or SHA of google-ml-infra/actions to use. For production, use the same stable tag or SHA that's used to pin the reusable workflow file version (e.g. "v1.5.0" for "google-ml-infra/actions/.github/workflows/run_benchmarks.yml@v1.5.0"). |
+| `publish_metrics` | No | `false` | If `true`, publishes benchmark results to Google Cloud Pub/Sub. |
+| `pub_sub_gcp_project_id` | No | `ml-oss-benchmarking-production` | GCP Project ID for Pub/Sub. |
+| `pub_sub_gcp_topic_id` | No | `public-results-prod` | Pub/Sub Topic ID. |
 
 ### Workflow granularity
 
@@ -381,3 +400,42 @@ git push origin benchmarking
 1. Monitor the "Run benchmark" jobs to ensure the workload executes successfully.
 2. Check the "Parse TensorBoard logs" step output to confirm your metrics were found and parsed correctly.
 3. Verify the generated "Benchmark Result" artifacts.
+
+## Step 5: Data Consumption (Pub/Sub)
+
+After the benchmark completes and metrics are parsed, the infrastructure serializes the data and will optionally publish it to Google Cloud Pub/Sub. This allows you to build custom dashboards, alerting systems, or historical archives by subscribing to the result stream.
+
+### Enabling Publication
+
+To enable publishing, you must set `publish_metrics: true` in your workflow file inputs (see Step 1). By default, this is disabled.
+
+### Data Format
+
+The message payload is a JSON-serialized BenchmarkResult protocol buffer (UTF-8 encoded).
+
+Schema Definition: [benchmark_result.proto](https://github.com/google-ml-infra/actions/blob/main/benchmarking/proto/benchmark_result.proto)
+
+### Requesting a Subscription
+
+To consume data for your repository, you must be onboarded as a consumer. Our infrastructure manages the subscription resources to ensure reliability (Dead Letter Queues, retention policies, etc.).
+
+**To onboard, please [raise an issue](https://github.com/google-ml-infra/actions/issues) with the following details:**
+
+1. **Repository Name**: The full repository name including the owner/organization (e.g., google/jax).
+
+2. **Principal**: The service account email that will consume the data (e.g., my-dashboard-sa@my-project.iam.gserviceaccount.com).
+
+3. **Confidentiality**: All benchmarks run via this platform are published to a single shared public topic. We will configure a filter on your repository name so you only receive your own data. **Note:** If your data cannot be made public (e.g., private repo, confidential results), please specify in the issue that you require a private topic.
+
+### Connecting to your Subscription
+
+Once your onboarding is processed, the platform team will provide you with a **Subscription ID**.
+
+If you are using the public topic, the details will be:
+
+- **GCP Project:** `ml-oss-benchmarking-production`
+- **Topic ID:** `public-results-prod`
+
+You can then configure your client to listen to this subscription using the standard [Google Cloud Pub/Sub libraries](https://docs.cloud.google.com/pubsub/docs/reference/libraries).
+
+**Security Note**: Consumers are strongly encouraged to validate incoming messages before processing them. The [BenchmarkResult]((https://github.com/google-ml-infra/actions/blob/main/benchmarking/proto/benchmark_result.proto)) protocol buffer definition is compatible with [protovalidate](https://github.com/bufbuild/protovalidate), allowing for robust constraints checking.
