@@ -56,7 +56,7 @@ on:
         description: "Pub/Sub Topic ID to publish results to."
         required: false
         type: string
-        default: "public-results-production"
+        default: "public-results-prod"
 
 permissions:
   contents: read # Required for actions/checkout.

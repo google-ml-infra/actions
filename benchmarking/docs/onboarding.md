@@ -70,7 +70,7 @@ The reusable workflow supports the following inputs:
 | `ml_actions_ref` | No | `main` | The branch, tag, or SHA of google-ml-infra/actions to use. For production, use the same stable tag or SHA that's used to pin the reusable workflow file version (e.g. "v1.5.0" for "google-ml-infra/actions/.github/workflows/run_benchmarks.yml@v1.5.0"). |
 | `publish_metrics` | No | `false` | If `true`, publishes benchmark results to Google Cloud Pub/Sub. |
 | `pub_sub_gcp_project_id` | No | `ml-oss-benchmarking-production` | GCP Project ID for Pub/Sub. |
-| `pub_sub_gcp_topic_id` | No | `public-results-production` | Pub/Sub Topic ID. |
+| `pub_sub_gcp_topic_id` | No | `public-results-prod` | Pub/Sub Topic ID. |
 
 ### Workflow granularity
 
@@ -434,7 +434,7 @@ Once your onboarding is processed, the platform team will provide you with a **S
 If you are using the public topic, the details will be:
 
 - **GCP Project:** `ml-oss-benchmarking-production`
-- **Topic ID:** `public-results-production`
+- **Topic ID:** `public-results-prod`
 
 You can then configure your client to listen to this subscription using the standard [Google Cloud Pub/Sub libraries](https://docs.cloud.google.com/pubsub/docs/reference/libraries).
 
