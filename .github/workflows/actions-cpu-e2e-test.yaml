@@ -21,7 +21,7 @@ jobs:
                    (contains(matrix.runner, 'linux-arm64') && 'us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build-arm64:latest') ||
                    (contains(matrix.runner, 'windows-x86') && null) }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v4
         with:
           persist-credentials: false
       - name: Simulate running a job on ${{ matrix.runner }}

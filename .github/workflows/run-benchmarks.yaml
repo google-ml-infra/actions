@@ -56,7 +56,7 @@ jobs:
       matrix: ${{ steps.generate.outputs.matrix }}
     steps:
       - name: Check out user repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v5
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -86,7 +86,7 @@ jobs:
           echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
           ref: ${{ steps.extract_ml_actions_repo_ref.outputs.repo_ref}}
@@ -115,7 +115,7 @@ jobs:
           echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
 
       - name: Upload matrix JSON artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v4
         with:
           name: matrix-json
           path: ${{ steps.generate.outputs.matrix_json_path }}
@@ -135,7 +135,7 @@ jobs:
 
     steps:
       - name: Check out user repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v5
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -165,7 +165,7 @@ jobs:
           echo "repo_ref=$REPO_REF" >> "$GITHUB_OUTPUT"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
           ref: ${{ steps.extract_ml_actions_repo_ref.outputs.repo_ref}}
@@ -221,7 +221,7 @@ jobs:
           echo "artifact_path=$ARTIFACT_FILE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Upload benchmark artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # ratchet:actions/upload-artifact@v4
         with:
           name: benchmark-result-${{ matrix.config_id }}
           path: ${{ steps.parse_tb_logs.outputs.artifact_path }}
