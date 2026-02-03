@@ -14,8 +14,8 @@
 
 """Tests for the benchmark results publisher library."""
 
-from unittest import mock
 import sys
+from unittest import mock
 import pytest
 from benchmarking.proto import benchmark_result_pb2
 from benchmarking.publisher import publish_results_lib
@@ -36,7 +36,7 @@ def mock_publisher_client():
 
 
 def test_publish_messages_success(mock_publisher_client, capsys):
-  """Tests that a list of valid messages is published with attributes."""
+  """Tests that a list of valid messages is published."""
   project_id = "test-project"
   topic_id = "test-topic"
   repo_name = "test-owner/test-repo"
@@ -52,7 +52,11 @@ def test_publish_messages_success(mock_publisher_client, capsys):
   mock_future.result.return_value = "msg_id_123"
   mock_publisher_client.publish.return_value = mock_future
 
-  publish_results_lib.publish_messages(project_id, topic_id, messages, repo_name)
+  with mock.patch(
+    "benchmarking.publisher.publish_results_lib.as_completed",
+    side_effect=lambda futures: iter(futures),
+  ):
+    publish_results_lib.publish_messages(project_id, topic_id, messages, repo_name)
 
   expected_data = json_format.MessageToJson(msg).encode("utf-8")
   mock_publisher_client.publish.assert_called_once_with(
@@ -61,26 +65,98 @@ def test_publish_messages_success(mock_publisher_client, capsys):
 
   captured = capsys.readouterr()
   assert "Published message 1/1" in captured.out
+  assert "msg_id_123" in captured.out
 
 
-def test_publish_messages_failure(mock_publisher_client, capsys):
-  """Tests that the library raises RuntimeError if publication fails."""
-
-  # Create benchmark result
-  msg = benchmark_result_pb2.BenchmarkResult()
-  messages = [msg]
+def test_publish_messages_all_fail(mock_publisher_client, capsys):
+  """Tests behavior when all messages fail to publish."""
+  project_id = "test-project"
+  topic_id = "test-topic"
   repo_name = "test-owner/test-repo"
 
-  # Mock Future raising an exception
+  # Create 2 benchmark results
+  messages = [
+    benchmark_result_pb2.BenchmarkResult(),
+    benchmark_result_pb2.BenchmarkResult(),
+  ]
+
+  # Mock Future raising an exception for every call
   mock_future = mock.Mock()
   mock_future.result.side_effect = Exception("Cloud Error")
   mock_publisher_client.publish.return_value = mock_future
 
-  with pytest.raises(RuntimeError) as e:
-    publish_results_lib.publish_messages("p", "t", messages, repo_name)
+  with mock.patch(
+    "benchmarking.publisher.publish_results_lib.as_completed",
+    side_effect=lambda futures: iter(futures),
+  ):
+    with pytest.raises(RuntimeError) as e:
+      publish_results_lib.publish_messages(project_id, topic_id, messages, repo_name)
 
-  assert "Publishing failed" in str(e.value)
-  assert "ERROR: Failed to publish message 1: Cloud Error" in capsys.readouterr().err
+  assert "Only 0/2 messages were sent successfully" in str(e.value)
+  captured = capsys.readouterr()
+  assert captured.err.count("Failed to publish message") == 2
+
+
+def test_publish_messages_one_fail(mock_publisher_client, capsys):
+  """Tests behavior when exactly one message fails."""
+  project_id = "test-project"
+  topic_id = "test-topic"
+  repo_name = "test-owner/test-repo"
+
+  # Create 3 benchmark results
+  messages = [benchmark_result_pb2.BenchmarkResult() for _ in range(3)]
+
+  # Futures: 2 Success, 1 Failure
+  f_success = mock.Mock()
+  f_success.result.return_value = "msg_id_ok"
+
+  f_fail = mock.Mock()
+  f_fail.result.side_effect = Exception("Single Failure")
+
+  mock_publisher_client.publish.side_effect = [f_success, f_success, f_fail]
+
+  with mock.patch(
+    "benchmarking.publisher.publish_results_lib.as_completed",
+    side_effect=lambda futures: iter(futures),
+  ):
+    with pytest.raises(RuntimeError) as e:
+      publish_results_lib.publish_messages(project_id, topic_id, messages, repo_name)
+
+  assert "Only 2/3 messages were sent successfully" in str(e.value)
+  captured = capsys.readouterr()
+  assert captured.out.count("Published message") == 2
+  assert captured.err.count("Failed to publish message") == 1
+
+
+def test_publish_messages_half_fail(mock_publisher_client, capsys):
+  """Tests behavior when half of the messages fail (e.g. 2 out of 4)."""
+  project_id = "test-project"
+  topic_id = "test-topic"
+  repo_name = "test-owner/test-repo"
+
+  # Create 4 benchmark results
+  messages = [benchmark_result_pb2.BenchmarkResult() for _ in range(4)]
+
+  # Create Futures: 2 Success, 2 Failure
+  f_success = mock.Mock()
+  f_success.result.return_value = "msg_id_ok"
+
+  f_fail = mock.Mock()
+  f_fail.result.side_effect = Exception("Oops")
+
+  mock_publisher_client.publish.side_effect = [f_success, f_fail, f_success, f_fail]
+
+  with mock.patch(
+    "benchmarking.publisher.publish_results_lib.as_completed",
+    side_effect=lambda futures: iter(futures),
+  ):
+    with pytest.raises(RuntimeError) as e:
+      publish_results_lib.publish_messages(project_id, topic_id, messages, repo_name)
+
+  assert "Only 2/4 messages were sent successfully" in str(e.value)
+  captured = capsys.readouterr()
+  assert captured.out.count("Published message") == 2
+  assert captured.err.count("Failed to publish message") == 2
 
 
 if __name__ == "__main__":

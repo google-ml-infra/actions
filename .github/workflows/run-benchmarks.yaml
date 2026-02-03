@@ -270,7 +270,9 @@ jobs:
           ML_ACTIONS_REPO="$GITHUB_WORKSPACE/ml_actions"
           cd "$ML_ACTIONS_REPO" || exit 1
 
-          bazel run //benchmarking/publisher:publish_results -- \
+          bazel run \
+            --noshow_progress \
+            //benchmarking/publisher:publish_results -- \
             --project_id="$PROJECT_ID" \
             --topic_id="$TOPIC_ID" \
             --benchmark_results_dir="$BENCHMARK_RESULTS_DIR" \

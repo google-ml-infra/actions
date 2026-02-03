@@ -15,7 +15,8 @@
 """Library for publishing benchmark results to Google Cloud Pub/Sub."""
 
 import sys
-from typing import List
+from collections.abc import Sequence
+from concurrent.futures import as_completed
 from google.cloud import pubsub_v1
 from benchmarking.proto import benchmark_result_pb2
 from google.protobuf import json_format
@@ -24,7 +25,7 @@ from google.protobuf import json_format
 def publish_messages(
   project_id: str,
   topic_id: str,
-  messages: List[benchmark_result_pb2.BenchmarkResult],
+  messages: Sequence[benchmark_result_pb2.BenchmarkResult],
   repo_name: str,
 ):
   """Publishes a list of BenchmarkResult messages to Pub/Sub."""
@@ -46,14 +47,16 @@ def publish_messages(
     except Exception as e:
       print(f"ERROR: Failed to prepare message for publishing: {e}", file=sys.stderr)
 
-  # Wait for all publications to complete
-  for i, future in enumerate(futures):
+  # Wait for publications to complete
+  for future in as_completed(futures):
     try:
       message_id = future.result(timeout=30)
-      print(f"Published message {i + 1}/{len(messages)} (Message ID: {message_id}).")
       success_count += 1
+      print(
+        f"Published message {success_count}/{len(messages)} (Message ID: {message_id})."
+      )
     except Exception as e:
-      print(f"ERROR: Failed to publish message {i + 1}: {e}", file=sys.stderr)
+      print(f"ERROR: Failed to publish message: {e}", file=sys.stderr)
 
   if success_count < len(messages):
     raise RuntimeError(
