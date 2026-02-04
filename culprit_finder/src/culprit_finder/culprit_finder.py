@@ -18,6 +18,23 @@ from culprit_finder import culprit_finder_state
 
 CULPRIT_FINDER_WORKFLOW_NAME = "culprit_finder.yml"
 
+# Configuration for projects that require special handling for external dependencies.
+# Some projects (e.g., JAX) depend on the HEAD of another repository (e.g., XLA).
+# When bisecting historical commits, running them against the *current* HEAD of the dependency
+# often causes build failures unrelated to the regression being investigated.
+#
+# This map defines how to "time-travel" for these dependencies:
+# - dependency_repo: The external repository to look up.
+# - input_name: The workflow input variable to set with the pinned commit hash.
+# - workflows: The specific workflows where this logic should apply.
+PROJECT_CONFIG = {
+    "jax-ml/jax": {
+        "dependency_repo": "openxla/xla",
+        "input_name": "xla-commit",
+        "workflows": ["wheel_tests_continuous.yml", "build_artifacts.yml"],
+    },
+}
+
 
 class CulpritFinder:
   """Culprit finder class to find the culprit commit for a GitHub workflow."""
@@ -184,6 +201,26 @@ class CulpritFinder:
       workflow_to_trigger, branch_name, event="workflow_dispatch"
     )
     previous_run_id = previous_run.id if previous_run else None
+
+    if self._repo in PROJECT_CONFIG and self._workflow_file in PROJECT_CONFIG[self._repo]["workflows"]:
+        config = PROJECT_CONFIG[self._repo]
+        logging.info("Project %s matched special case config", self._repo)
+
+        # Get date of the commit we are testing
+        commit_details = self._gh_client.get_commit(commit_sha)
+        commit_date = commit_details.commit.committer.date
+
+        # Find dependency commit at that time
+        dep_repo = config["dependency_repo"]
+        logging.info("Looking up dependency commit for %s at %s", dep_repo, commit_date)
+        dep_commit = self._gh_client.get_last_commit_before(dep_repo, commit_date)
+
+        if dep_commit:
+            input_name = config["input_name"]
+            logging.info("Pinning %s to %s", input_name, dep_commit.sha)
+            inputs[input_name] = dep_commit.sha
+        else:
+            logging.warning("Could not find matching commit for %s at %s", dep_repo, commit_date)
 
     self._gh_client.trigger_workflow(
       workflow_to_trigger,

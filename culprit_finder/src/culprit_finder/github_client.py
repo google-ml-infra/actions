@@ -29,7 +29,8 @@ class GithubClient:
         repo: The GitHub repository in 'owner/repo' format.
         token: The GitHub access token for authentication.
     """
-    self._repo = github.Github(auth=github.Auth.Token(token)).get_repo(repo, lazy=True)
+    self._gh = github.Github(auth=github.Auth.Token(token))
+    self._repo = self._gh.get_repo(repo, lazy=True)
 
   def compare_commits(self, base_sha: str, head_sha: str) -> list[Commit]:
     """
@@ -335,6 +336,43 @@ class GithubClient:
     """
     run = self.get_run(str(run_id))
     return list(run.jobs())
+
+  def get_commit(self, sha: str) -> Commit:
+    """
+    Gets details of a specific commit.
+
+    Args:
+        sha: The SHA of the commit to retrieve.
+
+    Returns:
+        A Commit object.
+    """
+    return self._repo.get_commit(sha)
+
+  def get_last_commit_before(
+    self, repo_name: str, date: str, branch: str = "main"
+  ) -> Commit | None:
+    """
+    Finds the latest commit in a repository that is older than or equal to a given date.
+
+    Args:
+        repo_name: The GitHub repository to search in 'owner/repo' format.
+        date: The ISO 8601 date string to search before (inclusive).
+        branch: The branch to search on.
+
+    Returns:
+        The matching Commit object, or None if not found.
+    """
+    target_repo = self._gh.get_repo(repo_name, lazy=True)
+    # until: "Only commits before this date will be returned."
+    # We want the *latest* commit before this date.
+    # get_commits returns in reverse chronological order (newest first).
+    # so the first one returned with `until=date` should be the one we want.
+    commits = target_repo.get_commits(sha=branch, until=date)
+
+    if commits.totalCount > 0:
+        return commits[0]
+    return None
 
 
 def get_github_token() -> str | None:
