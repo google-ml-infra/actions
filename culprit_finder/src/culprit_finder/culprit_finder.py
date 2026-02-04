@@ -188,20 +188,20 @@ class CulpritFinder:
       branch_name,
     )
 
-    # Get the ID of the previous run (if any) to distinguish it from the new one we are about to trigger
-    previous_run = self._gh_client.get_latest_run(
-      workflow_id=workflow_to_trigger, branch=branch_name, event="workflow_dispatch"
-    )
-    previous_run_id = previous_run.id if previous_run else None
-
-    self._gh_client.trigger_workflow(
-      workflow_to_trigger,
-      branch_name,
-      inputs,
-    )
-
     run: WorkflowRun | None = None
     for attempt in range(self._retries + 1):
+      # Get the ID of the previous run (if any) to distinguish it from the new one we are about to trigger
+      previous_run = self._gh_client.get_latest_run(
+        workflow_id=workflow_to_trigger, branch=branch_name, event="workflow_dispatch"
+      )
+      previous_run_id = previous_run.id if previous_run else None
+
+      self._gh_client.trigger_workflow(
+        workflow_to_trigger,
+        branch_name,
+        inputs,
+      )
+
       run = self._wait_for_workflow_completion(
         workflow_to_trigger,
         branch_name,

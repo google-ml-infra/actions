@@ -136,6 +136,7 @@ def test_test_commit_with_retries(
 
   assert is_good is True
   assert mock_wait.call_count == 3
+  assert mock_gh_client.trigger_workflow.call_count == 3
 
 
 @pytest.mark.parametrize(
