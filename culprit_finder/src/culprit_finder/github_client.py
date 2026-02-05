@@ -8,6 +8,7 @@ import re
 import time
 from typing import Optional
 import subprocess
+from unittest import mock
 
 import github
 from github.Commit import Commit
@@ -340,6 +341,127 @@ class GithubClient:
     """
     run = self.get_run(str(run_id))
     return list(run.jobs())
+
+
+class DryRunGithubClient:
+  """
+  A dry-run client that logs write operations and returns mock data.
+
+  PyGithub does not provide a straightforward way to instantiate its objects,
+  so this client uses mock objects to simulate runs and jobs.
+  """
+
+  def __init__(self, client: GithubClient, job_name: str | None = None):
+    """
+    Initializes the DryRunGithubClient.
+
+    Args:
+        client: The real GithubClient used for read-only operations.
+        job_name: Optional job name to include in mock workflow jobs.
+    """
+    self._client = client
+    self._job_name = job_name
+    self._branches: set[str] = set()
+    self._next_run_id = 1
+
+  def _create_mock_run(
+    self, workflow_id: str | int, branch: str, event: str
+  ) -> WorkflowRun:
+    run = mock.Mock(spec=WorkflowRun)
+    run.id = self._next_run_id
+    self._next_run_id += 1
+    run.workflow_id = workflow_id
+    run.head_branch = branch
+    run.event = event
+    run.status = "completed"
+    run.conclusion = "success"
+    run.head_sha = "DRY_RUN_SHA"
+    return run
+
+  def _create_mock_jobs(self) -> list[WorkflowJob]:
+    if not self._job_name:
+      return []
+    job = mock.Mock(spec=WorkflowJob)
+    job.name = self._job_name
+    job.status = "completed"
+    job.conclusion = "success"
+    return [job]
+
+  def compare_commits(self, base_sha: str, head_sha: str) -> list[Commit]:
+    return self._client.compare_commits(base_sha, head_sha)
+
+  def trigger_workflow(
+    self, workflow_file: str, branch: str, inputs: dict[str, str]
+  ) -> None:
+    logging.info(
+      "DRY RUN: Triggering workflow %s on %s with inputs %s",
+      workflow_file,
+      branch,
+      inputs,
+    )
+
+  def get_latest_run(
+    self,
+    workflow_id: str | int,
+    branch: Optional[str] = None,
+    event: Optional[str] = None,
+    created: Optional[str] = None,
+    status: Optional[str] = None,
+    commit: Optional[str] = None,
+  ) -> WorkflowRun | None:
+    if event == "workflow_dispatch" and branch:
+      logging.info(
+        "DRY RUN: Getting latest run for workflow %s on branch %s",
+        workflow_id,
+        branch,
+      )
+      return self._create_mock_run(workflow_id, branch, event)
+    if status == "completed":
+      return None
+    return self._client.get_latest_run(
+      workflow_id, branch, event, created=created, status=status, commit=commit
+    )
+
+  def check_branch_exists(self, branch_name: str) -> bool:
+    logging.info("DRY RUN: Checking if branch %s exists", branch_name)
+    return branch_name in self._branches
+
+  def create_branch(self, branch_name: str, sha: str) -> None:
+    logging.info("DRY RUN: Creating branch %s at %s", branch_name, sha)
+    self._branches.add(branch_name)
+
+  def wait_for_branch_creation(self, branch_name: str, timeout: int = 60) -> None:
+    logging.info("DRY RUN: Waiting for branch %s creation", branch_name)
+
+  def delete_branch(self, branch_name: str) -> None:
+    logging.info("DRY RUN: Deleting branch %s", branch_name)
+    self._branches.discard(branch_name)
+
+  def get_workflows(self) -> list[Workflow]:
+    return self._client.get_workflows()
+
+  def get_workflow(self, workflow_id: int | str) -> Workflow:
+    return self._client.get_workflow(workflow_id)
+
+  def get_run(self, run_id: str) -> WorkflowRun:
+    return self._client.get_run(run_id)
+
+  def get_run_and_job_from_url(
+    self, url: str
+  ) -> tuple[WorkflowRun, Optional[WorkflowJob]]:
+    return self._client.get_run_and_job_from_url(url)
+
+  def find_previous_successful_run(self, run: WorkflowRun) -> WorkflowRun:
+    return self._client.find_previous_successful_run(run)
+
+  def find_previous_successful_job_run(
+    self, run: WorkflowRun, job_name: str
+  ) -> WorkflowRun:
+    return self._client.find_previous_successful_job_run(run, job_name)
+
+  def get_run_jobs(self, run_id: str | int) -> list[WorkflowJob]:
+    logging.info("DRY RUN: Getting jobs for workflow run %s", run_id)
+    return self._create_mock_jobs()
 
 
 def get_github_token() -> str | None:

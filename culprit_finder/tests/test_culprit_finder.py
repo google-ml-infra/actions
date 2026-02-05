@@ -582,3 +582,31 @@ def test_update_state(finder, mock_state_persister, is_good, expected_status):
   field = "current_good" if is_good else "current_bad"
   assert finder._state[field] == commit_sha
   assert finder._state["cache"][commit_sha] == expected_status
+
+
+def test_run_bisection_dry_run(mocker, mock_gh_client, finder_factory):
+  """Tests that run_bisection in dry_run mode avoids real write API calls."""
+  commits = [
+    factories.create_commit(mocker, "c0", "m0"),
+    factories.create_commit(mocker, "c1", "m1"),
+    factories.create_commit(mocker, "c2", "m2"),
+  ]
+  mock_gh_client.compare_commits.return_value = commits
+
+  dry_client = github_client.DryRunGithubClient(mock_gh_client)
+
+  finder = finder_factory(gh_client=dry_client)
+
+  # In dry run, mocked runs are successful, so no culprit should be found.
+  result = finder.run_bisection()
+
+  assert result is None
+
+  # Verify real client write methods were NOT called.
+  mock_gh_client.create_branch.assert_not_called()
+  mock_gh_client.delete_branch.assert_not_called()
+  mock_gh_client.trigger_workflow.assert_not_called()
+  mock_gh_client.check_branch_exists.assert_not_called()
+
+  # Verify read-only calls were made via the real client.
+  mock_gh_client.compare_commits.assert_called_once()
