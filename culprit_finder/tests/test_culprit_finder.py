@@ -54,6 +54,7 @@ def finder_factory(mock_gh_client, mock_state_persister, mock_state):
       "state": mock_state,
       "state_persister": mock_state_persister,
       "use_cache": False,
+      "retries": 0,
     }
     defaults.update(kwargs)
     return culprit_finder.CulpritFinder(**defaults)
@@ -104,23 +105,11 @@ def test_wait_for_workflow_completion_success(mocker, finder, mock_gh_client):
     assert call_args.kwargs["workflow_id"] == workflow
 
 
-def test_test_commit_with_retries(
-  mocker, mock_gh_client, mock_state, mock_state_persister
-):
+def test_test_commit_with_retries(mocker, mock_gh_client, finder_factory):
   """Tests that _test_commit retries the specified number of times on failure."""
   mocker.patch("culprit_finder.culprit_finder.github_client")
 
-  finder = culprit_finder.CulpritFinder(
-    repo=REPO,
-    start_sha="start_sha",
-    end_sha="end_sha",
-    workflow_file=WORKFLOW_FILE,
-    has_culprit_finder_workflow=True,
-    gh_client=mock_gh_client,
-    state=mock_state,
-    state_persister=mock_state_persister,
-    retries=2,
-  )
+  finder = finder_factory(retries=2)
 
   branch = "test-branch"
   commit_sha = "sha1"
