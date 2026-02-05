@@ -44,6 +44,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write # Required for A/B testing PR comments
 
 jobs:
   run_benchmarks:
@@ -68,9 +69,14 @@ The reusable workflow supports the following inputs:
 | `registry_file` | **Yes** | - | Path to the `.pbtxt` benchmark registry file relative to the repository root. |
 | `workflow_type` | **Yes** | - | The workflow type to run (e.g., `PRESUBMIT`, `NIGHTLY`). Matches the configuration in your registry. |
 | `ml_actions_ref` | No | `main` | The branch, tag, or SHA of google-ml-infra/actions to use. For production, use the same stable tag or SHA that's used to pin the reusable workflow file version (e.g. "v1.5.0" for "google-ml-infra/actions/.github/workflows/run_benchmarks.yml@v1.5.0"). |
+| `job_id` | No | Random | A unique identifier for the top-level job (e.g. `e2e-test`). Used to namespace artifacts. If empty, a random ID is generated. |
+| `ab_mode` | No | `false` | If `true`, runs A/B comparison (baseline vs experiment) and generates an A/B report. |
+| `experiment_ref` | No | Current SHA | Git ref for the experiment. Defaults to the current commit SHA. |
+| `baseline_ref` | No | PR Base or main | Git ref for the baseline. Defaults to PR base or main. |
+| `post_pr_comment` | No | `true` | If `true` (and `ab_mode` is enabled), posts the A/B report as a sticky comment on the PR. |
 | `publish_metrics` | No | `false` | If `true`, publishes benchmark results to Google Cloud Pub/Sub. |
 | `pub_sub_gcp_project_id` | No | `ml-oss-benchmarking-production` | GCP Project ID for Pub/Sub. |
-| `pub_sub_gcp_topic_id` | No | `public-results-prod` | Pub/Sub Topic ID. |
+| `pub_sub_gcp_topic_id` | No | `public-results-prod` | Pub/Sub Topic ID to publish results to. |
 
 ### Workflow granularity
 
@@ -165,9 +171,11 @@ benchmarks {
     stats {
       stat: MEAN
       comparison: {
-        # Configures static threshold analysis against a baseline
+        # Configures threshold analysis.
+        # For static analysis: compares against baseline.value.
+        # For A/B testing: compares experiment vs baseline using threshold %.
         baseline { value: 100.0 } 
-        threshold { value: 0.1 }
+        threshold { value: 0.1 } # 10% tolerance
         improvement_direction: LESS 
       }
     }
@@ -373,7 +381,42 @@ except Exception as e:
     sys.exit(1)
 ```
 
-## Step 4: Testing
+## Step 4: A/B Testing
+
+BAP supports native A/B testing, allowing you to detect performance regressions on pull requests before they are merged.
+
+### How it works
+
+When `ab_mode: true` is set, the workflow automatically orchestrates the following:
+
+1.  **Baseline Run**: Checks out the base ref (e.g., `main`) and runs the benchmarks.
+2.  **Experiment Run**: Checks out your experiment ref (e.g. PR branch) and runs the same benchmarks.
+3.  **Analysis**: Compares the metrics between the two runs.
+4.  **Report**: Generates a markdown report and posts it as a "sticky" comment on your PR.
+
+### PR Comment
+
+The workflow posts a comment to the PR summarizing the results.
+
+- **Sticky Behavior**: The comment is updated on subsequent pushes to keep the conversation clean.
+- **Run History**: The comment maintains a collapsible history log of previous runs for the PR, allowing you to audit performance over time as you iterate on the code.
+- **Status**: The status (PASS/REGRESSION) is determined by the `threshold` and `improvement_direction` defined in your registry.
+
+### Enabling A/B Testing
+
+Set `ab_mode: true` in your workflow file. You can also specify a custom baseline and/or experiment ref if needed.
+
+```yaml
+jobs:
+  run_benchmarks:
+    uses: google-ml-infra/actions/.github/workflows/run-benchmarks.yml@main
+    with:
+      registry_file: "benchmarking/my_registry.pbtxt"
+      workflow_type: "PRESUBMIT"
+      ab_mode: true # Enable A/B testing
+```
+
+## Step 5: Testing
 
 When adding or modifying benchmarks, it is often useful to verify the configuration in the GitHub environment before merging. To avoid creating unnecessary PRs (which can clutter history) just to trigger a run, we recommend using a push-based workflow for testing.
 
@@ -401,7 +444,7 @@ git push origin benchmarking
 2. Check the "Parse TensorBoard logs" step output to confirm your metrics were found and parsed correctly.
 3. Verify the generated "Benchmark Result" artifacts.
 
-## Step 5: Data Consumption (Pub/Sub)
+## Step 6: Data Consumption (Pub/Sub)
 
 After the benchmark completes and metrics are parsed, the infrastructure serializes the data and will optionally publish it to Google Cloud Pub/Sub. This allows you to build custom dashboards, alerting systems, or historical archives by subscribing to the result stream.
 
