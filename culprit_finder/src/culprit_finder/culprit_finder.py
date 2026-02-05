@@ -34,6 +34,7 @@ class CulpritFinder:
     state_persister: culprit_finder_state.StatePersister,
     job: str | None = None,
     use_cache: bool = True,
+    retries: int = 0,
   ):
     """
     Initializes the CulpritFinder instance.
@@ -49,6 +50,7 @@ class CulpritFinder:
         state_persister: The StatePersister object used to save the bisection state.
         job: The specific job name within the workflow to monitor for pass/fail.
         use_cache: Whether to use the cached results from previous runs. Defaults to True.
+        retries: Number of times to retry workflow runs in case of failure.
     """
     self._repo = repo
     self._start_sha = start_sha
@@ -61,6 +63,7 @@ class CulpritFinder:
     self._state_persister = state_persister
     self._job = job
     self._use_cache = use_cache
+    self._retries = retries
 
   def _wait_for_workflow_completion(
     self,
@@ -185,39 +188,54 @@ class CulpritFinder:
       branch_name,
     )
 
-    # Get the ID of the previous run (if any) to distinguish it from the new one we are about to trigger
-    previous_run = self._gh_client.get_latest_run(
-      workflow_id=workflow_to_trigger, branch=branch_name, event="workflow_dispatch"
-    )
-    previous_run_id = previous_run.id if previous_run else None
+    run: WorkflowRun | None = None
+    for attempt in range(self._retries + 1):
+      # Get the ID of the previous run (if any) to distinguish it from the new one we are about to trigger
+      previous_run = self._gh_client.get_latest_run(
+        workflow_id=workflow_to_trigger, branch=branch_name, event="workflow_dispatch"
+      )
+      previous_run_id = previous_run.id if previous_run else None
 
-    self._gh_client.trigger_workflow(
-      workflow_to_trigger,
-      branch_name,
-      inputs,
-    )
-
-    run = self._wait_for_workflow_completion(
-      workflow_to_trigger,
-      branch_name,
-      commit_sha,
-      previous_run_id,
-    )
-    if not run:
-      logging.error("Workflow failed to complete")
-      return False
-
-    if run.conclusion == "skipped" and self._has_culprit_finder_workflow:
-      raise ValueError(
-        f"Bisection stopped: The culprit finder workflow was skipped while testing '{self._workflow_file}'.\n"
-        f"Please ensure that 'culprit_finder.yml' is configured to trigger on '{self._workflow_file}' "
-        f"and that all required permissions are set."
+      self._gh_client.trigger_workflow(
+        workflow_to_trigger,
+        branch_name,
+        inputs,
       )
 
-    if self._job:
-      jobs = self._gh_client.get_run_jobs(run.id)
-      target_job = self._get_target_job(jobs, self._has_culprit_finder_workflow)
-      return target_job.conclusion == "success"
+      run = self._wait_for_workflow_completion(
+        workflow_to_trigger,
+        branch_name,
+        commit_sha,
+        previous_run_id,
+      )
+
+      if run and run.conclusion == "success":
+        return True
+
+      if run and run.conclusion == "skipped" and self._has_culprit_finder_workflow:
+        raise ValueError(
+          f"Bisection stopped: The culprit finder workflow was skipped while testing '{self._workflow_file}'.\n"
+          f"Please ensure that 'culprit_finder.yml' is configured to trigger on '{self._workflow_file}' "
+          f"and that all required permissions are set."
+        )
+
+      if run and self._job:
+        jobs = self._gh_client.get_run_jobs(run.id)
+        target_job = self._get_target_job(jobs, self._has_culprit_finder_workflow)
+        if target_job.conclusion == "success":
+          return True
+
+      if attempt < self._retries:
+        logging.info(
+          "Retrying workflow for commit %s (attempt %d/%d)",
+          commit_sha,
+          attempt + 1,
+          self._retries,
+        )
+
+    if not run:
+      logging.error("Workflow failed to complete for commit %s", commit_sha)
+      return False
 
     return run.conclusion == "success"
 
