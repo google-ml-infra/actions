@@ -50,6 +50,8 @@ runs:
       uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # ratchet:actions/setup-python@v4
       with:
         python-version: ${{ inputs.python_version }}
+      env:
+        PIP_ROOT_USER_ACTION: "ignore"
 
     - name: Install dependencies
       shell: bash
@@ -57,6 +59,7 @@ runs:
         PROJECT_PATH: ${{ inputs.project_path }}
         EXTRAS: ${{ inputs.extras }}
         EXTRAS_HW: ${{ inputs.extras_hw }}
+        PIP_ROOT_USER_ACTION: "ignore"
       run: |
         echo "::group::Install dependencies"
         "$GITHUB_ACTION_PATH/install_deps.sh"
