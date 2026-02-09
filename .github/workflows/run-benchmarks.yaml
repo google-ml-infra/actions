@@ -376,6 +376,7 @@ jobs:
           merge-multiple: true
 
       - name: Run A/B Analyzer
+        id: ab_analyzer
         env:
           MATRIX_JSON_STR: ${{ needs.generate_matrix.outputs.matrix }}
           REPO_URL: "${{ github.server_url }}/${{ github.repository }}"
@@ -394,10 +395,14 @@ jobs:
              --matrix_json="$MATRIX_JSON_STR" \
              --output_file="$REPORT_FILE" \
              --repo_url="$REPO_URL" \
-             --workflow_name="$WORKFLOW_NAME" || echo "AB_STATUS=FAILURE" >> "$GITHUB_ENV"
+             --workflow_name="$WORKFLOW_NAME" || echo "status=FAILURE" >> "$GITHUB_OUTPUT"
 
-          # Set A/B report as job summary          
-          cat "$REPORT_FILE" >> "$GITHUB_STEP_SUMMARY"
+          # Set A/B report as job summary
+          if [[ -f "$REPORT_FILE" ]]; then
+            cat "$REPORT_FILE" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "_No A/B report generated due to analysis failure._" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload A/B Report Artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
@@ -415,6 +420,9 @@ jobs:
             await postComment({ github, context });
 
       - name: Check Final Status
+        shell: bash
+        env:
+          AB_STATUS: ${{ steps.ab_analyzer.outputs.status }}
         run: |
           if [[ "$AB_STATUS" == "FAILURE" ]]; then
             echo "[FAILURE] A/B Analyzer detected regressions or missing experiments."
