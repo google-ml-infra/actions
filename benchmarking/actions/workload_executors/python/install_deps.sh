@@ -24,6 +24,13 @@
 
 set -euo pipefail
 
+PIP_FLAGS=(
+  "--quiet"
+  "--root-user-action=ignore"
+  "--disable-pip-version-check"
+  "--no-warn-script-location"
+)
+
 USER_REPO="$GITHUB_WORKSPACE/user_repo"
 PROJECT_DIR="$USER_REPO/$PROJECT_PATH"
 
@@ -40,13 +47,13 @@ get_combined_extras() {
   if [[ -n "${EXTRAS_HW:-}" ]]; then
     extras+=("$EXTRAS_HW")
   fi
-
+  
   echo "$(IFS=,; echo "${extras[*]}")"
 }
 
 if [[ -f "requirements.lock" ]]; then
-    echo "Found requirements.lock, installing from lock file."
-    pip install -r requirements.lock
+echo "Found requirements.lock, installing from lock file."
+    pip install "${PIP_FLAGS[@]}" -r requirements.lock
 
 elif [[ -f "pyproject.toml" ]]; then
     COMBINED_EXTRAS="$(get_combined_extras)"
@@ -54,15 +61,21 @@ elif [[ -f "pyproject.toml" ]]; then
 
     if [[ -n "$COMBINED_EXTRAS" ]]; then
         echo "Installing pip extras: [$COMBINED_EXTRAS]"
-        pip install ".[$COMBINED_EXTRAS]"
+        pip install "${PIP_FLAGS[@]}" ".[$COMBINED_EXTRAS]"
     else
-        pip install .
+        pip install "${PIP_FLAGS[@]}" .
     fi
 
 elif [[ -f "requirements.txt" ]]; then
     echo "Found requirements.txt, installing."
-    pip install -r requirements.txt
+    pip install "${PIP_FLAGS[@]}" -r requirements.txt
 
 else
     echo "No dependency file was found in $PROJECT_DIR."
 fi
+
+# Summary
+echo "----------------------------------------------------------------"
+echo "Installed Dependencies:"
+pip list --format=columns
+echo "----------------------------------------------------------------"
