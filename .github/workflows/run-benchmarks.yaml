@@ -254,18 +254,34 @@ jobs:
       - name: Setup benchmark environment
         shell: bash
         run: |
-          # Create TensorBoard output dir and export path to GITHUB_ENV
+          # Create TensorBoard output dir and workload artifacts dir.
           TENSORBOARD_OUTPUT_DIR="$GITHUB_WORKSPACE/tblogs"
-          mkdir -p "$TENSORBOARD_OUTPUT_DIR"
+          WORKLOAD_ARTIFACTS_DIR="$GITHUB_WORKSPACE/artifacts"
+          mkdir -p "$TENSORBOARD_OUTPUT_DIR" "$WORKLOAD_ARTIFACTS_DIR"
+          
+          echo "TENSORBOARD_OUTPUT_DIR: $TENSORBOARD_OUTPUT_DIR"
+          echo "WORKLOAD_ARTIFACTS_DIR: $WORKLOAD_ARTIFACTS_DIR"
 
-          echo "Created TensorBoard output dir at: $TENSORBOARD_OUTPUT_DIR"
-          echo "TENSORBOARD_OUTPUT_DIR=$TENSORBOARD_OUTPUT_DIR" >> "$GITHUB_ENV"
+          # Export created dirs to GITHUB_ENV
+          {
+            echo "TENSORBOARD_OUTPUT_DIR=$TENSORBOARD_OUTPUT_DIR"
+            echo "WORKLOAD_ARTIFACTS_DIR=$WORKLOAD_ARTIFACTS_DIR"
+          } >> "$GITHUB_ENV"
 
       - name: Execute workload
         uses: ./ml_actions/benchmarking/actions/dynamic_action_executor
         with:
           action: ${{ matrix.workload.action }}
           action_inputs: ${{ matrix.workload.action_inputs && toJson(matrix.workload.action_inputs) || '{}' }}
+
+      - name: Upload workload artifacts
+        if: always() # Uploads even if the workload fails
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
+        with:
+          name: workload-artifacts-${{ matrix.config_id }}-${{ needs.generate_matrix.outputs.job_id }}
+          path: ${{ env.WORKLOAD_ARTIFACTS_DIR }}
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Parse TensorBoard logs and create benchmark result artifact
         env:

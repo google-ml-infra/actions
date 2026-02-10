@@ -19,9 +19,9 @@ The system is designed to execute any GitHub Action as a workload (e.g., standar
 The system follows two simple contracts:
 
 1. **Input**: A benchmark registry (e.g., benchmark_registry.pbtxt) defining the workload action and its inputs, along with environment requirements and other metadata.
-2. **Output**: Metric data written via TensorBoard to the standard output directory.
+2. **Output**: Metric data written via TensorBoard and arbitrary files written to the workload artifacts directory.
 
-Our infrastructure handles the following:
+Our platform handles the following:
 
 - Provisioning the correct GitHub Actions runners.
 - Converting defined benchmarks and environment requirements into GitHub Actions jobs.
@@ -114,7 +114,7 @@ You can define base inputs in the `workload` block of the benchmark registry and
 
 For our standard executors, we support "extension" inputs (suffixed with _hw) that allow you to append flags instead of overwriting them.
 
-Note: The infrastructure performs a simple dictionary merge on inputs. If a key in `environment_configs.workload_action_inputs` matches a key in the base `workload.action_inputs`, the value from `environment_configs.workload_action_inputs` will completely overwrite the base value. For best practice, if you are creating your own custom action and want to support appending values (like adding extra flags instead of replacing them), you should define distinct input keys in your action definition (e.g., flags and flags_hw). Your action's script is then responsible for concatenating them.
+Note: The platform performs a simple dictionary merge on inputs. If a key in `environment_configs.workload_action_inputs` matches a key in the base `workload.action_inputs`, the value from `environment_configs.workload_action_inputs` will completely overwrite the base value. For best practice, if you are creating your own custom action and want to support appending values (like adding extra flags instead of replacing them), you should define distinct input keys in your action definition (e.g., flags and flags_hw). Your action's script is then responsible for concatenating them.
 
 ### Defining metrics
 
@@ -258,21 +258,26 @@ benchmarks {
 }
 ```
 
-## Step 3: Log metrics via TensorBoard
+## Step 3: Output Metrics and Artifacts
 
-Your benchmark script will need to log metrics via TensorBoard to integrate with the infrastructure. The reusable workflow provides a standard environment variable, `TENSORBOARD_OUTPUT_DIR`, which points to the directory where TensorBoard must write event files.
+Your benchmark script will need to log metrics via TensorBoard to integrate with the platform.
 
-This environment variable is automatically injected into the execution environment of any workload action (standard or custom). If you define your own workload executor, you simply need to ensure your script reads this variable.
+The reusable workflow injects two standard environment variables into your workload's execution environment to handle outputs:
 
-### Supported Libraries
+| Variable | Required | Description |
+| :--- | :---  | :--- |
+| `TENSORBOARD_OUTPUT_DIR` | **Yes** | Directory where TensorFlow event files must be written for metric parsing. |
+| `WORKLOAD_ARTIFACTS_DIR` | No | Directory where arbitrary files (e.g., logits, images, debug logs) can be written. |
 
-The infrastructure parses both V1 (Scalar) and V2 (Tensor) event formats. You can use any standard writer library:
+### Logging Metrics (TensorBoard)
+
+The platform parses both V1 (Scalar) and V2 (Tensor) event formats. You can use any standard writer library:
 
 - [TensorFlow](https://pypi.org/project/tensorflow/)(`tf.summary`): Writes V2 Tensor events.
 - [tensorboardX](https://pypi.org/project/tensorboardX/): Writes V1 Scalar events (Ideal for PyTorch users).
 - [TensorBoard](https://pypi.org/project/tensorboard/): Writes V1 Scalar events (Lightweight, no TensorFlow dependency).
 
-### Option 1: Using TensorFlow (V2)
+#### Option 1: Using TensorFlow (V2)
 
 Standard approach if your workload already uses TensorFlow.
 
@@ -282,7 +287,7 @@ import os
 import sys
 import numpy as np
 
-# Get the output directory from the infrastructure.
+# Get the output directory from the platform.
 tblog_dir = os.environ.get("TENSORBOARD_OUTPUT_DIR")
 
 if not tblog_dir:
@@ -308,7 +313,7 @@ except Exception as e:
     sys.exit(1)
 ```
 
-### Option 2: Using tensorboardX (V1)
+#### Option 2: Using tensorboardX (V1)
 
 Recommended for PyTorch users or lightweight scripts avoiding a heavy TensorFlow installation.
 
@@ -341,7 +346,7 @@ except Exception as e:
     sys.exit(1)
 ```
 
-### Option 3: Using TensorBoard (V1)
+#### Option 3: Using TensorBoard (V1)
 
 Recommended if you want zero heavy dependencies (no tensorflow and no torch). This uses the low-level protobufs directly.
 
@@ -379,6 +384,23 @@ try:
 except Exception as e:
     print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
     sys.exit(1)
+```
+### Saving Workload Artifacts
+
+If your workload produces files other than metrics (e.g., raw logits, images, or custom JSON logs), you can save them to `WORKLOAD_ARTIFACTS_DIR`.
+
+Any file written to this directory is automatically zipped and uploaded as a GitHub Actions artifact (retained for 7 days), even if the benchmark workload fails.
+
+```python
+import os
+import numpy as np
+
+artifact_dir = os.environ.get("WORKLOAD_ARTIFACTS_DIR")
+
+if artifact_dir:
+    # Write arbitrary files
+    with open(os.path.join(artifact_dir, "logits.npy"), "wb") as f:
+        np.save(f, my_logits)
 ```
 
 ## Step 4: A/B Testing
@@ -442,11 +464,11 @@ git push origin benchmarking
 
 1. Monitor the "Run benchmark" jobs to ensure the workload executes successfully.
 2. Check the "Parse TensorBoard logs" step output to confirm your metrics were found and parsed correctly.
-3. Verify the generated "Benchmark Result" artifacts.
+3. Verify the generated "Benchmark Result" and "Workload Artifacts" on the summary page.
 
 ## Step 6: Data Consumption (Pub/Sub)
 
-After the benchmark completes and metrics are parsed, the infrastructure serializes the data and will optionally publish it to Google Cloud Pub/Sub. This allows you to build custom dashboards, alerting systems, or historical archives by subscribing to the result stream.
+After the benchmark completes and metrics are parsed, the platform serializes the data and will optionally publish it to Google Cloud Pub/Sub. This allows you to build custom dashboards, alerting systems, or historical archives by subscribing to the result stream.
 
 ### Enabling Publication
 
@@ -460,7 +482,7 @@ Schema Definition: [benchmark_result.proto](https://github.com/google-ml-infra/a
 
 ### Requesting a Subscription
 
-To consume data for your repository, you must be onboarded as a consumer. Our infrastructure manages the subscription resources to ensure reliability (Dead Letter Queues, retention policies, etc.).
+To consume data for your repository, you must be onboarded as a consumer. Our platform manages the subscription resources to ensure reliability (Dead Letter Queues, retention policies, etc.).
 
 **To onboard, please [raise an issue](https://github.com/google-ml-infra/actions/issues) with the following details:**
 

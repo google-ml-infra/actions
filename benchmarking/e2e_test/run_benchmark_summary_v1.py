@@ -24,19 +24,20 @@ from tensorboard.summary.writer.event_file_writer import EventFileWriter
 
 
 def main():
-  """Runs a fake benchmark and writes TensorBoard logs."""
+  """Runs a fake benchmark and writes TensorBoard logs + artifacts."""
   print("E2E test benchmark script starting.")
   tblog_dir = os.environ.get("TENSORBOARD_OUTPUT_DIR")
+  artifact_dir = os.environ.get("WORKLOAD_ARTIFACTS_DIR")
 
   if not tblog_dir:
     print("Error: TENSORBOARD_OUTPUT_DIR env var not set.", file=sys.stderr)
     sys.exit(1)
 
+  # Write TensorBoard metrics
   print(f"Received TENSORBOARD_OUTPUT_DIR: {tblog_dir}.")
   args = sys.argv[1:]
   print(f"Received runtime_flags: {args}.")
   fake_metrics = [101.2, 100.5, 102.1, 99.8, 101.5]
-  print(f"Fake metrics generated: {fake_metrics}.")
 
   try:
     writer = EventFileWriter(tblog_dir)
@@ -54,10 +55,21 @@ def main():
     writer.close()
 
     print(f"Successfully wrote 5 wall_time metrics to {tblog_dir}")
+
+    # Create workload wrtifact
+    if artifact_dir:
+      print(f"Received WORKLOAD_ARTIFACTS_DIR: {artifact_dir}")
+      artifact_path = os.path.join(artifact_dir, "test_artifact.txt")
+      with open(artifact_path, "w") as f:
+        f.write("Hello from run_benchmark_summary_v1.")
+      print(f"Successfully wrote artifact to {artifact_path}")
+    else:
+      print("Warning: WORKLOAD_ARTIFACTS_DIR env var not set.")
+
     print("E2E test benchmark script finished.")
 
   except Exception as e:
-    print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
+    print(f"Error executing benchmark: {e}", file=sys.stderr)
     sys.exit(1)
 
 
