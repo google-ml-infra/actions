@@ -15,7 +15,9 @@
 """Tests for the A/B Analyzer library."""
 
 import json
+from pathlib import Path
 import sys
+from typing import Mapping, Optional
 import pytest
 from google.protobuf import wrappers_pb2
 from benchmarking.ab_analyzer import ab_analyzer_lib
@@ -26,8 +28,21 @@ from benchmarking.proto.common import metric_pb2
 # --- Helper Functions ---
 
 
-def make_result(config_id, metrics_dict, commit_sha=""):
-  """Creates a BenchmarkResult proto."""
+def make_result(
+  config_id: str,
+  metrics_dict: Mapping[str, Mapping[metric_pb2.Stat, float]],
+  commit_sha: str = "",
+) -> benchmark_result_pb2.BenchmarkResult:
+  """Creates a BenchmarkResult proto from a dictionary of metrics.
+
+  Args:
+      config_id: The configuration ID for the benchmark result.
+      metrics_dict: A nested mapping of {metric_name: {stat_enum: value}}.
+      commit_sha: Optional commit SHA to include in the result.
+
+  Returns:
+      A populated BenchmarkResult protobuf.
+  """
   res = benchmark_result_pb2.BenchmarkResult(config_id=config_id)
   if commit_sha:
     res.commit_sha = commit_sha
@@ -42,13 +57,28 @@ def make_result(config_id, metrics_dict, commit_sha=""):
 
 
 def make_job_with_spec(
-  config_id, metric_name, stat_enum, threshold=None, direction=None
+  config_id: str,
+  metric_name: str,
+  stat: metric_pb2.Stat,
+  threshold: Optional[float] = None,
+  direction: Optional[metric_pb2.ImprovementDirection] = None,
 ):
-  """Creates a BenchmarkJob proto with specific threshold config."""
+  """Creates a BenchmarkJob proto with specific threshold config.
+
+  Args:
+      config_id: The unique identifier for the benchmark job.
+      metric_name: The name of the metric to track (e.g., 'latency').
+      stat: The statistic to track (e.g., metric_pb2.Stat.MEAN).
+      threshold: Optional regression threshold (e.g., 0.05 for 5%).
+      direction: Optional improvement direction (e.g., SMALLER_IS_BETTER).
+
+  Returns:
+      A BenchmarkJob protobuf configured with the specified metric and comparison specs.
+  """
   job = benchmark_job_pb2.BenchmarkJob(config_id=config_id)
 
   # Create StatSpec
-  stat_spec = metric_pb2.StatSpec(stat=stat_enum)
+  stat_spec = metric_pb2.StatSpec(stat=stat)
   if threshold is not None or direction is not None:
     comp = metric_pb2.ComparisonSpec()
     if threshold is not None:
@@ -68,7 +98,7 @@ def make_job_with_spec(
 # --- Tests for File Loading ---
 
 
-def test_load_results_parsing(tmp_path):
+def test_load_results_parsing(tmp_path: Path, subtests) -> None:
   """Tests that filenames are correctly parsed into Config ID and Mode."""
 
   # Case 1: Happy path
@@ -86,16 +116,18 @@ def test_load_results_parsing(tmp_path):
   p4.write_text("{}")
 
   # Run the loader
-  pairs = ab_analyzer_lib.load_results(tmp_path)
+  results = ab_analyzer_lib.load_results(tmp_path)
 
   # Verify case 1
-  assert "BERT-LARGE" in pairs
-  assert "baseline" in pairs["BERT-LARGE"]
+  with subtests.test(msg="BERT-LARGE"):
+    assert "BERT-LARGE" in results
+    assert benchmark_job_pb2.AbTestGroup.BASELINE in results["BERT-LARGE"]
 
   # Verify case 2
-  assert "MY-BASELINE-MODEL" in pairs
-  assert "experiment" in pairs["MY-BASELINE-MODEL"]
-  assert "baseline" not in pairs["MY-BASELINE-MODEL"]
+  with subtests.test(msg="MY-BASELINE-MODEL"):
+    assert "MY-BASELINE-MODEL" in results
+    assert benchmark_job_pb2.AbTestGroup.EXPERIMENT in results["MY-BASELINE-MODEL"]
+    assert benchmark_job_pb2.AbTestGroup.BASELINE not in results["MY-BASELINE-MODEL"]
 
 
 # --- Tests for Comparison Config Logic ---
@@ -140,11 +172,16 @@ def test_generate_report_pass():
   base = make_result("test", {"latency": {metric_pb2.Stat.MEAN: 100.0}}, "sha1")
   exp = make_result("test", {"latency": {metric_pb2.Stat.MEAN: 99.0}}, "sha2")
 
-  pairs = {"test": {"baseline": base, "experiment": exp}}
+  results = {
+    "test": {
+      benchmark_job_pb2.AbTestGroup.BASELINE: base,
+      benchmark_job_pb2.AbTestGroup.EXPERIMENT: exp,
+    }
+  }
   matrix = {}  # Defaults: 5% threshold, LESS
 
   report, success = ab_analyzer_lib.generate_report(
-    pairs, matrix, "http://repo", "Test Workflow"
+    results, matrix, "http://repo", "TestFlow"
   )
 
   assert success is True
@@ -158,11 +195,16 @@ def test_generate_report_fail_latency():
   base = make_result("test", {"latency": {metric_pb2.Stat.P99: 100.0}}, "sha1")
   exp = make_result("test", {"latency": {metric_pb2.Stat.P99: 110.0}}, "sha2")
 
-  pairs = {"test": {"baseline": base, "experiment": exp}}
+  results = {
+    "test": {
+      benchmark_job_pb2.AbTestGroup.BASELINE: base,
+      benchmark_job_pb2.AbTestGroup.EXPERIMENT: exp,
+    }
+  }
   matrix = {}  # Defaults: 5% threshold, LESS
 
   report, success = ab_analyzer_lib.generate_report(
-    pairs, matrix, "http://repo", "Test Workflow"
+    results, matrix, "http://repo", "TestFlow"
   )
 
   assert success is False
@@ -176,7 +218,12 @@ def test_generate_report_fail_accuracy():
   base = make_result("test", {"accuracy": {metric_pb2.Stat.MEAN: 0.90}}, "sha1")
   exp = make_result("test", {"accuracy": {metric_pb2.Stat.MEAN: 0.80}}, "sha2")
 
-  pairs = {"test": {"baseline": base, "experiment": exp}}
+  results = {
+    "test": {
+      benchmark_job_pb2.AbTestGroup.BASELINE: base,
+      benchmark_job_pb2.AbTestGroup.EXPERIMENT: exp,
+    }
+  }
   job = make_job_with_spec(
     "test",
     "accuracy",
@@ -186,7 +233,7 @@ def test_generate_report_fail_accuracy():
   matrix = {"test": job}
 
   report, success = ab_analyzer_lib.generate_report(
-    pairs, matrix, "http://repo", "Test Workflow"
+    results, matrix, "http://repo", "TestFlow"
   )
 
   assert success is False
@@ -199,11 +246,16 @@ def test_generate_report_undetermined():
   base = make_result("test", {"errors": {metric_pb2.Stat.MEAN: 0.0}}, "sha1")
   exp = make_result("test", {"errors": {metric_pb2.Stat.MEAN: 1.0}}, "sha2")
 
-  pairs = {"test": {"baseline": base, "experiment": exp}}
+  results = {
+    "test": {
+      benchmark_job_pb2.AbTestGroup.BASELINE: base,
+      benchmark_job_pb2.AbTestGroup.EXPERIMENT: exp,
+    }
+  }
   matrix = {}
 
   report, success = ab_analyzer_lib.generate_report(
-    pairs, matrix, "http://repo", "Test Workflow"
+    results, matrix, "http://repo", "TestFlow"
   )
 
   # Should warn but not fail
@@ -215,15 +267,15 @@ def test_generate_report_undetermined():
 def test_missing_experiment_fails():
   """Test that missing experiment data causes a global FAIL."""
   base = make_result("broken_exp", {"latency": {metric_pb2.Stat.MEAN: 100.0}}, "sha1")
-  pairs = {
+  results = {
     "broken_exp": {
-      "baseline": base
+      benchmark_job_pb2.AbTestGroup.BASELINE: base
       # Missing experiment
     }
   }
 
   report, success = ab_analyzer_lib.generate_report(
-    pairs, {}, "http://repo", "Test Workflow"
+    results, {}, "http://repo", "TestFlow"
   )
 
   assert success is False
@@ -234,15 +286,15 @@ def test_missing_experiment_fails():
 def test_missing_baseline_warns():
   """Test that missing baseline data causes a PASS with warning."""
   exp = make_result("broken_base", {"latency": {metric_pb2.Stat.MEAN: 100.0}}, "sha2")
-  pairs = {
+  results = {
     "broken_base": {
       # Missing baseline
-      "experiment": exp
+      benchmark_job_pb2.AbTestGroup.EXPERIMENT: exp
     }
   }
 
   report, success = ab_analyzer_lib.generate_report(
-    pairs, {}, "http://repo", "Test Workflow"
+    results, {}, "http://repo", "TestFlow"
   )
 
   assert success is True

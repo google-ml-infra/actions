@@ -21,18 +21,18 @@ import "benchmarking/proto/common/workload_action.proto";
 import "benchmarking/proto/common/metric.proto";
 import "benchmarking/proto/common/workflow_type.proto"; 
 
+// Defines the group assignment for A/B testing scenarios.
+enum AbTestGroup {
+  // Default: Standard single execution.
+  AB_TEST_GROUP_UNSPECIFIED = 0;
+  // The control group (baseline/reference).
+  BASELINE = 1;
+  // The treatment group (experiment/candidate).
+  EXPERIMENT = 2;
+}
+
 // Represents a single, fully resolved job in the GitHub Actions matrix.
 message BenchmarkJob {
-  // Defines the group assignment for A/B testing scenarios.
-  enum AbTestGroup {
-    // Default: Standard single execution.
-    AB_TEST_GROUP_UNSPECIFIED = 0;
-    // The control group (baseline/reference).
-    BASELINE = 1;
-    // The treatment group (experiment/candidate).
-    EXPERIMENT = 2;
-  }
-
   // REQUIRED: Unique identifier for this specific combination of benchmark configuration
   // and environment configuration (e.g. "resnet50_gpu_v100").
   string config_id = 1 [(buf.validate.field).string.min_len = 1];

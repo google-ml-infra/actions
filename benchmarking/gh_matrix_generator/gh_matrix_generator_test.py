@@ -189,7 +189,7 @@ def test_config_id_persistence_across_workflow_types():
 # --- Tests for A/B Testing Logic ---
 
 
-def test_generate_matrix_ab_mode():
+def test_generate_matrix_ab_mode(subtests):
   """Tests that A/B mode duplicates entries and assigns correct refs."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
 
@@ -210,19 +210,21 @@ def test_generate_matrix_ab_mode():
   experiment = matrix[1]
 
   # Verify baseline
-  assert baseline["benchmark_name"] == "cpu_benchmark"
-  assert baseline["ab_test_group"] == "BASELINE"
-  assert baseline["checkout_ref"] == "main"
-  assert baseline["config_id"] == "cpu_benchmark_basic_cpu"
+  with subtests.test(msg="baseline"):
+    assert baseline["benchmark_name"] == "cpu_benchmark"
+    assert baseline["ab_test_group"] == "BASELINE"
+    assert baseline["checkout_ref"] == "main"
+    assert baseline["config_id"] == "cpu_benchmark_basic_cpu"
 
   # Verify experiment
-  assert experiment["benchmark_name"] == "cpu_benchmark"
-  assert experiment["ab_test_group"] == "EXPERIMENT"
-  assert experiment["checkout_ref"] == "feat-123"
-  assert experiment["config_id"] == "cpu_benchmark_basic_cpu"
+  with subtests.test(msg="experiment"):
+    assert experiment["benchmark_name"] == "cpu_benchmark"
+    assert experiment["ab_test_group"] == "EXPERIMENT"
+    assert experiment["checkout_ref"] == "feat-123"
+    assert experiment["config_id"] == "cpu_benchmark_basic_cpu"
 
 
-def test_generate_matrix_ab_mode_presubmit():
+def test_generate_matrix_ab_mode_presubmit(subtests):
   """Tests A/B mode with multiple benchmarks (PRESUBMIT has CPU and GPU)."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
 
@@ -238,10 +240,13 @@ def test_generate_matrix_ab_mode_presubmit():
   groups = [entry["ab_test_group"] for entry in matrix]
   names = [entry["benchmark_name"] for entry in matrix]
 
-  assert groups.count("BASELINE") == 2
-  assert groups.count("EXPERIMENT") == 2
-  assert names.count("cpu_benchmark") == 2
-  assert names.count("gpu_benchmark") == 2
+  with subtests.test(msg="Verify groups"):
+    assert groups.count("BASELINE") == 2
+    assert groups.count("EXPERIMENT") == 2
+
+  with subtests.test(msg="Verify benchmarks"):
+    assert names.count("cpu_benchmark") == 2
+    assert names.count("gpu_benchmark") == 2
 
 
 if __name__ == "__main__":

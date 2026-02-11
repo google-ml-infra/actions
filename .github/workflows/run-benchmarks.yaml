@@ -84,22 +84,22 @@ on:
         default: ""
 
 permissions:
-  contents: read # Required for actions/checkout.
-  pull-requests: write # Required for posting PR comments.
+  contents: read  # Required for actions/checkout.
+  pull-requests: write  # Required for posting PR comments.
 
 jobs:
   generate_matrix:
     name: Generate matrix
     runs-on: linux-x86-n2-16
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d  # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
       ml_actions_ref: ${{ steps.resolve_refs.outputs.ml_actions_ref }}
       job_id: ${{ steps.gen_job_id.outputs.job_id }}
     steps:
       - name: Check out user repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -163,7 +163,7 @@ jobs:
           echo "experiment_ref=$EXPERIMENT_REF" >> "$GITHUB_OUTPUT"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
           ref: ${{ steps.resolve_refs.outputs.ml_actions_ref }}
@@ -197,7 +197,7 @@ jobs:
           echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
 
       - name: Upload matrix JSON artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
           name: matrix-json-${{ steps.gen_job_id.outputs.job_id }}
           path: ${{ steps.generate.outputs.matrix_json_path }}
@@ -224,7 +224,7 @@ jobs:
 
     steps:
       - name: Check out user repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
           repository: ${{ github.repository }}
           # For A/B mode, use the checkout ref. Otherwise fall back to SHA.
@@ -244,7 +244,7 @@ jobs:
           echo "ref=$RESOLVED_REF" >> "$GITHUB_OUTPUT"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
@@ -310,7 +310,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload benchmark result
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
           name: ${{ steps.parse_tb_logs.outputs.benchmark_result_artifact_name }}
           path: ${{ steps.parse_tb_logs.outputs.benchmark_result_file }}
@@ -356,11 +356,11 @@ jobs:
     needs: [generate_matrix, run_benchmarks]
     runs-on: linux-x86-n2-16
     container:
-      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d  # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     if: inputs.ab_mode == true && !cancelled()
     steps:
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
           repository: 'google-ml-infra/actions'
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
@@ -368,7 +368,7 @@ jobs:
           persist-credentials: false
 
       - name: Download benchmark results
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ratchet:actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # ratchet:actions/download-artifact@v4
         with:
           # Only download artifacts created in this specific job
           pattern: benchmark-result-*-${{ needs.generate_matrix.outputs.job_id }}
@@ -405,14 +405,14 @@ jobs:
           fi
 
       - name: Upload A/B Report Artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
           name: ab-report-${{ needs.generate_matrix.outputs.job_id }}
           path: ${{ github.workspace }}/ab_report.md
 
       - name: Post PR Comment
         if: inputs.post_pr_comment == true && github.event_name == 'pull_request' && !cancelled()
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # ratchet:actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # ratchet:actions/github-script@v7
         with:
           script: |
             const scriptPath = require('path').resolve('./ml_actions/benchmarking/post_pr_comment/post_pr_comment.js');

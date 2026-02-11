@@ -16,19 +16,46 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import TypeAlias
+from collections.abc import MutableMapping, Mapping
 from google.protobuf import json_format
 from benchmarking.proto import benchmark_job_pb2
 from benchmarking.proto import benchmark_result_pb2
 from benchmarking.proto.common import metric_pb2
 
-# Map[config_id, Map[mode, BenchmarkResultProto]]
-ResultPairs = Dict[str, Dict[str, benchmark_result_pb2.BenchmarkResult]]
+# Maps A/B group to benchmark result.
+AbGroupResultMap: TypeAlias = Mapping[
+  benchmark_job_pb2.AbTestGroup, benchmark_result_pb2.BenchmarkResult
+]
+
+# Maps config_id to a set of A/B groups.
+ResultMapping: TypeAlias = Mapping[str, AbGroupResultMap]
 
 
-def load_results(results_dir: Path) -> ResultPairs:
-  """Scans the results directory and deserializes benchmark result artifacts into protos."""
-  pairs = {}
+def load_results(results_dir: Path) -> ResultMapping:
+  """Scans the results directory and deserializes benchmark result artifacts into protos.
+
+  Expected benchmark result file naming convention:
+      benchmark-result-{CONFIG_ID}-{MODE}-{JOB_ID}.json
+
+  Parsing Logic:
+      1. Scans for filenames matching "benchmark-result-*.json".
+      2. Identifies the mode ("BASELINE" or "EXPERIMENT") by finding the last occurrence
+         of the keyword.
+      3. Extracts the Config ID from the segment between the prefix and the mode.
+
+  Args:
+      results_dir: The directory path containing downloaded benchmark artifacts.
+
+  Returns:
+      A mapping where keys are configuration IDs and values are dictionaries mapping
+      the A/B mode ('baseline' or 'experiment') to the deserialized BenchmarkResult proto.
+
+  Raises:
+      ValueError: If a result file contains invalid JSON or cannot be parsed into
+          the expected protobuf format.
+  """
+  results = {}
 
   # Benchmark result artifact naming convention:
   # benchmark-result-{CONFIG}[-{AB_MODE}]-{JOB_ID}.json
@@ -41,17 +68,17 @@ def load_results(results_dir: Path) -> ResultPairs:
       continue
 
     if base_idx > exp_idx:
-      mode = "baseline"
+      mode = benchmark_job_pb2.AbTestGroup.BASELINE
       head = filename[:base_idx]
     else:
-      mode = "experiment"
+      mode = benchmark_job_pb2.AbTestGroup.EXPERIMENT
       head = filename[:exp_idx]
 
     prefix = "benchmark-result-"
     config_id = head[len(prefix) :]
 
-    if config_id not in pairs:
-      pairs[config_id] = {}
+    if config_id not in results:
+      results[config_id] = {}
 
     try:
       with open(path, "r") as f:
@@ -59,46 +86,58 @@ def load_results(results_dir: Path) -> ResultPairs:
 
       result_proto = benchmark_result_pb2.BenchmarkResult()
       json_format.ParseDict(json_data, result_proto, ignore_unknown_fields=True)
-      pairs[config_id][mode] = result_proto
+      results[config_id][mode] = result_proto
 
     except json.JSONDecodeError as e:
       raise ValueError(f"Error decoding JSON for {path}: {e}") from e
     except json_format.ParseError as e:
       raise ValueError(f"Error parsing proto for {path}: {e}") from e
 
-  return pairs
+  return results
 
 
 def get_comparison_config(
-  matrix_map: Dict[str, benchmark_job_pb2.BenchmarkJob],
+  matrix_map: MutableMapping[str, benchmark_job_pb2.BenchmarkJob],
   config_id: str,
   metric_name: str,
-  stat_enum: int,
-) -> Tuple[float, int]:
-  """Retrieves threshold and improvement direction (Enum int)."""
+  stat: metric_pb2.Stat,
+) -> tuple[float, metric_pb2.ImprovementDirection]:
+  """Retrieves the comparison threshold and improvement direction for a specific metric.
 
-  DEFAULT_THRESHOLD = 0.05
-  DEFAULT_DIRECTION = metric_pb2.ImprovementDirection.LESS
+  Args:
+      matrix_map: A mapping of configuration IDs to BenchmarkJob definitions.
+      config_id: The unique identifier for the benchmark configuration.
+      metric_name: The name of the metric to look up (e.g., 'latency').
+      stat: The specific statistic (e.g., MEDIAN, P99) to look up.
+
+  Returns:
+      A tuple containing:
+      - threshold (float): The allowed regression threshold (e.g., 0.05 for 5%).
+      - direction (ImprovementDirection): The direction that indicates improvement.
+  """
+
+  default_threshold = 0.05
+  default_direction = metric_pb2.ImprovementDirection.LESS
 
   job = matrix_map.get(config_id)
   if not job:
-    return DEFAULT_THRESHOLD, DEFAULT_DIRECTION
+    return default_threshold, default_direction
 
   metric_spec = next((m for m in job.metrics if m.name == metric_name), None)
   if not metric_spec:
-    return DEFAULT_THRESHOLD, DEFAULT_DIRECTION
+    return default_threshold, default_direction
 
-  stat_spec = next((s for s in metric_spec.stats if s.stat == stat_enum), None)
+  stat_spec = next((s for s in metric_spec.stats if s.stat == stat), None)
   if not stat_spec or not stat_spec.HasField("comparison"):
-    return DEFAULT_THRESHOLD, DEFAULT_DIRECTION
+    return default_threshold, default_direction
 
   comp = stat_spec.comparison
-  threshold = comp.threshold.value if comp.HasField("threshold") else DEFAULT_THRESHOLD
+  threshold = comp.threshold.value if comp.HasField("threshold") else default_threshold
   direction = (
     comp.improvement_direction
     if comp.improvement_direction
     != metric_pb2.ImprovementDirection.IMPROVEMENT_DIRECTION_UNSPECIFIED
-    else DEFAULT_DIRECTION
+    else default_direction
   )
 
   return threshold, direction
@@ -107,7 +146,16 @@ def get_comparison_config(
 def get_commit_link_markdown(
   result_proto: benchmark_result_pb2.BenchmarkResult, repo_url: str
 ) -> str:
-  """Generates a Markdown link to the commit: [short_sha](repo_url/commit/full_sha)."""
+  """Generates a Markdown-formatted link to a specific commit.
+
+  Args:
+      result_proto: The benchmark result protobuf containing the commit SHA.
+      repo_url: The base URL of the source repository (e.g., "https://github.com/org/repo").
+
+  Returns:
+      A Markdown string linking to the commit (e.g., "[abcdef1](.../commit/abcdef1...)").
+      Returns "unknown" if the commit SHA is missing from the result.
+  """
   if not result_proto.commit_sha:
     return "unknown"
 
@@ -121,22 +169,37 @@ def get_commit_link_markdown(
 
 
 def generate_report(
-  pairs: ResultPairs,
-  matrix_map: Dict[str, benchmark_job_pb2.BenchmarkJob],
+  results: ResultMapping,
+  matrix_map: MutableMapping[str, benchmark_job_pb2.BenchmarkJob],
   repo_url: str,
   workflow_name: str,
-) -> Tuple[str, bool]:
-  """Generates a Markdown report string and a success status."""
-  lines = [f"## A/B Benchmark Results: {workflow_name}"]
-  global_success = True
+) -> tuple[str, bool]:
+  """Generates a Markdown report string and a success status.
 
-  if not pairs:
-    lines.append("\n_No A/B benchmark results found._")
-    return "\n".join(lines), True
+  Args:
+      results: A mapping of configuration IDs to A/B groups (baseline/experiment).
+      matrix_map: A mapping of configuration IDs to BenchmarkJob definitions, used to
+        retrieve threshold and comparison settings.
+      repo_url: The base URL of the repository, used to generate commit links.
+      workflow_name: The name of the workflow to display in the report header.
 
-  for config_id, pair in pairs.items():
-    baseline_result = pair.get("baseline")
-    experiment_result = pair.get("experiment")
+  Returns:
+      A tuple containing:
+      - report_content (str): The full Markdown report string.
+      - success (bool): True if no regressions or failures were detected, False otherwise.
+
+  Raises:
+      ValueError: If the results mapping is empty.
+  """
+  lines: list[str] = [f"## A/B Benchmark Results: {workflow_name}"]
+  global_success: bool = True
+
+  if not results:
+    raise ValueError("No A/B benchmark results found.")
+
+  for config_id, result in results.items():
+    baseline_result = result.get(benchmark_job_pb2.AbTestGroup.BASELINE)
+    experiment_result = result.get(benchmark_job_pb2.AbTestGroup.EXPERIMENT)
 
     if not experiment_result:
       lines.append(f"\n### {config_id}: FAILED (Experiment Missing)")
@@ -163,17 +226,19 @@ def generate_report(
     )
     lines.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
 
-    base_stats = {(s.metric_name, s.stat): s.value.value for s in baseline_result.stats}
-    exp_stats = {
+    base_stats: Mapping[tuple[str, metric_pb2.Stat], float] = {
+      (s.metric_name, s.stat): s.value.value for s in baseline_result.stats
+    }
+    exp_stats: Mapping[tuple[str, metric_pb2.Stat], float] = {
       (s.metric_name, s.stat): s.value.value for s in experiment_result.stats
     }
 
-    for (metric_name, stat_enum), exp_val in exp_stats.items():
-      base_val = base_stats.get((metric_name, stat_enum))
-      stat_name = metric_pb2.Stat.Name(stat_enum)
+    for (metric_name, stat), exp_val in exp_stats.items():
+      base_val = base_stats.get((metric_name, stat))
+      stat_name = metric_pb2.Stat.Name(stat)
       display_name = f"{metric_name} <small>({stat_name})</small>"
       threshold, direction = get_comparison_config(
-        matrix_map, config_id, metric_name, stat_enum
+        matrix_map, config_id, metric_name, stat
       )
 
       if base_val is None:

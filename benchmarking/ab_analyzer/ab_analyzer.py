@@ -18,7 +18,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Dict
+from collections.abc import MutableMapping
 from google.protobuf import json_format
 from benchmarking.ab_analyzer import ab_analyzer_lib
 from benchmarking.proto import benchmark_job_pb2
@@ -67,7 +67,7 @@ def main():
     raise ValueError(f"Provided matrix JSON is not valid: {e}") from e
 
   # Deserialize into BenchmarkJob protos
-  matrix_map: Dict[str, benchmark_job_pb2.BenchmarkJob] = {}
+  matrix_map: MutableMapping[str, benchmark_job_pb2.BenchmarkJob] = {}
   try:
     for job_dict in matrix_list:
       job = benchmark_job_pb2.BenchmarkJob()
@@ -80,17 +80,16 @@ def main():
       f"Error parsing benchmark job JSON into BenchmarkJob proto: {e}"
     ) from e
 
-  # Load paired results
-  pairs = ab_analyzer_lib.load_results(args.results_dir)
+  # Load results
+  results = ab_analyzer_lib.load_results(args.results_dir)
 
   # Generate report
   report_content, is_success = ab_analyzer_lib.generate_report(
-    pairs, matrix_map, args.repo_url, args.workflow_name
+    results, matrix_map, args.repo_url, args.workflow_name
   )
 
   # Write A/B report
-  with open(args.output_file, "w") as f:
-    f.write(report_content)
+  args.output_file.write_text(report_content)
 
   print(f"Report written to {args.output_file}")
 

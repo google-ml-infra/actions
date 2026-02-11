@@ -16,7 +16,7 @@
 
 import os
 import sys
-from typing import Any, Dict, List
+from typing import Any, Mapping, Sequence
 from google.protobuf import text_format
 from google.protobuf.json_format import MessageToDict
 from protovalidate import validate, ValidationError
@@ -72,7 +72,7 @@ class MatrixGenerator:
     ab_mode: bool = False,
     baseline_ref: str = "main",
     experiment_ref: str = "",
-  ) -> List[Dict[str, Any]]:
+  ) -> Sequence[Mapping[str, Any]]:
     """Generates the full matrix using the BenchmarkJob proto to enforce strict validation."""
     matrix = []
     workflow_enum = workflow_type_pb2.WorkflowType.Value(workflow_type_str.upper())
@@ -112,14 +112,14 @@ class MatrixGenerator:
           # Baseline job
           baseline_job = benchmark_job_pb2.BenchmarkJob()
           baseline_job.CopyFrom(base_job)
-          baseline_job.ab_test_group = benchmark_job_pb2.BenchmarkJob.BASELINE
+          baseline_job.ab_test_group = benchmark_job_pb2.AbTestGroup.BASELINE
           baseline_job.checkout_ref = baseline_ref
           jobs_to_emit.append(baseline_job)
 
           # Experiment job
           experiment_job = benchmark_job_pb2.BenchmarkJob()
           experiment_job.CopyFrom(base_job)
-          experiment_job.ab_test_group = benchmark_job_pb2.BenchmarkJob.EXPERIMENT
+          experiment_job.ab_test_group = benchmark_job_pb2.AbTestGroup.EXPERIMENT
           experiment_job.checkout_ref = experiment_ref
           jobs_to_emit.append(experiment_job)
         else:
