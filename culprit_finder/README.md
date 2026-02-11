@@ -63,7 +63,9 @@ If provided, the tool infers the repository, workflow name, job name (if applica
 (Optional if URL is provided).
 - `--job` (Optional): The specific job name within the workflow to monitor for pass/fail.
 If not provided, the tool checks the overall workflow conclusion.
+- `--retry`: (Optional) Number of times to retry the workflow run if it fails (default: 0).
 - `--clear-cache`: (Optional) Deletes the local state file before execution to start a fresh bisection.
+- `--no-cache`: (Optional) Disabled cached results. This will run the workflow on all commits.
 
 ### State Persistence and Resuming
 
