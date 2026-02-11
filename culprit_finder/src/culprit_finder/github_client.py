@@ -2,12 +2,13 @@
 Module for interacting with the GitHub API via PyGithub.
 """
 
-import logging
 import os
 import re
-import time
-from typing import Optional
 import subprocess
+import logging
+import datetime
+from typing import Optional
+import time
 
 import github
 from github.Commit import Commit
@@ -350,29 +351,28 @@ class GithubClient:
     return self._repo.get_commit(sha)
 
   def get_last_commit_before(
-    self, repo_name: str, date: str, branch: str = "main"
+    self, repo_name: str, date: str | datetime.datetime, branch: str = "main"
   ) -> Commit | None:
     """
     Finds the latest commit in a repository that is older than or equal to a given date.
 
     Args:
         repo_name: The GitHub repository to search in 'owner/repo' format.
-        date: The ISO 8601 date string to search before (inclusive).
+        date: The ISO 8601 date string or datetime object to search before (inclusive).
         branch: The branch to search on.
 
     Returns:
         The matching Commit object, or None if not found.
     """
     target_repo = self._gh.get_repo(repo_name, lazy=True)
-    # until: "Only commits before this date will be returned."
-    # We want the *latest* commit before this date.
-    # get_commits returns in reverse chronological order (newest first).
-    # so the first one returned with `until=date` should be the one we want.
+    # PyGithub's get_commits returns a PaginatedList in reverse chronological order.
+    # We use `until` to filter commits before the date.
     commits = target_repo.get_commits(sha=branch, until=date)
 
-    if commits.totalCount > 0:
-        return commits[0]
-    return None
+    # Calling `totalCount` on a PaginatedList forces PyGithub to fetch the entire 
+    # pagination graph just to get the count. This is a massive API overhead.
+    # Instead, we just take the first item from the iterator, which only fetches the first page.
+    return next(iter(commits), None)
 
 
 def get_github_token() -> str | None:

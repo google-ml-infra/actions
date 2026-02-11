@@ -125,6 +125,69 @@ def test_test_commit_success(mocker, finder, mock_gh_client):
   )
 
 
+@pytest.mark.parametrize("has_culprit_workflow", [True, False])
+def test_test_commit_with_project_config(
+  mocker, mock_gh_client, has_culprit_workflow, mock_state, mock_state_persister
+):
+  """Tests that _test_commit injects the pinned dependency if the repo matches PROJECT_CONFIG."""
+  repo_name = "jax-ml/jax"
+  workflow_file = "wheel_tests_continuous.yml"
+  branch = "test-branch"
+  commit_sha = "sha1"
+  dep_commit_sha = "xla_sha_123"
+
+  # Create finder with specific repo and workflow
+  finder = culprit_finder.CulpritFinder(
+    repo=repo_name,
+    start_sha="start_sha",
+    end_sha="end_sha",
+    workflow_file=workflow_file,
+    has_culprit_finder_workflow=has_culprit_workflow,
+    gh_client=mock_gh_client,
+    state=mock_state,
+    state_persister=mock_state_persister,
+  )
+
+  # Mock completion
+  mock_wait = mocker.patch.object(finder, "_wait_for_workflow_completion")
+  mock_wait.return_value = factories.create_run(
+    mocker, head_sha=commit_sha, conclusion="success", status="completed"
+  )
+  mock_gh_client.get_latest_run.return_value = None
+
+  # Mock dependency lookup
+  mock_commit = mocker.Mock()
+  mock_commit.commit.committer.date = "2023-01-01T00:00:00Z"
+  mock_gh_client.get_commit.return_value = mock_commit
+  
+  mock_dep_commit = mocker.Mock()
+  mock_dep_commit.sha = dep_commit_sha
+  mock_gh_client.get_last_commit_before.return_value = mock_dep_commit
+  
+  is_good = finder._test_commit(commit_sha, branch)
+
+  assert is_good is True
+  mock_gh_client.get_commit.assert_called_once_with(commit_sha)
+  mock_gh_client.get_last_commit_before.assert_called_once_with(
+    "openxla/xla", "2023-01-01T00:00:00Z"
+  )
+
+  # Determine expected arguments based on configuration
+  if has_culprit_workflow:
+    expected_workflow = CULPRIT_WORKFLOW
+    expected_inputs = {"workflow-to-debug": workflow_file, "xla-commit": dep_commit_sha}
+  else:
+    expected_workflow = workflow_file
+    expected_inputs = {"xla-commit": dep_commit_sha}
+
+  mock_gh_client.trigger_workflow.assert_called_once_with(
+    expected_workflow,
+    branch,
+    expected_inputs,
+  )
+
+
+
 def test_test_commit_failure(mocker, finder, mock_gh_client):
   """Tests that _test_commit returns False if the workflow fails."""
   mock_wait = mocker.patch.object(finder, "_wait_for_workflow_completion")

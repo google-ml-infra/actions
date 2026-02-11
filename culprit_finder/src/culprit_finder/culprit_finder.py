@@ -33,6 +33,11 @@ PROJECT_CONFIG = {
         "input_name": "xla-commit",
         "workflows": ["wheel_tests_continuous.yml", "build_artifacts.yml"],
     },
+    "google-ml-infra/jax-fork": {
+        "dependency_repo": "openxla/xla",
+        "input_name": "xla-commit",
+        "workflows": ["wheel_tests_continuous.yml", "build_artifacts.yml"],
+    },
 }
 
 
@@ -208,6 +213,8 @@ class CulpritFinder:
 
         # Get date of the commit we are testing
         commit_details = self._gh_client.get_commit(commit_sha)
+        # PyGithub returns naive datetime objects in UTC.
+        # get_last_commit_before's `until` parameter natively handles this datetime object.
         commit_date = commit_details.commit.committer.date
 
         # Find dependency commit at that time
