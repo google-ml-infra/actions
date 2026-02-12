@@ -31,6 +31,7 @@ runs:
       env:
         REQUESTED_ACTION: ${{ inputs.action }}
       run: |
+        echo "::group::Generate action wrapper"
         set -euo pipefail
 
         # Validate action path
@@ -39,9 +40,9 @@ runs:
           exit 1
         fi
 
-        rm -rf ./.dynamic-action
-        mkdir -p ./.dynamic-action
+        rm -rf ./.dynamic-action && mkdir -p ./.dynamic-action
         sed "s|\$REQUESTED_ACTION|$REQUESTED_ACTION|g" "$GITHUB_ACTION_PATH/wrapper.yaml.template" > ./.dynamic-action/action.yml
+        echo "::endgroup::"
 
     - name: Execute wrapper
       uses: ./.dynamic-action
