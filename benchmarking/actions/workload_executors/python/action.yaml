@@ -46,10 +46,14 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Set up Python
-      uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # ratchet:actions/setup-python@v4
-      with:
-        python-version: ${{ inputs.python_version }}
+    - name: Install Python
+      shell: bash
+      env: 
+        PYTHON_VERSION: ${{ inputs.python_version }}
+      run: |
+        echo "::group::Install Python"
+        "$GITHUB_ACTION_PATH/setup_python.sh" "$PYTHON_VERSION"
+        echo "::endgroup::"
 
     - name: Install dependencies
       shell: bash
@@ -64,18 +68,13 @@ runs:
 
     - name: Run benchmark script
       shell: bash
+      working-directory: user_repo
       env:
         SCRIPT: ${{ inputs.script_path }}
         ARGS: "${{ inputs.runtime_flags }} ${{ inputs.runtime_flags_hw }}"
       run: |
-        echo "::group::Run Benchmark Script"
-
-        set -euo pipefail
+        echo "::group::Run benchmark script"
         export PYTHONPATH="$GITHUB_WORKSPACE/user_repo"
-        cd "$GITHUB_WORKSPACE/user_repo" || exit 1
-
-        echo "SCRIPT: $SCRIPT"
-        echo "ARGS: $ARGS"
+        echo "SCRIPT: $SCRIPT | ARGS: $ARGS"
         python "$SCRIPT" $ARGS
-
         echo "::endgroup::"
