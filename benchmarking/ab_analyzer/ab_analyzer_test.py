@@ -16,8 +16,8 @@
 
 import json
 from pathlib import Path
+from collections.abc import Mapping
 import sys
-from typing import Mapping, Optional
 import pytest
 from google.protobuf import wrappers_pb2
 from benchmarking.ab_analyzer import ab_analyzer_lib
@@ -60,8 +60,8 @@ def make_job_with_spec(
   config_id: str,
   metric_name: str,
   stat: metric_pb2.Stat,
-  threshold: Optional[float] = None,
-  direction: Optional[metric_pb2.ImprovementDirection] = None,
+  threshold: float | None = None,
+  direction: metric_pb2.ImprovementDirection | None = None,
 ):
   """Creates a BenchmarkJob proto with specific threshold config.
 

@@ -17,7 +17,7 @@
 import json
 from pathlib import Path
 from typing import TypeAlias
-from collections.abc import MutableMapping, Mapping
+from collections.abc import Mapping
 from google.protobuf import json_format
 from benchmarking.proto import benchmark_job_pb2
 from benchmarking.proto import benchmark_result_pb2
@@ -97,7 +97,7 @@ def load_results(results_dir: Path) -> ResultMapping:
 
 
 def get_comparison_config(
-  matrix_map: MutableMapping[str, benchmark_job_pb2.BenchmarkJob],
+  matrix_map: Mapping[str, benchmark_job_pb2.BenchmarkJob],
   config_id: str,
   metric_name: str,
   stat: metric_pb2.Stat,
@@ -170,7 +170,7 @@ def get_commit_link_markdown(
 
 def generate_report(
   results: ResultMapping,
-  matrix_map: MutableMapping[str, benchmark_job_pb2.BenchmarkJob],
+  matrix_map: Mapping[str, benchmark_job_pb2.BenchmarkJob],
   repo_url: str,
   workflow_name: str,
 ) -> tuple[str, bool]:

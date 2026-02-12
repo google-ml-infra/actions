@@ -18,7 +18,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from collections.abc import MutableMapping
 from google.protobuf import json_format
 from benchmarking.ab_analyzer import ab_analyzer_lib
 from benchmarking.proto import benchmark_job_pb2
@@ -67,13 +66,13 @@ def main():
     raise ValueError(f"Provided matrix JSON is not valid: {e}") from e
 
   # Deserialize into BenchmarkJob protos
-  matrix_map: MutableMapping[str, benchmark_job_pb2.BenchmarkJob] = {}
+  matrix_map: dict[str, benchmark_job_pb2.BenchmarkJob] = {}
   try:
     for job_dict in matrix_list:
       job = benchmark_job_pb2.BenchmarkJob()
       json_format.ParseDict(job_dict, job, ignore_unknown_fields=True)
 
-      if job.ab_test_group == benchmark_job_pb2.BenchmarkJob.BASELINE:
+      if job.ab_test_group == benchmark_job_pb2.AbTestGroup.BASELINE:
         matrix_map[job.config_id] = job
   except json_format.ParseError as e:
     raise ValueError(

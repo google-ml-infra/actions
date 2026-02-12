@@ -16,7 +16,8 @@
 
 import os
 import sys
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 from google.protobuf import text_format
 from google.protobuf.json_format import MessageToDict
 from protovalidate import validate, ValidationError
