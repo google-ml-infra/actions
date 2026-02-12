@@ -278,7 +278,8 @@ jobs:
         if: always() # Uploads even if the workload fails
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
-          name: workload-artifacts-${{ matrix.config_id }}-${{ needs.generate_matrix.outputs.job_id }}
+          # Format: workload-artifacts-{CONFIG}[-{AB_MODE}]-{JOB_ID}.json
+          name: workload-artifacts-${{ matrix.config_id }}${{ matrix.ab_test_group && format('-{0}', matrix.ab_test_group) || '' }}-${{ needs.generate_matrix.outputs.job_id }}
           path: ${{ env.WORKLOAD_ARTIFACTS_DIR }}
           retention-days: 7
           if-no-files-found: ignore
