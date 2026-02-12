@@ -41,19 +41,28 @@ runs:
   steps:
     - name: Run Bazel target
       shell: bash
+      working-directory: user_repo
       env:
         TARGET: ${{ inputs.target }}
         BAZEL_RUN_FLAGS: "${{ inputs.bazel_run_flags }} ${{ inputs.bazel_run_flags_hw }}"
         ARGS: "${{ inputs.runtime_flags }} ${{ inputs.runtime_flags_hw }}"
       run: |
         echo "::group::Run Bazel target"
-
         set -euo pipefail
-        cd "$GITHUB_WORKSPACE/user_repo"
-        
+
+        echo "----------------------------------------------------------------"
         echo "TARGET: $TARGET"
         echo "BAZEL RUN FLAGS: $BAZEL_RUN_FLAGS"
         echo "ARGS: $ARGS"
-        bazel run $BAZEL_RUN_FLAGS "$TARGET" -- $ARGS
+        echo "----------------------------------------------------------------"
+
+        bazel run \
+          --noshow_progress \
+          --noshow_loading_progress \
+          --ui_event_filters=-info \
+          $BAZEL_RUN_FLAGS \
+          "$TARGET" \
+          -- \
+          $ARGS
 
         echo "::endgroup::"

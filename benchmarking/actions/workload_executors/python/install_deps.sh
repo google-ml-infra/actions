@@ -39,39 +39,39 @@ echo "Searching for dependency files in $PROJECT_DIR."
 
 get_combined_extras() {
   local extras=()
-  
+
   if [[ -n "${EXTRAS:-}" ]]; then
     extras+=("$EXTRAS")
   fi
-  
+
   if [[ -n "${EXTRAS_HW:-}" ]]; then
     extras+=("$EXTRAS_HW")
   fi
-  
+
   echo "$(IFS=,; echo "${extras[*]}")"
 }
 
 if [[ -f "requirements.lock" ]]; then
-echo "Found requirements.lock, installing from lock file."
-    pip install "${PIP_FLAGS[@]}" -r requirements.lock
+  echo "Found requirements.lock, installing from lock file."
+  pip install "${PIP_FLAGS[@]}" -r requirements.lock
 
 elif [[ -f "pyproject.toml" ]]; then
-    COMBINED_EXTRAS="$(get_combined_extras)"
-    echo "Found pyproject.toml, installing from source."
+  COMBINED_EXTRAS="$(get_combined_extras)"
+  echo "Found pyproject.toml, installing from source."
 
-    if [[ -n "$COMBINED_EXTRAS" ]]; then
-        echo "Installing pip extras: [$COMBINED_EXTRAS]"
-        pip install "${PIP_FLAGS[@]}" ".[$COMBINED_EXTRAS]"
-    else
-        pip install "${PIP_FLAGS[@]}" .
-    fi
+  if [[ -n "$COMBINED_EXTRAS" ]]; then
+      echo "Installing pip extras: [$COMBINED_EXTRAS]"
+      pip install "${PIP_FLAGS[@]}" ".[$COMBINED_EXTRAS]"
+  else
+      pip install "${PIP_FLAGS[@]}" .
+  fi
 
 elif [[ -f "requirements.txt" ]]; then
-    echo "Found requirements.txt, installing."
-    pip install "${PIP_FLAGS[@]}" -r requirements.txt
+  echo "Found requirements.txt, installing."
+  pip install "${PIP_FLAGS[@]}" -r requirements.txt
 
 else
-    echo "No dependency file was found in $PROJECT_DIR."
+  echo "No dependency file was found in $PROJECT_DIR."
 fi
 
 # Summary
