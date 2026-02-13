@@ -52,6 +52,7 @@ runs:
         PYTHON_VERSION: ${{ inputs.python_version }}
       run: |
         echo "::group::Install Python"
+        set -euo pipefail
         "$GITHUB_ACTION_PATH/setup_python.sh" "$PYTHON_VERSION"
         echo "::endgroup::"
 
@@ -63,6 +64,7 @@ runs:
         EXTRAS_HW: ${{ inputs.extras_hw }}
       run: |
         echo "::group::Install dependencies"
+        set -euo pipefail
         "$GITHUB_ACTION_PATH/install_deps.sh"
         echo "::endgroup::"
 
@@ -74,7 +76,13 @@ runs:
         ARGS: "${{ inputs.runtime_flags }} ${{ inputs.runtime_flags_hw }}"
       run: |
         echo "::group::Run benchmark script"
+        set -euo pipefail
         export PYTHONPATH="$GITHUB_WORKSPACE/user_repo"
-        echo "SCRIPT: $SCRIPT | ARGS: $ARGS"
+
+        echo "----------------------------------------------------------------"
+        echo "SCRIPT: $SCRIPT"
+        echo "ARGS: $ARGS"
+        echo "----------------------------------------------------------------"
+
         python "$SCRIPT" $ARGS
         echo "::endgroup::"

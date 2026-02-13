@@ -106,12 +106,15 @@ jobs:
           path: user_repo
           persist-credentials: false
 
-      - name: Generate Job ID
+      - name: Generate job ID
         id: gen_job_id
         shell: bash
         env:
           INPUT_JOB_ID: ${{ inputs.job_id }}
         run: |
+          echo "::group::Generate job ID"
+          set -euo pipefail
+
           # If user provided a job_id, use it. Otherwise, generate one.
           if [[ -n "$INPUT_JOB_ID" ]]; then
             echo "job_id=$INPUT_JOB_ID" >> "$GITHUB_OUTPUT"
@@ -121,7 +124,9 @@ jobs:
             echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Resolve Git refs
+          echo "::endgroup::"
+
+      - name: Resolve git refs
         id: resolve_refs
         shell: bash
         env:
@@ -134,6 +139,9 @@ jobs:
           ML_ACTIONS_REF: ${{ github.repository == 'google-ml-infra/actions' && github.sha || inputs.ml_actions_ref }}
           SHA: ${{ github.sha }}
         run: |
+          echo "::group::Resolve git refs"
+          set -euo pipefail
+          
           # Resolve ML Actions ref
           echo "ml_actions_ref=$ML_ACTIONS_REF" >> "$GITHUB_OUTPUT"
 
@@ -161,6 +169,7 @@ jobs:
           echo "Resolved git refs: baseline=$BASELINE_REF, experiment=$EXPERIMENT_REF"
           echo "baseline_ref=$BASELINE_REF" >> "$GITHUB_OUTPUT"
           echo "experiment_ref=$EXPERIMENT_REF" >> "$GITHUB_OUTPUT"
+          echo "::endgroup::"
 
       - name: Check out ML actions repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
@@ -181,20 +190,26 @@ jobs:
         shell: bash
         working-directory: ml_actions
         run: |
+          echo "::group::Generate benchmark matrix"
           set -euo pipefail
           REGISTRY_PATH="$GITHUB_WORKSPACE/user_repo/$REGISTRY_FILE"
           MATRIX_JSON_PATH="$GITHUB_WORKSPACE/matrix.json"
 
-          MATRIX_JSON="$(bazel run //benchmarking/gh_matrix_generator -- \
-          --registry_file="$REGISTRY_PATH" \
-          --workflow_type="$WORKFLOW_TYPE" \
-          --ab_mode="$AB_MODE" \
-          --baseline_ref="$BASELINE_REF" \
-          --experiment_ref="$EXPERIMENT_REF" | jq -c '.')"
+          MATRIX_JSON="$(bazel run //benchmarking/gh_matrix_generator \
+            --noshow_progress \
+            --noshow_loading_progress \
+            --ui_event_filters=-info \
+            -- \
+            --registry_file="$REGISTRY_PATH" \
+            --workflow_type="$WORKFLOW_TYPE" \
+            --ab_mode="$AB_MODE" \
+            --baseline_ref="$BASELINE_REF" \
+            --experiment_ref="$EXPERIMENT_REF" | jq -c '.')"
 
           echo "$MATRIX_JSON" | jq '.' > "$MATRIX_JSON_PATH"
           echo "matrix_json_path=$MATRIX_JSON_PATH" >> "$GITHUB_OUTPUT"
           echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
+          echo "::endgroup::"
 
       - name: Upload matrix JSON artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
@@ -240,8 +255,11 @@ jobs:
           # For A/B mode, use the checkout ref. Otherwise fall back to standard ref.
           RESOLVED_REF: ${{ matrix.checkout_ref || github.ref_name }}
         run: |
+          echo "::group::Get workload commit info"
+          set -euo pipefail
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "ref=$RESOLVED_REF" >> "$GITHUB_OUTPUT"
+          echo "::endgroup::"
 
       - name: Check out ML actions repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
@@ -251,9 +269,12 @@ jobs:
           path: ml_actions
           persist-credentials: false
 
-      - name: Setup benchmark environment
+      - name: Set up benchmark environment
         shell: bash
         run: |
+          echo "::group::Set up benchmark environment"
+          set -euo pipefail
+
           # Create TensorBoard output dir and workload artifacts dir.
           TENSORBOARD_OUTPUT_DIR="$GITHUB_WORKSPACE/tblogs"
           WORKLOAD_ARTIFACTS_DIR="$GITHUB_WORKSPACE/artifacts"
@@ -267,6 +288,8 @@ jobs:
             echo "TENSORBOARD_OUTPUT_DIR=$TENSORBOARD_OUTPUT_DIR"
             echo "WORKLOAD_ARTIFACTS_DIR=$WORKLOAD_ARTIFACTS_DIR"
           } >> "$GITHUB_ENV"
+
+          echo "::endgroup::"
 
       - name: Execute workload
         uses: ./ml_actions/benchmarking/actions/dynamic_action_executor
@@ -284,7 +307,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Parse TensorBoard logs and create benchmark result artifact
+      - name: Parse TF event files
         env:
           BENCHMARK_CONFIG_ID: ${{ matrix.config_id }}
           METRIC_SPECS_JSON: '${{ toJson(matrix.metrics) }}'
@@ -301,11 +324,16 @@ jobs:
         working-directory: ml_actions
         shell: bash
         run: |
+          echo "::group::Parse TF event files"
           set -euo pipefail
           mkdir -p "$BENCHMARK_RESULTS_DIR"          
           TARGET_BENCHMARK_RESULT_FILE_PATH="$BENCHMARK_RESULTS_DIR/$BENCHMARK_RESULT_FILENAME"
 
-          bazel run //benchmarking/tb_parser -- \
+          bazel run //benchmarking/tb_parser \
+            --noshow_progress \
+            --noshow_loading_progress \
+            --ui_event_filters=-info \
+            -- \
             --metric_specs_json="$METRIC_SPECS_JSON" \
             --tblog_dir="$TENSORBOARD_OUTPUT_DIR" \
             --output_dir="$BENCHMARK_RESULTS_DIR" \
@@ -326,6 +354,8 @@ jobs:
             echo "benchmark_result_artifact_name=${BENCHMARK_RESULT_FILENAME%.json}"
           } >> "$GITHUB_OUTPUT"
 
+          echo "::endgroup::"
+
       - name: Upload benchmark result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
@@ -342,13 +372,20 @@ jobs:
         shell: bash
         working-directory: ml_actions
         run: |
+          echo "::group::Run static threshold analyzer"
           set -euo pipefail
 
-          bazel run //benchmarking/static_threshold_analyzer -- \
+          bazel run //benchmarking/static_threshold_analyzer \
+            --noshow_progress \
+            --noshow_loading_progress \
+            --ui_event_filters=-info \
+            -- \
             --metric_specs_json="$METRIC_SPECS_JSON" \
-            --benchmark_result_file="$BENCHMARK_RESULT_FILE"
+            --benchmark_result_file="$BENCHMARK_RESULT_FILE" 
 
-      - name: Publish Results to Pub/Sub
+          echo "::endgroup::"
+
+      - name: Publish results to Pub/Sub
         if: success() && inputs.publish_metrics
         env:
           PROJECT_ID: ${{ inputs.pub_sub_gcp_project_id }}
@@ -358,15 +395,20 @@ jobs:
         shell: bash
         working-directory: ml_actions
         run: |
+          echo "::group::Publish results to Pub/Sub"
           set -euo pipefail
 
           bazel run \
             --noshow_progress \
+            --noshow_loading_progress \
+            --ui_event_filters=-info \
             //benchmarking/publisher:publish_results -- \
             --project_id="$PROJECT_ID" \
             --topic_id="$TOPIC_ID" \
             --benchmark_results_dir="$BENCHMARK_RESULTS_DIR" \
             --repo_name="$USER_REPO"
+
+          echo "::endgroup::"
 
   ab_analysis:
     name: A/B Analysis
@@ -392,7 +434,7 @@ jobs:
           path: all_results
           merge-multiple: true
 
-      - name: Run A/B Analyzer
+      - name: Run A/B analyzer
         id: ab_analyzer
         env:
           MATRIX_JSON_STR: ${{ needs.generate_matrix.outputs.matrix }}
@@ -401,18 +443,23 @@ jobs:
         shell: bash
         working-directory: ml_actions
         run: |
+          echo "::group::Run A/B analyzer"
           set -euo pipefail
 
           RESULTS_DIR="$GITHUB_WORKSPACE/all_results"
           REPORT_FILE="$GITHUB_WORKSPACE/ab_report.md"
 
           # Catch non-zero exit code to allow the workflow to proceed to the PR comment step.
-          bazel run //benchmarking/ab_analyzer -- \
-             --results_dir="$RESULTS_DIR" \
-             --matrix_json="$MATRIX_JSON_STR" \
-             --output_file="$REPORT_FILE" \
-             --repo_url="$REPO_URL" \
-             --workflow_name="$WORKFLOW_NAME" || echo "status=FAILURE" >> "$GITHUB_OUTPUT"
+          bazel run //benchmarking/ab_analyzer \
+            --noshow_progress \
+            --noshow_loading_progress \
+            --ui_event_filters=-info \
+            -- \
+            --results_dir="$RESULTS_DIR" \
+            --matrix_json="$MATRIX_JSON_STR" \
+            --output_file="$REPORT_FILE" \
+            --repo_url="$REPO_URL" \
+            --workflow_name="$WORKFLOW_NAME" || echo "status=FAILURE" >> "$GITHUB_OUTPUT"
 
           # Set A/B report as job summary
           if [[ -f "$REPORT_FILE" ]]; then
@@ -421,13 +468,15 @@ jobs:
             echo "_No A/B report generated due to analysis failure._" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Upload A/B Report Artifact
+          echo "::endgroup::"
+
+      - name: Upload A/B report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
           name: ab-report-${{ needs.generate_matrix.outputs.job_id }}
           path: ${{ github.workspace }}/ab_report.md
 
-      - name: Post PR Comment
+      - name: Post PR comment
         if: inputs.post_pr_comment == true && github.event_name == 'pull_request' && !cancelled()
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # ratchet:actions/github-script@v7
         with:
@@ -436,12 +485,17 @@ jobs:
             const postComment = require(scriptPath);
             await postComment({ github, context });
 
-      - name: Check Final Status
+      - name: Assert final status
         shell: bash
         env:
           AB_STATUS: ${{ steps.ab_analyzer.outputs.status }}
         run: |
+          echo "::group::Assert final status"
+          set -euo pipefail
+
           if [[ "$AB_STATUS" == "FAILURE" ]]; then
             echo "[FAILURE] A/B Analyzer detected regressions or missing experiments."
             exit 1
           fi
+
+          echo "::endgroup::"
