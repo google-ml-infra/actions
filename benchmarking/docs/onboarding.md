@@ -58,7 +58,7 @@ jobs:
 
 ### Required permissions
 
-`permissions: contents: read` permission is required in the caller workflow. The reusable workflow's access token inherits permissions from the caller, so the caller must explicitly grant the read rights needed for actions/checkout to succeed.
+`contents: read` and `pull-requests: write` permissions are required in the caller workflow.
 
 ### Workflow Inputs
 
