@@ -382,6 +382,11 @@ def _remove_hardware_specific_deps(hardware: str, pyproject_file: str, output_di
     hardware_specific_deps_list = TPU_SPECIFIC_DEPS.copy()
     hardware_specific_deps_list.extend(CUDA12_SPECIFIC_DEPS)
     hardware_specific_deps_list.extend(TENSORFLOW_DEPS)
+  elif hardware == "cpu":
+    hardware_specific_deps_list = TPU_SPECIFIC_DEPS.copy()
+    hardware_specific_deps_list.extend(CUDA12_SPECIFIC_DEPS)
+    hardware_specific_deps_list.extend(CUDA13_SPECIFIC_DEPS)
+    hardware_specific_deps_list.extend(TENSORFLOW_DEPS)
   else:
     logging.warning(f"Unknown hardware {hardware}. Please use tpu or gpu.")
     return
