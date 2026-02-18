@@ -40,13 +40,16 @@ message EnvironmentConfig {
 
   // REQUIRED: The container image to execute the workload inside.
   string container_image = 3 [(buf.validate.field).string.min_len = 1];
-
-  // REQUIRED: The workflow types that this environment should run in (e.g. PRESUBMIT).
-  repeated bap.common.WorkflowType workflow_type = 4 [(buf.validate.field).repeated.min_items = 1];
   
-  // Environment-specific overrides for workload inputs.
+  // Optional: Environment-specific overrides for workload inputs.
   // These values merge with or override the base workload inputs.
   map<string, string> workload_action_inputs = 5;
+
+  // Optional: Environment-specific tags (e.g. "presubmit", "gpu", "nightly").
+  repeated string tags = 6;
+
+  // Prevent reuse of deleted tags.
+  reserved 4;
 }
 // Defines a specific benchmark configuration.
 message BenchmarkConfig {
@@ -73,6 +76,9 @@ message BenchmarkConfig {
 
   // REQUIRED: List of environment configurations.
   repeated EnvironmentConfig environment_configs = 9 [(buf.validate.field).repeated.min_items = 1];
+
+  // Optional: Global tags that apply to all environments (e.g. "pytorch", "vision").
+  repeated string tags = 10;
 
   // Prevent reuse of deleted tags.
   reserved 5;
