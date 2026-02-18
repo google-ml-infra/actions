@@ -1,0 +1,46 @@
+# A workflow to test clang-format composite action
+
+name: Test CI Clang-format On Error Action
+# Run on pull_request
+on:
+  pull_request:
+    paths:
+    - ci_clangformat/**
+    - tests/ci_clangformat/**
+    - .github/workflows/check-clang-format.yaml
+    branches:
+      - main
+  push:
+    paths:
+    - ci_clangformat/**
+    - tests/ci_clangformat/**
+    - .github/workflows/check-clang-format.yaml
+    branches:
+      - main
+defaults:
+  run:
+    shell: bash
+
+permissions: {}
+
+jobs:
+  run-clang-format:
+    runs-on: "linux-x86-n2-16"
+    container: "us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build:latest"
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: "Run clang-format on error action"
+        id: check-format
+        uses: ./ci_clangformat/
+        with:
+          filepaths: "tests/ci_clangformat/unformatted_files/*.cc tests/ci_clangformat/unformatted_files/**/*.h"
+        continue-on-error: true
+      - name: "Check clang-format result failed as expected"
+        if: steps.check-format.outcome == 'failure'
+        run: echo "Clang-format check failed as expected."
+      - name: "Check clang-format result did not fail as expected"
+        if: steps.check-format.outcome != 'failure'
+        run: echo "::error::Clang-format check did not fail as expected." && exit 1
