@@ -6,7 +6,7 @@
 #
 #     https://www.apache.org/licenses/LICENSE-2.0
 #
-# Unless required by applicable law of a greedor agreed to in writing, software
+# Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
@@ -15,7 +15,7 @@
 # Reusable workflow to run benchmarks defined in a benchmark registry.
 #
 # This workflow generates and executes a parallel matrix of benchmark jobs
-# based on the provided registry_file and workflow_type.
+# based on the provided registry_file and filters.
 #
 # Note that GITHUB_WORKSPACE env var is used instead of github.workspace
 # context reference due to https://github.com/actions/runner/issues/2058. 
@@ -30,10 +30,21 @@ on:
         description: "Path to the .pbtxt benchmark registry file, relative to the repository root."
         required: true
         type: string
-      workflow_type:
-        description: "The workflow type to run (e.g., PRESUBMIT)."
-        required: true
+      benchmark_filter:
+        description: "Regex to filter by benchmark name (e.g. 'resnet.*')."
+        required: false
         type: string
+        default: ""
+      environment_filter:
+        description: "Regex to filter by environment configuration ID (e.g. 'a100.*')."
+        required: false
+        type: string
+        default: ""
+      tag_filter:
+        description: "Space-separated list of tags. Benchmarks and/or environment configs must match at least one (e.g. 'gpu')."
+        required: false
+        type: string
+        default: ""
       ml_actions_ref:
         description: >
           The branch, tag, or SHA of google-ml-infra/actions to use. Defaults to 'main'.
@@ -41,19 +52,19 @@ on:
           (e.g., a PR), the commit SHA (github.sha) is used automatically to test changes.
         required: false
         type: string
-        default: 'main'
+        default: "main"
       publish_metrics:
         description: "If true, publishes benchmark results to Google Cloud Pub/Sub."
         required: false
         type: boolean
         default: false
       pub_sub_gcp_project_id:
-        description: "Google Cloud Project ID for Pub/Sub."
+        description: "Google Cloud project ID for Pub/Sub."
         required: false
         type: string
         default: "ml-oss-benchmarking-production"
       pub_sub_gcp_topic_id:
-        description: "Pub/Sub Topic ID to publish results to."
+        description: "Pub/Sub topic ID to publish results to."
         required: false
         type: string
         default: "public-results-prod"
@@ -63,17 +74,17 @@ on:
         type: boolean
         default: false
       experiment_ref:
-        description: "Git ref for the experiment. Defaults to current commit SHA."
+        description: "Git ref for the experiment in A/B mode. Defaults to current commit SHA."
         required: false
         type: string
         default: ""
       baseline_ref:
-        description: "Git ref for the baseline. Defaults to PR base or main."
+        description: "Git ref for the baseline in A/B mode. Defaults to PR base or main."
         required: false
         type: string
         default: ""
       post_pr_comment:
-        description: "If true (and ab_mode is enabled), posts the A/B report as a sticky comment on the PR."
+        description: "If true and ab_mode is enabled, posts the A/B report as a sticky comment on the PR."
         required: false
         type: boolean
         default: true
@@ -82,6 +93,11 @@ on:
         required: false
         type: string
         default: ""
+    
+    outputs:
+      job_id:
+        description: "Unique identifier for the top-level job."
+        value: ${{ jobs.generate_matrix.outputs.job_id }}
 
 permissions:
   contents: read  # Required for actions/checkout.
@@ -121,6 +137,7 @@ jobs:
           else
             # Generates 16 bytes of hex (32 chars), equivalent to a UUID length.
             JOB_ID="$(openssl rand -hex 16)"
+            echo "Generated Job ID: $JOB_ID"
             echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
           fi
 
@@ -182,7 +199,10 @@ jobs:
       - name: Generate benchmark matrix
         env:
           REGISTRY_FILE: ${{ inputs.registry_file }}
-          WORKFLOW_TYPE: ${{ inputs.workflow_type }}
+          BENCHMARK_FILTER: ${{ inputs.benchmark_filter }}
+          ENVIRONMENT_FILTER: ${{ inputs.environment_filter }}
+          TAG_FILTER: ${{ inputs.tag_filter }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
           AB_MODE: ${{ inputs.ab_mode }}
           BASELINE_REF: ${{ steps.resolve_refs.outputs.baseline_ref }}
           EXPERIMENT_REF: ${{ steps.resolve_refs.outputs.experiment_ref }}
@@ -194,17 +214,32 @@ jobs:
           set -euo pipefail
           REGISTRY_PATH="$GITHUB_WORKSPACE/user_repo/$REGISTRY_FILE"
           MATRIX_JSON_PATH="$GITHUB_WORKSPACE/matrix.json"
+          ARGS=(
+            --registry_file="$REGISTRY_PATH"
+            --github_event="$GITHUB_EVENT_NAME"
+            --ab_mode="$AB_MODE"
+            --baseline_ref="$BASELINE_REF"
+            --experiment_ref="$EXPERIMENT_REF"
+          )
+
+          if [[ -n "$BENCHMARK_FILTER" ]]; then
+            ARGS+=(--benchmark_filter="$BENCHMARK_FILTER")
+          fi
+
+          if [[ -n "$ENVIRONMENT_FILTER" ]]; then
+            ARGS+=(--environment_filter="$ENVIRONMENT_FILTER")
+          fi
+          
+          if [[ -n "$TAG_FILTER" ]]; then
+             ARGS+=(--tag_filter "$TAG_FILTER")
+          fi
 
           MATRIX_JSON="$(bazel run //benchmarking/gh_matrix_generator \
             --noshow_progress \
             --noshow_loading_progress \
             --ui_event_filters=-info \
             -- \
-            --registry_file="$REGISTRY_PATH" \
-            --workflow_type="$WORKFLOW_TYPE" \
-            --ab_mode="$AB_MODE" \
-            --baseline_ref="$BASELINE_REF" \
-            --experiment_ref="$EXPERIMENT_REF" | jq -c '.')"
+            "${ARGS[@]}" | jq -c '.')"
 
           echo "$MATRIX_JSON" | jq '.' > "$MATRIX_JSON_PATH"
           echo "matrix_json_path=$MATRIX_JSON_PATH" >> "$GITHUB_OUTPUT"
@@ -283,7 +318,7 @@ jobs:
           echo "TENSORBOARD_OUTPUT_DIR: $TENSORBOARD_OUTPUT_DIR"
           echo "WORKLOAD_ARTIFACTS_DIR: $WORKLOAD_ARTIFACTS_DIR"
 
-          # Export created dirs to GITHUB_ENV
+          # Export created dirs to GITHUB_ENV.
           {
             echo "TENSORBOARD_OUTPUT_DIR=$TENSORBOARD_OUTPUT_DIR"
             echo "WORKLOAD_ARTIFACTS_DIR=$WORKLOAD_ARTIFACTS_DIR"
@@ -307,7 +342,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Parse TF event files
+      - name: Parse TB event files
         env:
           BENCHMARK_CONFIG_ID: ${{ matrix.config_id }}
           METRIC_SPECS_JSON: '${{ toJson(matrix.metrics) }}'
@@ -324,7 +359,7 @@ jobs:
         working-directory: ml_actions
         shell: bash
         run: |
-          echo "::group::Parse TF event files"
+          echo "::group::Parse TB event files"
           set -euo pipefail
           mkdir -p "$BENCHMARK_RESULTS_DIR"          
           TARGET_BENCHMARK_RESULT_FILE_PATH="$BENCHMARK_RESULTS_DIR/$BENCHMARK_RESULT_FILENAME"
@@ -411,7 +446,7 @@ jobs:
           echo "::endgroup::"
 
   ab_analysis:
-    name: A/B Analysis
+    name: A/B analysis
     needs: [generate_matrix, run_benchmarks]
     runs-on: linux-x86-n2-16
     container:

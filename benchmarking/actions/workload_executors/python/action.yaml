@@ -23,7 +23,7 @@ inputs:
     description: "Path to the benchmark script, relative to the repo root."
     required: true
   project_path:
-    description: "Path to the project directory, relative to repo root."
+    description: "Path to the project directory, relative to repo root. Defaults to '.'."
     required: false
     default: "."
   extras:

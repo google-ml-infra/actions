@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import shlex
 from benchmarking.gh_matrix_generator.gh_matrix_generator_lib import (
   MatrixGenerator,
   load_and_validate_suite_from_pbtxt,
@@ -25,34 +26,69 @@ from benchmarking.gh_matrix_generator.gh_matrix_generator_lib import (
 def main():
   parser = argparse.ArgumentParser(description="Generate GitHub Actions matrix.")
   parser.add_argument(
-    "--registry_file", required=True, help="Path to the .pbtxt registry file."
+    "--registry_file",
+    required=True,
+    help="Path to the .pbtxt registry file.",
   )
   parser.add_argument(
-    "--workflow_type", required=True, help="Workflow type (e.g. PRESUBMIT, POSTSUBMIT)."
+    "--github_event",
+    required=True,
+    help="The GitHub event name triggering this run (e.g. pull_request, schedule).",
+  )
+  parser.add_argument(
+    "--benchmark_filter",
+    required=False,
+    default="",
+    help="Regex to filter by benchmark.name (e.g. 'resnet.*').",
+  )
+  parser.add_argument(
+    "--environment_filter",
+    required=False,
+    default="",
+    help="Regex to filter by environment_config.id (e.g. 'a100.*').",
+  )
+  parser.add_argument(
+    "--tag_filter",
+    required=False,
+    nargs="*",
+    default=[],
+    help="List of tags to filter by. Benchmarks must match at least one tag.",
   )
   parser.add_argument(
     "--ab_mode",
-    type=lambda x: str(x).lower() == "true",  # Handles 'true'/'True' strings from YAML
+    required=False,
+    type=lambda x: str(x).lower() == "true",  # Handles 'true'/'True' strings
     default=False,
     help="If true, generate A/B testing matrix (Baseline vs Experiment).",
   )
   parser.add_argument(
     "--baseline_ref",
+    required=False,
     default="main",
     help="Git ref for the baseline (control).",
   )
   parser.add_argument(
     "--experiment_ref",
+    required=False,
     default="",
     help="Git ref for the experiment (candidate).",
   )
 
   args = parser.parse_args()
+
+  # Normalize tag input to handle both CLI lists and GHA quoted strings
+  normalized_tags = []
+  for tag_arg in args.tag_filter:
+    normalized_tags.extend(shlex.split(tag_arg))
+
   suite = load_and_validate_suite_from_pbtxt(args.registry_file)
   generator = MatrixGenerator()
   matrix = generator.generate(
     suite=suite,
-    workflow_type_str=args.workflow_type,
+    benchmark_filter=args.benchmark_filter,
+    environment_filter=args.environment_filter,
+    tag_filter=normalized_tags,
+    github_event=args.github_event,
     ab_mode=args.ab_mode,
     baseline_ref=args.baseline_ref,
     experiment_ref=args.experiment_ref,

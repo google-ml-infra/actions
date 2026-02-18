@@ -28,6 +28,7 @@ VALID_SUITE_PBTXT = """
       name: "cpu_benchmark"
       description: "A valid CPU benchmark."
       owner: "cpu-team"
+      tags: "team-cpu"
       workload {
         action: "./ml_actions/benchmarking/actions/workload_executors/bazel"
         action_inputs { key: "target" value: "//b:cpu" }
@@ -37,7 +38,7 @@ VALID_SUITE_PBTXT = """
         id: "basic_cpu"
         runner_label: "linux-x86-n2-32"
         container_image: "gcr.io/testing/cpu-container:latest"
-        workflow_type: [PRESUBMIT, POSTSUBMIT]
+        tags: ["presubmit", "postsubmit", "cpu"]
         workload_action_inputs { key: "runtime_flags_hw" value: "--precision=fp32" }
       }
       update_frequency_policy: QUARTERLY
@@ -58,6 +59,7 @@ VALID_SUITE_PBTXT = """
       name: "gpu_benchmark"
       description: "A valid GPU benchmark."
       owner: "gpu-team"
+      tags: "team-gpu"
       workload {
         action: "./user_repo/benchmarking/actions/hlo"
         action_inputs { key: "gcs_path" value: "gs://bucket/model.hlo" }
@@ -67,12 +69,13 @@ VALID_SUITE_PBTXT = """
         id: "a100_4gpu"
         runner_label: "linux-x86-a2-48-a100-4gpu"
         container_image: "gcr.io/testing/gpu-container:latest"
-        workflow_type: [PRESUBMIT]
+        tags: ["presubmit", "gpu"]
       }
       update_frequency_policy: WEEKLY
     }
     """
 
+# Missing environment configuration ID.
 INVALID_SUITE_MISSING_ID_PBTXT = """
     benchmarks {
       name: "broken_benchmark"
@@ -84,7 +87,7 @@ INVALID_SUITE_MISSING_ID_PBTXT = """
       environment_configs {
         runner_label: "linux-x86-n2-32"
         container_image: "gcr.io/testing/cpu-container:latest"
-        workflow_type: [PRESUBMIT]
+        tags: ["presubmit"]
       }
       update_frequency_policy: QUARTERLY
     }
@@ -96,7 +99,7 @@ INVALID_SUITE_MISSING_ID_PBTXT = """
 @mock.patch("builtins.open", new_callable=mock.mock_open, read_data=VALID_SUITE_PBTXT)
 @mock.patch("os.path.isabs", return_value=True)
 def test_load_and_validate_suite_success(_mock_isabs, _mock_open):
-  """Tests that a valid pbtxt file is loaded and validated correctly."""
+  """Tests that a valid benchmark registry pbtxt file is loaded and validated correctly."""
   suite = gh_matrix_generator_lib.load_and_validate_suite_from_pbtxt("dummy_path.pbtxt")
   assert len(suite.benchmarks) == 2
   assert suite.benchmarks[0].name == "cpu_benchmark"
@@ -109,7 +112,7 @@ def test_load_and_validate_suite_success(_mock_isabs, _mock_open):
 )
 @mock.patch("os.path.isabs", return_value=True)
 def test_load_and_validate_suite_fails_on_invalid_pbtxt(_mock_isabs, _mock_open):
-  """Tests that an invalid pbtxt (missing required environment_config ID) fails validation."""
+  """Tests that an invalid benchmark registry pbtxt file fails validation."""
   with pytest.raises(ValueError) as excinfo:
     gh_matrix_generator_lib.load_and_validate_suite_from_pbtxt("invalid.pbtxt")
 
@@ -122,24 +125,99 @@ def test_load_and_validate_suite_fails_on_invalid_pbtxt(_mock_isabs, _mock_open)
 
 
 @pytest.mark.parametrize(
-  "workflow_type, expected_count, expected_names",
+  "tag_filter, expected_count, expected_names",
   [
-    ("PRESUBMIT", 2, {"cpu_benchmark", "gpu_benchmark"}),
-    ("POSTSUBMIT", 1, {"cpu_benchmark"}),
-    ("SCHEDULED", 0, set()),
-    ("MANUAL", 0, set()),
+    (["presubmit"], 2, {"cpu_benchmark", "gpu_benchmark"}),
+    (["postsubmit"], 1, {"cpu_benchmark"}),
+    (["gpu"], 1, {"gpu_benchmark"}),
+    (["team-cpu"], 1, {"cpu_benchmark"}),
+    ([], 2, {"cpu_benchmark", "gpu_benchmark"}),
+    (["nonexistent"], 0, set()),
   ],
 )
-def test_generate_matrix_filtering(workflow_type, expected_count, expected_names):
-  """Tests that the matrix is correctly filtered for different workflow types."""
+def test_generate_matrix_tag_filtering(tag_filter, expected_count, expected_names):
+  """Tests that the matrix is correctly filtered by tags."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
 
   generator = gh_matrix_generator_lib.MatrixGenerator()
-  matrix = generator.generate(suite, workflow_type)
+  matrix = generator.generate(
+    suite, github_event="workflow_dispatch", tag_filter=tag_filter
+  )
 
   assert len(matrix) == expected_count
   generated_names = {entry["benchmark_name"] for entry in matrix}
   assert generated_names == expected_names
+
+
+@pytest.mark.parametrize(
+  "benchmark_filter, expected_count, expected_names",
+  [
+    ("cpu", 1, {"cpu_benchmark"}),
+    ("gpu", 1, {"gpu_benchmark"}),
+    ("benchmark", 2, {"cpu_benchmark", "gpu_benchmark"}),
+    ("xyz_nomatch", 0, set()),
+  ],
+)
+def test_generate_matrix_benchmark_filtering(
+  benchmark_filter, expected_count, expected_names
+):
+  """Tests that the matrix is correctly filtered by benchmark name regex."""
+  suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
+
+  generator = gh_matrix_generator_lib.MatrixGenerator()
+  matrix = generator.generate(
+    suite, github_event="workflow_dispatch", benchmark_filter=benchmark_filter
+  )
+
+  assert len(matrix) == expected_count
+  generated_names = {entry["benchmark_name"] for entry in matrix}
+  assert generated_names == expected_names
+
+
+@pytest.mark.parametrize(
+  "environment_filter, expected_count, expected_names",
+  [
+    ("basic_cpu", 1, {"cpu_benchmark"}),
+    ("a100", 1, {"gpu_benchmark"}),
+    ("nomatch", 0, set()),
+  ],
+)
+def test_generate_matrix_environment_filtering(
+  environment_filter, expected_count, expected_names
+):
+  """Tests that the matrix is correctly filtered by environment configuration ID regex."""
+  suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
+
+  generator = gh_matrix_generator_lib.MatrixGenerator()
+  matrix = generator.generate(
+    suite, github_event="workflow_dispatch", environment_filter=environment_filter
+  )
+
+  assert len(matrix) == expected_count
+  generated_names = {entry["benchmark_name"] for entry in matrix}
+  assert generated_names == expected_names
+
+
+@pytest.mark.parametrize(
+  "github_event, expected_type",
+  [
+    ("pull_request", "PRESUBMIT"),
+    ("schedule", "SCHEDULED"),
+    ("push", "POSTSUBMIT"),
+    ("release", "POSTSUBMIT"),
+    ("workflow_dispatch", "MANUAL"),
+    ("random_event", "MANUAL"),
+  ],
+)
+def test_generate_matrix_workflow_type_inference(github_event, expected_type):
+  """Tests that github_event correctly maps to workflow_type in the output."""
+  suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
+  generator = gh_matrix_generator_lib.MatrixGenerator()
+
+  matrix = generator.generate(suite, github_event=github_event, tag_filter=["cpu"])
+
+  # Check the first job in the matrix
+  assert matrix[0]["workflow_type"] == expected_type
 
 
 def test_generate_matrix_content_correctness():
@@ -147,7 +225,7 @@ def test_generate_matrix_content_correctness():
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
 
   generator = gh_matrix_generator_lib.MatrixGenerator()
-  matrix = generator.generate(suite, "PRESUBMIT")
+  matrix = generator.generate(suite, github_event="pull_request", tag_filter=["cpu"])
 
   cpu_entry = next(item for item in matrix if item["benchmark_name"] == "cpu_benchmark")
 
@@ -165,27 +243,6 @@ def test_generate_matrix_content_correctness():
   assert action_inputs["runtime_flags_hw"] == "--precision=fp32"
 
 
-def test_config_id_persistence_across_workflow_types():
-  """Verifies that config_id remains the same across different workflow types."""
-  suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
-  generator = gh_matrix_generator_lib.MatrixGenerator()
-
-  # Generate for PRESUBMIT
-  matrix_pre = generator.generate(suite, "PRESUBMIT")
-  cpu_pre = next(i for i in matrix_pre if i["benchmark_name"] == "cpu_benchmark")
-
-  # Generate for POSTSUBMIT
-  matrix_post = generator.generate(suite, "POSTSUBMIT")
-  cpu_post = next(i for i in matrix_post if i["benchmark_name"] == "cpu_benchmark")
-
-  # IDs match
-  assert cpu_pre["config_id"] == cpu_post["config_id"]
-
-  # Metadata differs
-  assert cpu_pre["workflow_type"] == "PRESUBMIT"
-  assert cpu_post["workflow_type"] == "POSTSUBMIT"
-
-
 # --- Tests for A/B Testing Logic ---
 
 
@@ -194,10 +251,11 @@ def test_generate_matrix_ab_mode(subtests):
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
 
   generator = gh_matrix_generator_lib.MatrixGenerator()
-  # Run in A/B Mode with custom refs
+  # Run in A/B Mode with custom refs.
   matrix = generator.generate(
     suite,
-    "POSTSUBMIT",  # Contains 1 benchmark (cpu_benchmark)
+    github_event="workflow_dispatch",
+    benchmark_filter="cpu_benchmark",
     ab_mode=True,
     baseline_ref="main",
     experiment_ref="feat-123",
@@ -225,12 +283,18 @@ def test_generate_matrix_ab_mode(subtests):
 
 
 def test_generate_matrix_ab_mode_presubmit(subtests):
-  """Tests A/B mode with multiple benchmarks (PRESUBMIT has CPU and GPU)."""
+  """Tests A/B mode with multiple benchmarks.."""
   suite = text_format.Parse(VALID_SUITE_PBTXT, benchmark_registry_pb2.BenchmarkSuite())
 
   generator = gh_matrix_generator_lib.MatrixGenerator()
+  # Presubmit tag selects both CPU and GPU benchmarks.
   matrix = generator.generate(
-    suite, "PRESUBMIT", ab_mode=True, baseline_ref="main", experiment_ref="HEAD"
+    suite,
+    github_event="pull_request",
+    tag_filter=["presubmit"],
+    ab_mode=True,
+    baseline_ref="main",
+    experiment_ref="HEAD",
   )
 
   # Expect 4 entries (2 benchmarks * 2 modes)

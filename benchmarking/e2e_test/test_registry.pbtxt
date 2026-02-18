@@ -16,6 +16,7 @@ benchmarks {
   name: "e2e_python_benchmark_summary_v1"
   description: "A test benchmark for a Python-based project using TF 1.x Summary for logging metrics."
   owner: "e2e-test-team"
+  tags: "e2e-test"
   workload {
     # Must start with ./ml_actions because of the checkout path
     # in our reusable workflow.
@@ -29,7 +30,6 @@ benchmarks {
     id: "cpu_standard"
     runner_label: "linux-x86-n2-16"
     container_image: "us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00",
-    workflow_type: [PRESUBMIT]
   }
   update_frequency_policy: QUARTERLY
   metrics {
@@ -53,6 +53,7 @@ benchmarks {
   name: "e2e_python_benchmark_summary_v2"
   description: "A test benchmark for a Python-based project using TF 2.x Summary for logging metrics."
   owner: "e2e-test-team"
+  tags: "e2e-test"
   workload {
     # Must start with ./ml_actions because of the checkout path
     # in our reusable workflow.
@@ -66,7 +67,6 @@ benchmarks {
     id: "cpu_standard"
     runner_label: "linux-x86-n2-16"
     container_image: "us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00",
-    workflow_type: [PRESUBMIT]
   }
   update_frequency_policy: QUARTERLY
   metrics {
@@ -90,6 +90,7 @@ benchmarks {
   name: "e2e_python_benchmark_tensorboardx"
   description: "A test benchmark for a Python-based project using tensorboardX for logging metrics."
   owner: "e2e-test-team"
+  tags: "e2e-test"
   workload {
     # Must start with ./ml_actions because of the checkout path
     # in our reusable workflow.
@@ -103,7 +104,6 @@ benchmarks {
     id: "cpu_standard"
     runner_label: "linux-x86-n2-16"
     container_image: "us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00",
-    workflow_type: [PRESUBMIT]
   }
   update_frequency_policy: QUARTERLY
   metrics {
@@ -127,6 +127,7 @@ benchmarks {
   name: "e2e_bazel_benchmark"
   description: "A test benchmark for a Bazel workload."
   owner: "e2e-test-team"
+  tags: "e2e-test"
   workload {
     # Must start with ./ml_actions because of the checkout path
     # in our reusable workflow.
@@ -137,7 +138,6 @@ benchmarks {
     id: "cpu_standard"
     runner_label: "linux-x86-n2-16"
     container_image: "us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build@sha256:f3b96c5ae6ad8e1354693a45f920ea19f28f6bc5d8c5896de20832569c715d00",
-    workflow_type: [PRESUBMIT]
   }
   update_frequency_policy: QUARTERLY
   metrics {
