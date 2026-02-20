@@ -68,18 +68,15 @@ runs:
         cache-python: ${{ inputs.cache-python }}
         cache-suffix: ${{ inputs.cache-suffix }}
 
-    - name: Install Python ${{ inputs.python-version }}
-      shell: bash
-      env:
-        UV_PYTHON_VERSION: ${{ inputs.python-version }}
-      run: uv python install "${UV_PYTHON_VERSION}"
-
     - name: Create and select uv virtual environment
       id: select_python
       shell: bash
       env:
         UV_PYTHON_VERSION: ${{ inputs.python-version }}
       run: | # zizmor: ignore[github-env] This step intentionally exports validated venv paths for downstream steps.
+
+        # A safety check used to protect against injecting potential
+        # unrelated additional variables.
         ensure_single_line() {
           local var_name="$1"
           local var_value="$2"
@@ -90,7 +87,14 @@ runs:
               ;;
           esac
         }
-        MANAGED_PYTHON_BIN="$(uv python find "$UV_PYTHON_VERSION")"
+
+        # setup-uv already handles Python install/restore. Simply re-installing here can
+        # fail on Windows when cached reparse points already exist.
+        if ! MANAGED_PYTHON_BIN="$(uv python find "$UV_PYTHON_VERSION" 2>/dev/null)"; then
+          uv python install "$UV_PYTHON_VERSION"
+          MANAGED_PYTHON_BIN="$(uv python find "$UV_PYTHON_VERSION")"
+        fi
+
         VENV_PATH="${RUNNER_TEMP:-/tmp}/uv-ci-venv"
         uv venv --clear --python "$MANAGED_PYTHON_BIN" "$VENV_PATH"
         if [ -x "$VENV_PATH/bin/python" ]; then
@@ -101,6 +105,8 @@ runs:
           echo "::error::Could not find Python executable in $VENV_PATH"
           exit 1
         fi
+
+        # Ensure both python and python3 are available in PATH.
         PYTHON_DIR="$(dirname "$PYTHON_BIN")"
         if [ "${RUNNER_OS:-}" = "Windows" ]; then
           if [ ! -e "$PYTHON_DIR/python3.exe" ] && [ -e "$PYTHON_DIR/python.exe" ]; then
@@ -114,6 +120,7 @@ runs:
             ln -s python "$PYTHON_DIR/python3"
           fi
         fi
+
         ensure_single_line 'PYTHON_BIN' "$PYTHON_BIN"
         ensure_single_line 'VIRTUAL_ENV' "$VENV_PATH"
         ensure_single_line 'PYTHON_DIR' "$PYTHON_DIR"
