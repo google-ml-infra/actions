@@ -6,8 +6,9 @@ inputs:
     description: 'Python version to install.'
     required: true
   summary-label:
-    description: 'Label used in GitHub step summary output.'
-    required: true
+    description: 'Optional label used in GitHub step summary output. If empty, defaults to python-<python-version>.'
+    required: false
+    default: ''
   uv-version:
     description: 'uv version to install.'
     required: false
@@ -133,7 +134,7 @@ runs:
       if: ${{ env.CI_UV_DEBUG == 'true' }}
       shell: bash
       env:
-        SUMMARY_LABEL: ${{ inputs.summary-label }}
+        SUMMARY_LABEL: ${{ inputs.summary-label != '' && inputs.summary-label || format('python-{0}', inputs.python-version) }}
         PY_SETUP_T0: ${{ steps.mark_python_setup_start.outputs.py_setup_t0 }}
         UV_CACHE_HIT: ${{ steps.setup_uv_with_glob.outputs.cache-hit || steps.setup_uv_default_glob.outputs.cache-hit }}
         PYTHON_CACHE_HIT: ${{ steps.setup_uv_with_glob.outputs.python-cache-hit || steps.setup_uv_default_glob.outputs.python-cache-hit }}

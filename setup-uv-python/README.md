@@ -14,7 +14,7 @@ Composite action for installing Python via `uv`.
 | Input                   | Required | Default   | Description                                     |
 |-------------------------|----------|-----------|-------------------------------------------------|
 | `python-version`        | Yes      | N/A       | Python version to install.                      |
-| `summary-label`         | Yes      | N/A       | Label used in GitHub step-summary output.       |
+| `summary-label`         | No       | `''`      | Optional label for step summary output.         |
 | `uv-version`            | No       | `0.10.4`  | `uv` version to install.                        |
 | `enable-cache`          | No       | `true`    | Enable `uv` cache restore/save behavior.        |
 | `cache-python`          | No       | `true`    | Cache uv-managed Python installations.          |
@@ -69,6 +69,17 @@ If you need the explicit interpreter path:
 ```yaml
 - run: ${{ steps.setup_python.outputs.python-bin }} -m pip --version
 ```
+
+## Step Summary Output
+
+Debug information about the timing and the installation (e.g., cache usage)
+may be output in the form of a step summary.
+
+- Step-summary output is emitted only when `CI_UV_DEBUG=true`.
+- If `summary-label` is empty, a default of `python-<python-version>` is used.
+- If the action is invoked multiple times within the same job,
+  for the same python version, set `summary-label` explicitly
+  for each invocation to keep step-summary entries unambiguous.
 
 ## Notes
 
