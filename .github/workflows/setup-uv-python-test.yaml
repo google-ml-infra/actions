@@ -110,9 +110,11 @@ jobs:
           summary-label: invalid
 
       - name: Assert invalid version failed
+        env:
+          SETUP_PYTHON_INVALID_OUTCOME: ${{ steps.setup_python_invalid.outcome }}
         run: |
           set -euo pipefail
-          if [ "${{ steps.setup_python_invalid.outcome }}" != "failure" ]; then
+          if [ "$SETUP_PYTHON_INVALID_OUTCOME" != "failure" ]; then
             echo "Expected setup-uv-python to fail for an invalid version"
             exit 1
           fi
