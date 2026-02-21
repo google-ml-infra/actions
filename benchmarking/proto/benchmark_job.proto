@@ -20,6 +20,7 @@ import "buf/validate/validate.proto";
 import "benchmarking/proto/common/workload_action.proto";
 import "benchmarking/proto/common/metric.proto";
 import "benchmarking/proto/common/workflow_type.proto"; 
+import "benchmarking/proto/common/environment_config.proto";
 
 // Defines the group assignment for A/B testing scenarios.
 enum AbTestGroup {
@@ -52,12 +53,6 @@ message BenchmarkJob {
   // Optional: GitHub labels for filtering or triggering workflows.
   repeated string github_labels = 6; 
   
-  // REQUIRED: The GitHub Actions runner label (e.g. "linux-x86-n2-32").
-  string runner_label = 7 [(buf.validate.field).string.min_len = 1];
-  
-  // REQUIRED: The container image to execute the workload inside.
-  string container_image = 8 [(buf.validate.field).string.min_len = 1];  
-  
   // REQUIRED: Configuration for the workload executor action.
   bap.common.WorkloadAction workload = 9 [(buf.validate.field).required = true];
   
@@ -71,4 +66,10 @@ message BenchmarkJob {
   // OPTIONAL: The specific Git reference (SHA, branch, tag) to checkout for this job.
   // Generally required if ab_test_group is BASELINE or EXPERIMENT.
   string checkout_ref = 12;
+
+  // REQUIRED: The environment configuration to run the benchmark on.
+  bap.common.EnvironmentConfig environment_config = 13 [(buf.validate.field).required = true];
+
+  // Prevent reuse of deleted tags.
+  reserved 7, 8;
 }

@@ -35,21 +35,22 @@ ResultMapping: TypeAlias = Mapping[str, AbGroupResultMap]
 def load_results(results_dir: Path) -> ResultMapping:
   """Scans the results directory and deserializes benchmark result artifacts into protos.
 
-  Expected benchmark result file naming convention:
-      benchmark-result-{CONFIG_ID}-{MODE}-{JOB_ID}.json
+  Expected directory naming convention (files are always named benchmark_result.json):
+      shard-benchmark-result-{CONFIG_ID}-{MODE}-{JOB_ID}
 
   Parsing Logic:
-      1. Scans for filenames matching "benchmark-result-*.json".
+      1. Scans for files named exactly "benchmark_result.json".
       2. Identifies the mode ("BASELINE" or "EXPERIMENT") by finding the last occurrence
-         of the keyword.
-      3. Extracts the Config ID from the segment between the prefix and the mode.
+         of the keyword in the parent directory's name.
+      3. Extracts the Config ID from the parent directory's name by stripping the prefix
+         and the mode suffix.
 
   Args:
       results_dir: The directory path containing downloaded benchmark artifacts.
 
   Returns:
       A mapping where keys are configuration IDs and values are dictionaries mapping
-      the A/B mode ('baseline' or 'experiment') to the deserialized BenchmarkResult proto.
+      the A/B mode (BASELINE or EXPERIMENT) to the deserialized BenchmarkResult proto.
 
   Raises:
       ValueError: If a result file contains invalid JSON or cannot be parsed into
@@ -57,24 +58,24 @@ def load_results(results_dir: Path) -> ResultMapping:
   """
   results = {}
 
-  # Benchmark result artifact naming convention:
-  # benchmark-result-{CONFIG}[-{AB_MODE}]-{JOB_ID}.json
-  for path in results_dir.rglob("benchmark-result-*.json"):
-    filename = path.stem
-    base_idx = filename.rfind("-BASELINE-")
-    exp_idx = filename.rfind("-EXPERIMENT-")
+  for path in results_dir.rglob("benchmark_result.json"):
+    # Format: shard-benchmark-result-{CONFIG}[-{AB_MODE}]-{JOB_ID}
+    dir_name = path.parent.name
+
+    base_idx = dir_name.rfind("-BASELINE-")
+    exp_idx = dir_name.rfind("-EXPERIMENT-")
 
     if base_idx == -1 and exp_idx == -1:
       continue
 
     if base_idx > exp_idx:
       mode = benchmark_job_pb2.AbTestGroup.BASELINE
-      head = filename[:base_idx]
+      head = dir_name[:base_idx]
     else:
       mode = benchmark_job_pb2.AbTestGroup.EXPERIMENT
-      head = filename[:exp_idx]
+      head = dir_name[:exp_idx]
 
-    prefix = "benchmark-result-"
+    prefix = "shard-benchmark-result-"
     config_id = head[len(prefix) :]
 
     if config_id not in results:

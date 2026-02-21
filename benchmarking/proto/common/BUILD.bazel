@@ -39,6 +39,14 @@ proto_library(
     ]
 )
 
+proto_library(
+    name = "environment_config_proto",
+    srcs = ["environment_config.proto"],
+    deps = [
+        "@protovalidate//proto/protovalidate/buf/validate:validate_proto"
+    ]
+)
+
 py_proto_library(
     name = "metric_py_proto",
     deps = [":metric_proto"],
@@ -52,4 +60,9 @@ py_proto_library(
 py_proto_library(
     name = "workload_action_py_proto",
     deps = [":workload_action_proto"],
+)
+
+py_proto_library(
+    name = "environment_config_py_proto",
+    deps = [":environment_config_proto"],
 )
