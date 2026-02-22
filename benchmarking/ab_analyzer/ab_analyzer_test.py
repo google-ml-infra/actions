@@ -99,21 +99,21 @@ def make_job_with_spec(
 
 
 def test_load_results_parsing(tmp_path: Path, subtests) -> None:
-  """Tests that filenames are correctly parsed into Config ID and Mode."""
+  """Tests that directory names are correctly parsed into Config ID and Mode."""
 
   # Case 1: Happy path
   # Config: BERT-LARGE, Mode: BASELINE, JobID: 123
-  p1 = tmp_path / "benchmark-result-BERT-LARGE-BASELINE-123.json"
-  p1.write_text(json.dumps({"config_id": "BERT-LARGE"}))
+  dir1 = tmp_path / "shard-benchmark-result-BERT-LARGE-BASELINE-123"
+  dir1.mkdir()
+  p1 = dir1 / "benchmark_result.json"
+  p1.write_text(json.dumps({"benchmark_name": "BERT-LARGE"}))
 
   # Case 2: Config ID contains the word "BASELINE"
   # Config: MY-BASELINE-MODEL, Mode: EXPERIMENT, JobID: abc
-  p2 = tmp_path / "benchmark-result-MY-BASELINE-MODEL-EXPERIMENT-abc.json"
-  p2.write_text(json.dumps({"config_id": "MY-BASELINE-MODEL"}))
-
-  # Case 3: Ignored File: Does not match prefix
-  p4 = tmp_path / "random-file.json"
-  p4.write_text("{}")
+  dir2 = tmp_path / "shard-benchmark-result-MY-BASELINE-MODEL-EXPERIMENT-abc"
+  dir2.mkdir()
+  p2 = dir2 / "benchmark_result.json"
+  p2.write_text(json.dumps({"benchmark_name": "MY-BASELINE-MODEL"}))
 
   # Run the loader
   results = ab_analyzer_lib.load_results(tmp_path)

@@ -67,4 +67,10 @@ message BenchmarkResult {
 
   // REQUIRED: The workflow type (e.g. "PRESUBMIT", "POSTSUBMIT").
   bap.common.WorkflowType workflow_type = 9 [(buf.validate.field).enum = { not_in: [0]}];
+
+  // REQUIRED: The name of the benchmark.
+  string benchmark_name = 10 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: Identifier for the environment configuration.
+  string environment_config_id = 11 [(buf.validate.field).string.min_len = 1];
 }

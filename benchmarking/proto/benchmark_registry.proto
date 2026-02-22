@@ -20,6 +20,7 @@ import "buf/validate/validate.proto";
 import "benchmarking/proto/common/metric.proto";
 import "benchmarking/proto/common/workflow_type.proto";
 import "benchmarking/proto/common/workload_action.proto";
+import "benchmarking/proto/common/environment_config.proto";
 
 // Defines how frequently the benchmark should be reviewed and/or updated 
 // for retention purposes.
@@ -30,27 +31,6 @@ enum UpdateFrequency {
   QUARTERLY = 3;
 }
 
-// Defines the specific execution environment (runner, container image) and stable identity for a benchmark variant.
-message EnvironmentConfig {
-  // REQUIRED: A unique, stable identifier for this environment configuration (e.g. "gpu_l4_standard").
-  string id = 1 [(buf.validate.field).string.min_len = 1];
-
-  // REQUIRED: The GitHub Actions runner label to request (e.g. "linux-x86-n2-32").
-  string runner_label = 2 [(buf.validate.field).string.min_len = 1];
-
-  // REQUIRED: The container image to execute the workload inside.
-  string container_image = 3 [(buf.validate.field).string.min_len = 1];
-  
-  // Optional: Environment-specific overrides for workload inputs.
-  // These values merge with or override the base workload inputs.
-  map<string, string> workload_action_inputs = 5;
-
-  // Optional: Environment-specific tags (e.g. "presubmit", "gpu", "nightly").
-  repeated string tags = 6;
-
-  // Prevent reuse of deleted tags.
-  reserved 4;
-}
 // Defines a specific benchmark configuration.
 message BenchmarkConfig {
   // REQUIRED: A unique name for the benchmark (e.g., "resnet50_jax_train").
@@ -75,7 +55,7 @@ message BenchmarkConfig {
   repeated bap.common.MetricSpec metrics = 8;
 
   // REQUIRED: List of environment configurations.
-  repeated EnvironmentConfig environment_configs = 9 [(buf.validate.field).repeated.min_items = 1];
+  repeated bap.common.EnvironmentConfig environment_configs = 9 [(buf.validate.field).repeated.min_items = 1];
 
   // Optional: Global tags that apply to all environments (e.g. "pytorch", "vision").
   repeated string tags = 10;

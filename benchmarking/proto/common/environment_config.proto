@@ -1,0 +1,41 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package bap.common;
+
+import "buf/validate/validate.proto";
+
+// Defines the specific execution environment (runner, container image) and stable identity for a benchmark variant.
+message EnvironmentConfig {
+  // REQUIRED: A unique, stable identifier for this environment configuration (e.g. "gpu_l4_standard").
+  string id = 1 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: The GitHub Actions runner label to request (e.g. "linux-x86-n2-32").
+  string runner_label = 2 [(buf.validate.field).string.min_len = 1];
+
+  // REQUIRED: The container image to execute the workload inside.
+  string container_image = 3 [(buf.validate.field).string.min_len = 1];
+  
+  // Optional: Environment-specific overrides for workload inputs.
+  // These values merge with or override the base workload inputs.
+  map<string, string> workload_action_inputs = 5;
+
+  // Optional: Environment-specific tags (e.g. "presubmit", "gpu", "nightly").
+  repeated string tags = 6;
+
+  // Prevent reuse of deleted tags.
+  reserved 4;
+}

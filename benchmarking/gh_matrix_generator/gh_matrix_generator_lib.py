@@ -185,8 +185,7 @@ class MatrixGenerator:
         base_job = benchmark_job_pb2.BenchmarkJob()
         base_job.config_id = config_id
         base_job.workflow_type = workflow_type
-        base_job.runner_label = env_config.runner_label
-        base_job.container_image = env_config.container_image
+        base_job.environment_config.CopyFrom(env_config)
         base_job.benchmark_name = benchmark.name
         base_job.description = benchmark.description
         base_job.owner = benchmark.owner
