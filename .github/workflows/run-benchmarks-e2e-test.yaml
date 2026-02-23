@@ -43,10 +43,7 @@ jobs:
     uses: ./.github/workflows/run-benchmarks.yaml
     with:
       registry_file: "benchmarking/e2e_test/test_registry.pbtxt"
-      workflow_type: "PRESUBMIT"
-      publish_metrics: false
-      pub_sub_gcp_project_id: "ml-oss-benchmarking-testing"
-      pub_sub_gcp_topic_id: "public-results-dev"
+      tag_filter: "e2e-test"
 
   run_ab_e2e_test:
     name: A/B Mode E2E Test
@@ -56,7 +53,6 @@ jobs:
     uses: ./.github/workflows/run-benchmarks.yaml
     with:
       registry_file: "benchmarking/e2e_test/test_registry.pbtxt"
-      workflow_type: "PRESUBMIT"
+      benchmark_filter: "e2e_bazel_benchmark"
       ab_mode: true
       post_pr_comment: true
-      publish_metrics: false

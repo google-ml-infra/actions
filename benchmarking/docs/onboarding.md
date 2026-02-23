@@ -12,25 +12,26 @@
 
 ## Overview
 
-This guide provides the steps to add a project's benchmarks to BAP (Benchmarking Automation Platform). BAP is GitHub-native and makes use of GitHub Actions to administer benchmarks.
+This guide provides instructions to run benchmarks on BAP (Benchmarking Automation Platform). BAP is GitHub-native and makes use of GitHub Actions to administer benchmarks.
 
 The system is designed to execute any GitHub Action as a workload (e.g., standard Python scripts, Bazel targets, or custom user-defined actions), provided it adheres to the metric reporting contract.
 
 The system follows two simple contracts:
 
 1. **Input**: A benchmark registry (e.g., benchmark_registry.pbtxt) defining the workload action and its inputs, along with environment requirements and other metadata.
-2. **Output**: Metric data written via TensorBoard and arbitrary files written to the workload artifacts directory.
+2. **Output**: Metric data written to TensorFlow event files and arbitrary files written to the workload artifacts directory.
 
 Our platform handles the following:
 
 - Provisioning the correct GitHub Actions runners.
 - Converting defined benchmarks and environment requirements into GitHub Actions jobs.
 - Securely executing the specified workload action.
-- TensorBoard log parsing and statistic computation.
-- Static threshold analysis.
+- TensorFlow event file parsing and statistic computation.
+- Static threshold analysis and regression detection.
+- A/B testing and regression detection.
 - Publishing results to Google Cloud Pub/Sub for downstream consumption.
 
-## Step 1: Create a workflow file
+## Create a workflow file
 
 First, in your own repository, create a new workflow file in `.github/workflows/` for running benchmarks. 
 
@@ -51,7 +52,6 @@ jobs:
     uses: google-ml-infra/actions/.github/workflows/run_benchmarks.yml@<commit | branch | tag>
     with:
       registry_file: "benchmarking/my_registry.pbtxt"
-      workflow_type: "PRESUBMIT"
       ml_actions_ref: <commit | branch | tag>
       publish_metrics: true
 ```
@@ -67,24 +67,39 @@ The reusable workflow supports the following inputs:
 | Input | Required | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `registry_file` | **Yes** | - | Path to the `.pbtxt` benchmark registry file relative to the repository root. |
-| `workflow_type` | **Yes** | - | The workflow type to run (e.g., `PRESUBMIT`, `NIGHTLY`). Matches the configuration in your registry. |
+| `benchmark_filter` | No | `""` | Regex to filter by benchmark name (e.g. `resnet.*`). |
+| `environment_filter` | No | `""` | Regex to filter by environment configuration ID (e.g. `a100.*`). |
+| `tag_filter` | No | `""` | Space-separated list of tags. Benchmarks and/or environment configs must match at least one (e.g. `gpu`). |
 | `ml_actions_ref` | No | `main` | The branch, tag, or SHA of google-ml-infra/actions to use. For production, use the same stable tag or SHA that's used to pin the reusable workflow file version (e.g. "v1.5.0" for "google-ml-infra/actions/.github/workflows/run_benchmarks.yml@v1.5.0"). |
 | `job_id` | No | Random | A unique identifier for the top-level job (e.g. `e2e-test`). Used to namespace artifacts. If empty, a random ID is generated. |
 | `ab_mode` | No | `false` | If `true`, runs A/B comparison (baseline vs experiment) and generates an A/B report. |
-| `experiment_ref` | No | Current SHA | Git ref for the experiment. Defaults to the current commit SHA. |
-| `baseline_ref` | No | PR Base or main | Git ref for the baseline. Defaults to PR base or main. |
-| `post_pr_comment` | No | `true` | If `true` (and `ab_mode` is enabled), posts the A/B report as a sticky comment on the PR. |
+| `experiment_ref` | No | Current SHA | Git ref for the experiment in A/B mode. Defaults to the current commit SHA. |
+| `baseline_ref` | No | PR Base or main | Git ref for the baseline in A/B mode. Defaults to PR base or main. |
+| `post_pr_comment` | No | `true` | If `true` and `ab_mode` is enabled, posts the A/B report as a sticky comment on the PR. |
 | `publish_metrics` | No | `false` | If `true`, publishes benchmark results to Google Cloud Pub/Sub. |
-| `pub_sub_gcp_project_id` | No | `ml-oss-benchmarking-production` | GCP Project ID for Pub/Sub. |
-| `pub_sub_gcp_topic_id` | No | `public-results-prod` | Pub/Sub Topic ID to publish results to. |
+| `pub_sub_gcp_project_id` | No | `ml-oss-benchmarking-production` | GCP project ID for Pub/Sub. |
+| `pub_sub_gcp_topic_id` | No | `public-results-prod` | Pub/Sub topic ID to publish results to. |
 
-### Workflow granularity
+### Workflow Outputs
 
-We recommend creating a dedicated workflow file for each distinct [workflow_type](https://github.com/google-ml-infra/actions/blob/main/benchmarking/proto/benchmark_registry.proto#L112) 
-you plan to support (PRESUBMIT, NIGHTLY, PERIODIC, etc.) to better control scheduling, triggers, and resource allocation.
+The reusable workflow exposes the following outputs which can be used by downstream jobs in your caller workflow:
 
+| Output | Description |
+| :--- | :--- |
+| `job_id` | The unique identifier for the top-level job. Useful for locating artifacts. |
 
-## Step 2: Create benchmark registry
+### Workflow Type Inference
+
+The [workflow type](https://github.com/google-ml-infra/actions/blob/main/benchmarking/proto/common/workflow_type.proto) for a benchmark run is automatically inferred based on the GitHub event that triggered the workflow. This value is attached to the generated benchmark results as metadata, allowing downstream consumers (e.g., dashboards, Pub/Sub pipelines) to correctly categorize the data.
+
+| GitHub Event | BAP Workflow Type |
+| :--- | :--- |
+| `pull_request`, `pull_request_target`, `merge_group` | `PRESUBMIT` |
+| `push`, `release` | `POSTSUBMIT` |
+| `schedule` | `SCHEDULED` |
+| `workflow_dispatch`, `repository_dispatch`, and all other events | `MANUAL` |
+
+## Create benchmark registry
 
 Next, create a benchmark registry file (.pbtxt) based on the [benchmark_registry.proto](https://github.com/google-ml-infra/actions/blob/main/benchmarking/proto/benchmark_registry.proto) schema. This file defines what code to run and how to run it.
 
@@ -94,43 +109,51 @@ The registry uses a flexible schema where you define a workload by specifying an
 
 We provide standard workload executors for Python and Bazel, but you are fully empowered to define your own custom action in your repository and reference it here.
 
-#### Standard Executors
+#### Workload inputs
 
-Each of the standard executors can be referenced either via a remote reference or a local reference. The local reference is recommended since the platform ships the standard executors together with the workflow.
+You can define base inputs in the `workload.action_inputs` block of the benchmark registry and environment-specific overrides or extensions in the `environment_configs.workload_action_inuts` block.
 
-**Python**
+For our standard executors, we support "extension" inputs (suffixed with `_hw`) that allow you to append flags instead of overwriting them.
+
+Note: The platform performs a simple dictionary merge on inputs. If a key in `environment_configs.workload_action_inputs` matches a key in the base `workload.action_inputs`, the value from `environment_configs.workload_action_inputs` will completely overwrite the base value. For best practice, if you are creating your own custom action and want to support appending values (like adding extra flags instead of replacing them), you should define distinct input keys in your action definition (e.g., flags and flags_hw). Your action's script is then responsible for concatenating them.
+
+#### Python Executor
 
 - Local reference: `./ml_actions/benchmarking/actions/workload_executors/python`
 - Remote reference: `google-ml-infra/actions/benchmarking/actions/workload_executors/python@<ref>`
 
-**Bazel**
+| Input | Required | Description |
+| :--- | :--- | :--- |
+| `python_version` | **Yes** | Python version to use (e.g. 3.10). |
+| `script_path` | **Yes** | Path to the benchmark script, relative to the repo root. |
+| `project_path` | No | Path to the project directory, relative to repo root. Defaults to `.`. |
+| `extras` | No | Base comma-separated list of extras. |
+| `extras_hw` | No | Comma-separated list of hardware-specific extras. This list is appended to extras. |
+| `runtime_flags` | No |  Base runtime flags to pass to the benchmark script. |
+| `runtime_flags_hw` | No |  Hardware-specific runtime flags, appended to runtime_flags. |
+
+#### Bazel Executor
 
 - Local reference: `./ml_actions/benchmarking/actions/workload_executors/bazel`
 - Remote reference: `google-ml-infra/actions/benchmarking/actions/workload_executors/bazel@<ref>`
 
-#### Workload inputs
-
-You can define base inputs in the `workload` block of the benchmark registry and environment-specific overrides or extensions in the `environment_configs` block using `workload_action_inputs`.
-
-For our standard executors, we support "extension" inputs (suffixed with _hw) that allow you to append flags instead of overwriting them.
-
-Note: The platform performs a simple dictionary merge on inputs. If a key in `environment_configs.workload_action_inputs` matches a key in the base `workload.action_inputs`, the value from `environment_configs.workload_action_inputs` will completely overwrite the base value. For best practice, if you are creating your own custom action and want to support appending values (like adding extra flags instead of replacing them), you should define distinct input keys in your action definition (e.g., flags and flags_hw). Your action's script is then responsible for concatenating them.
+| Input | Required | Description |
+| :--- | :--- | :--- |
+| `target` | **Yes** | The Bazel target to run (e.g. //benchmarks:my_test). |
+| `bazel_run_flags` | No | Base flags to pass to the bazel run command. |
+| `bazel_run_flags_hw` | No | Base flags to pass to the bazel run command. |
+| `runtime_flags` | No | Base runtime flags passed to the binary. 
+| `runtime_flags_hw` | No | Hardware-specific runtime flags, appended to runtime_flags. |
 
 ### Defining metrics
 
-A key part of the registry is defining metrics. You must specify the `metrics.name` field, which must exactly match the tag name used in the TensorBoard logs generated by your benchmark script (covered in the next step). 
+A key part of the registry is defining metrics. You must specify the `metrics.name` field, which must exactly match the tag name used in the TensorFlow event files generated by your benchmark script. 
+
 Within the metrics block, you specify the statistics (stats) to be calculated (e.g., MEAN, P99) and can optionally configure static threshold analysis using the comparison block.
 
 ### Example 1: Bazel workload
 
 This example uses the standard Bazel executor.
-
-Available inputs for Bazel:
-
-- `target` (Required)
-- `bazel_run_flags` / `bazel_run_flags_hw` (Passed to bazel run, e.g., compilation options)
-- `runtime_flags` / `runtime_flags_hw` (Passed to the binary after --)
-
 
 ```proto
 benchmarks {
@@ -152,7 +175,6 @@ benchmarks {
     id: "cpu_standard"
     runner_label: "linux-x86-n2-32"
     container_image: "us-docker.pkg.dev/my-project/images/cpu-test:latest"
-    workflow_type: [PRESUBMIT]
 
     # Environment-specific build flags
     workload_action_inputs { key: "bazel_run_flags_hw" value: "--config=linux_cpu_opt" }
@@ -191,14 +213,6 @@ benchmarks {
 
 This example uses the standard Python executor. It defines base dependencies (`test`) and appends environment-specific dependencies (`cuda`) and flags (`--use_gpu`) for the GPU config.
 
-Available inputs for Python:
-
-- `python_version` (Required)
-- `script_path` (Required)
-- `project_path` (Default: ".")
-- `extras` / `extras_hw` (Comma-separated extras)
-- `runtime_flags` / `runtime_flags_hw` (Passed to the script)
-
 ```proto
 benchmarks {
   name: "my_python_benchmark"
@@ -225,7 +239,6 @@ benchmarks {
     id: "gpu_l4"
     runner_label: "linux-x86-a4-224-l4-gpu"
     container_image: "us-docker.pkg.dev/my-project/images/gpu-test:latest"
-    workflow_type: [PRESUBMIT]
     
     # Environment extensions (merged into the inputs above)
     # Appends 'cuda' -> pip install .[test,cuda]
@@ -258,9 +271,9 @@ benchmarks {
 }
 ```
 
-## Step 3: Output Metrics and Artifacts
+## Output Metrics and Artifacts
 
-Your benchmark script will need to log metrics via TensorBoard to integrate with the platform.
+Your benchmark script will need to log metrics using TensorFlow event files to integrate with the platform.
 
 The reusable workflow injects two standard environment variables into your workload's execution environment to handle outputs:
 
@@ -403,7 +416,7 @@ if artifact_dir:
         np.save(f, my_logits)
 ```
 
-## Step 4: A/B Testing
+## A/B Testing Configuration
 
 BAP supports native A/B testing, allowing you to detect performance regressions on pull requests before they are merged.
 
@@ -434,45 +447,45 @@ jobs:
     uses: google-ml-infra/actions/.github/workflows/run-benchmarks.yml@main
     with:
       registry_file: "benchmarking/my_registry.pbtxt"
-      workflow_type: "PRESUBMIT"
       ab_mode: true # Enable A/B testing
 ```
 
-## Step 5: Testing
+## Testing / Ad-hoc Runs
 
-When adding or modifying benchmarks, it is often useful to verify the configuration in the GitHub environment before merging. To avoid creating unnecessary PRs (which can clutter history) just to trigger a run, we recommend using a push-based workflow for testing.
+We recommend configuring your workflow to support manual triggers via `workflow_dispatch`. This allows you to test configuration changes on a feature branch without merging, or to perform ad-hoc benchmark runs on demand.
 
-**Configure a test trigger**: Ensure your workflow file (from Step 1) is configured to trigger on push to your specific testing branch.
+### Configure the trigger
+
+Ensure your workflow file includes `workflow_dispatch:` in the `on:` section.
 
 ```yaml
 on:
-  push:
-    branches:
-      - "benchmarking" # or your feature branch name
+  workflow_dispatch:
 ```
 
-**Push to the testing branch**: Commit your changes to this branch and push to GitHub.
+### Push to a remote branch
 
 ```bash
-git checkout -b benchmarking
+git checkout -b my-feature-branch
 git add .
 git commit -m "Test new benchmark config"
-git push origin benchmarking
+git push origin my-feature-branch
 ```
 
-**Verify the run**: Navigate to the Actions tab in your GitHub repository. You should see the workflow triggered by your push.
+### Trigger the workflow
 
-1. Monitor the "Run benchmark" jobs to ensure the workload executes successfully.
-2. Check the "Parse TensorBoard logs" step output to confirm your metrics were found and parsed correctly.
-3. Verify the generated "Benchmark Result" and "Workload Artifacts" on the summary page.
+You can run the workflow against your branch using the GitHub Web UI or the CLI.
 
-## Step 6: Data Consumption (Pub/Sub)
+- [GitHub UI](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+- [GitHub CLI](https://cli.github.com/manual/gh_workflow_run)
+
+## Data Consumption (Pub/Sub)
 
 After the benchmark completes and metrics are parsed, the platform serializes the data and will optionally publish it to Google Cloud Pub/Sub. This allows you to build custom dashboards, alerting systems, or historical archives by subscribing to the result stream.
 
 ### Enabling Publication
 
-To enable publishing, you must set `publish_metrics: true` in your workflow file inputs (see Step 1). By default, this is disabled.
+To enable publishing, you must set `publish_metrics: true` in your workflow file inputs. By default, this is disabled.
 
 ### Data Format
 
