@@ -43,34 +43,30 @@ runs:
         TARGET_SHA: ${{ github.event.before }}
         FILE_PATHS: ${{ inputs.filepaths }}
       run: |
-        echo "Detecting changed Bazel files..."
-        
         # Add this line to resolve the dubious ownership error
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-        # Determine the correct base for the git diff
+        BAZEL_PATTERNS="$FILE_PATHS"
+        
         if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          echo "Detecting changed Bazel files..."
+
           DIFF_BASE="HEAD~1"
+          
+          echo "Comparing changes from $DIFF_BASE to HEAD"
+        
+          GIT_DIFF_CMD="git diff -z --name-only --diff-filter=d $DIFF_BASE HEAD -- $BAZEL_PATTERNS"
+    
+          echo "Checking formatting of changed bazel files..."
+          $GIT_DIFF_CMD | xargs -0 buildifier --mode=check -v
+          
         elif [[ "${{ github.event_name }}" == "push" ]]; then
-          if [[ "$TARGET_SHA" == "0000000000000000000000000000000000000000" || -z "$TARGET_SHA" ]]; then
-            # Fallback for new branches or missing 'before' SHA
-            DIFF_BASE="HEAD~1"
-          else
-            # For pushes, compare against the previous commit SHA
-            DIFF_BASE="$TARGET_SHA"
-            # In case multiple commits are pushed, fetch the target branch to ensure the base commit is available
-            git fetch origin "$TARGET_SHA" --depth=1 || true
-          fi
+          # Run on specified files if this is a push event
+          echo "Checking formatting of specified bazel files..."
+          # Use git ls-files to safely expand the patterns (including git pathspecs)
+          git ls-files -z -- $BAZEL_PATTERNS | xargs -0 -r buildifier --mode=check -v
+
         else
           echo "::error::Unsupported event type: ${GITHUB_EVENT_NAME}"
           exit 1
         fi
-  
-        echo "Comparing changes from $DIFF_BASE to HEAD"
-        
-        BAZEL_PATTERNS="$FILE_PATHS"
-        
-        GIT_DIFF_CMD="git diff -z --name-only --diff-filter=d $DIFF_BASE HEAD -- $BAZEL_PATTERNS"
-    
-        echo "Checking formatting of changed bazel files..."
-        $GIT_DIFF_CMD | xargs -0 buildifier --mode=check -v
