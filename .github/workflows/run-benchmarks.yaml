@@ -249,8 +249,9 @@ jobs:
       - name: Upload matrix JSON artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
-          name: matrix-json-${{ steps.gen_job_id.outputs.job_id }}
+          name: shard-matrix-${{ steps.gen_job_id.outputs.job_id }}
           path: ${{ steps.generate.outputs.matrix_json_path }}
+          retention-days: 1
 
   run_benchmarks:
     # For A/B mode, append mode to the job name.
@@ -268,9 +269,9 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
 
-    runs-on: ${{ matrix.runner_label }}
+    runs-on: ${{ matrix.environment_config.runner_label }}
     container:
-      image: ${{ matrix.container_image }}
+      image: ${{ matrix.environment_config.container_image }}
 
     steps:
       - name: Check out user repo
@@ -336,18 +337,20 @@ jobs:
         if: always() # Uploads even if the workload fails
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
-          # Format: workload-artifacts-{CONFIG}[-{AB_MODE}]-{JOB_ID}.json
-          name: workload-artifacts-${{ matrix.config_id }}${{ matrix.ab_test_group && format('-{0}', matrix.ab_test_group) || '' }}-${{ needs.generate_matrix.outputs.job_id }}
+          # Format: shard-workload-artifacts-{CONFIG}[-{AB_MODE}]-{JOB_ID}.json
+          name: shard-workload-artifacts-${{ matrix.config_id }}${{ matrix.ab_test_group && format('-{0}', matrix.ab_test_group) || '' }}-${{ needs.generate_matrix.outputs.job_id }}
           path: ${{ env.WORKLOAD_ARTIFACTS_DIR }}
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: ignore
 
       - name: Parse TB event files
         env:
           BENCHMARK_CONFIG_ID: ${{ matrix.config_id }}
+          BENCHMARK_NAME: ${{ matrix.benchmark_name }}
+          ENVIRONMENT_CONFIG_ID: ${{ matrix.environment_config.id }}
           METRIC_SPECS_JSON: '${{ toJson(matrix.metrics) }}'
           WORKFLOW_TYPE: ${{ matrix.workflow_type }}
-          RUNNER_LABEL: ${{ matrix.runner_label }}
+          RUNNER_LABEL: ${{ matrix.environment_config.runner_label }}
           RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           COMMIT_SHA: ${{ steps.commit_info.outputs.sha }}
           BRANCH: ${{ steps.commit_info.outputs.ref }}
@@ -362,7 +365,7 @@ jobs:
           echo "::group::Parse TB event files"
           set -euo pipefail
           mkdir -p "$BENCHMARK_RESULTS_DIR"          
-          TARGET_BENCHMARK_RESULT_FILE_PATH="$BENCHMARK_RESULTS_DIR/$BENCHMARK_RESULT_FILENAME"
+          BENCHMARK_RESULT_FILE_PATH="$BENCHMARK_RESULTS_DIR/benchmark_result.json"
 
           bazel run //benchmarking/tb_parser \
             --noshow_progress \
@@ -373,6 +376,8 @@ jobs:
             --tblog_dir="$TENSORBOARD_OUTPUT_DIR" \
             --output_dir="$BENCHMARK_RESULTS_DIR" \
             --config_id="$BENCHMARK_CONFIG_ID" \
+            --benchmark_name="$BENCHMARK_NAME" \
+            --environment_config_id="$ENVIRONMENT_CONFIG_ID" \
             --commit_sha="$COMMIT_SHA" \
             --github_run_id="$GITHUB_RUN_ID" \
             --workflow_type="$WORKFLOW_TYPE" \
@@ -380,13 +385,9 @@ jobs:
             --branch="$BRANCH" \
             --run_url="$RUN_URL"
 
-          # Rename the default output to our specific, unique artifact name
-          mv "$BENCHMARK_RESULTS_DIR/benchmark_result.json" "$TARGET_BENCHMARK_RESULT_FILE_PATH"
-
           {
             echo "benchmark_results_dir=$BENCHMARK_RESULTS_DIR"
-            echo "benchmark_result_file=$TARGET_BENCHMARK_RESULT_FILE_PATH"
-            echo "benchmark_result_artifact_name=${BENCHMARK_RESULT_FILENAME%.json}"
+            echo "benchmark_result_file=$BENCHMARK_RESULT_FILE_PATH"
           } >> "$GITHUB_OUTPUT"
 
           echo "::endgroup::"
@@ -394,8 +395,10 @@ jobs:
       - name: Upload benchmark result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
-          name: ${{ steps.parse_tb_logs.outputs.benchmark_result_artifact_name }}
+          # Format: shard-benchmark-result-{CONFIG}[-{AB_MODE}]-{JOB_ID}
+          name: shard-benchmark-result-${{ matrix.config_id }}${{ matrix.ab_test_group && format('-{0}', matrix.ab_test_group) || '' }}-${{ needs.generate_matrix.outputs.job_id }}
           path: ${{ steps.parse_tb_logs.outputs.benchmark_result_file }}
+          retention-days: 1
 
       - name: Run static threshold analyzer
         # For A/B mode, skip static analysis. The ab_analysis job will handle pass/fail logic.
@@ -465,9 +468,8 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # ratchet:actions/download-artifact@v4
         with:
           # Only download artifacts created in this specific job
-          pattern: benchmark-result-*-${{ needs.generate_matrix.outputs.job_id }}
+          pattern: shard-benchmark-result-*-${{ needs.generate_matrix.outputs.job_id }}
           path: all_results
-          merge-multiple: true
 
       - name: Run A/B analyzer
         id: ab_analyzer
@@ -508,8 +510,9 @@ jobs:
       - name: Upload A/B report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
-          name: ab-report-${{ needs.generate_matrix.outputs.job_id }}
+          name: shard-ab-report-${{ needs.generate_matrix.outputs.job_id }}
           path: ${{ github.workspace }}/ab_report.md
+          retention-days: 1
 
       - name: Post PR comment
         if: inputs.post_pr_comment == true && github.event_name == 'pull_request' && !cancelled()
@@ -534,3 +537,59 @@ jobs:
           fi
 
           echo "::endgroup::"
+
+  bundle_artifacts:
+    name: bundle_artifacts
+    needs: [generate_matrix, run_benchmarks, ab_analysis]
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d  # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+    if: always()
+    
+    steps:
+      - name: Check out ML actions repo
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        with:
+          repository: 'google-ml-infra/actions'
+          ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
+          path: ml_actions
+          persist-credentials: false
+
+      - name: Download all job artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # ratchet:actions/download-artifact@v4
+        with:
+          pattern: shard-*-${{ needs.generate_matrix.outputs.job_id }}
+          path: raw_artifacts
+
+      - name: Run artifact bundler
+        env:
+          JOB_ID: "${{ needs.generate_matrix.outputs.job_id }}"
+        shell: bash 
+        working-directory: ml_actions
+        run: |
+          echo "::group::Run artifact bundler"
+          set -euo pipefail
+
+          RAW_DIR="$GITHUB_WORKSPACE/raw_artifacts"
+          FINAL_DIR="$GITHUB_WORKSPACE/final_artifacts"
+          mkdir -p "$FINAL_DIR"
+          
+          bazel run //benchmarking/artifact_bundler -- \
+            --raw_dir="$RAW_DIR" \
+            --final_dir="$FINAL_DIR" \
+            --job_id="$JOB_ID"
+          
+          echo "::endgroup::"
+
+      - name: Upload Bundled Artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ needs.generate_matrix.outputs.job_id }}
+          path: final_artifacts/
+
+      - name: Delete temporary artifacts
+        uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # ratchet:geekyeggo/delete-artifact@v5
+        with:
+          name: shard-*-${{ needs.generate_matrix.outputs.job_id }}
+          useGlob: true
+          failOnError: false

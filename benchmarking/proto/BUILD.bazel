@@ -25,6 +25,7 @@ proto_library(
         "//benchmarking/proto/common:metric_proto",
         "//benchmarking/proto/common:workflow_type_proto",
         "//benchmarking/proto/common:workload_action_proto",
+        "//benchmarking/proto/common:environment_config_proto",
     ],
 )
 
@@ -48,6 +49,7 @@ proto_library(
         "//benchmarking/proto/common:metric_proto",
         "//benchmarking/proto/common:workflow_type_proto",
         "//benchmarking/proto/common:workload_action_proto",
+        "//benchmarking/proto/common:environment_config_proto",
     ],
 )
 
