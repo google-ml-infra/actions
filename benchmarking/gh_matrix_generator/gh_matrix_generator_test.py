@@ -235,8 +235,13 @@ def test_generate_matrix_content_correctness():
 
   assert cpu_entry["config_id"] == "cpu_benchmark_basic_cpu"
   assert cpu_entry["workflow_type"] == "PRESUBMIT"
-  assert cpu_entry["runner_label"] == "linux-x86-n2-32"
-  assert cpu_entry["container_image"] == "gcr.io/testing/cpu-container:latest"
+
+  assert cpu_entry["environment_config"]["id"] == "basic_cpu"
+  assert cpu_entry["environment_config"]["runner_label"] == "linux-x86-n2-32"
+  assert (
+    cpu_entry["environment_config"]["container_image"]
+    == "gcr.io/testing/cpu-container:latest"
+  )
 
   action_inputs = cpu_entry["workload"]["action_inputs"]
   assert action_inputs["target"] == "//b:cpu"
