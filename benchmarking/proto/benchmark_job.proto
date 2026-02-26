@@ -50,9 +50,6 @@ message BenchmarkJob {
   // REQUIRED: Owner or team responsible for the benchmark.
   string owner = 5 [(buf.validate.field).string.min_len = 1];
   
-  // Optional: GitHub labels for filtering or triggering workflows.
-  repeated string github_labels = 6; 
-  
   // REQUIRED: Configuration for the workload executor action.
   bap.common.WorkloadAction workload = 9 [(buf.validate.field).required = true];
   
@@ -71,5 +68,5 @@ message BenchmarkJob {
   bap.common.EnvironmentConfig environment_config = 13 [(buf.validate.field).required = true];
 
   // Prevent reuse of deleted tags.
-  reserved 7, 8;
+  reserved 6, 7, 8;
 }

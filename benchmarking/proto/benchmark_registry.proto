@@ -22,15 +22,6 @@ import "benchmarking/proto/common/workflow_type.proto";
 import "benchmarking/proto/common/workload_action.proto";
 import "benchmarking/proto/common/environment_config.proto";
 
-// Defines how frequently the benchmark should be reviewed and/or updated 
-// for retention purposes.
-enum UpdateFrequency {
-  UPDATE_FREQUENCY_UNSPECIFIED = 0;
-  WEEKLY = 1;
-  MONTHLY = 2;
-  QUARTERLY = 3;
-}
-
 // Defines a specific benchmark configuration.
 message BenchmarkConfig {
   // REQUIRED: A unique name for the benchmark (e.g., "resnet50_jax_train").
@@ -45,12 +36,6 @@ message BenchmarkConfig {
   // REQUIRED: Configuration for the workload executor action.
   bap.common.WorkloadAction workload = 4 [(buf.validate.field).required = true];
 
-  // REQUIRED: How often this benchmark definition should be reviewed.
-  UpdateFrequency update_frequency_policy = 6 [(buf.validate.field).enum = { not_in: [0]}];
-
-  // Optional: GitHub labels for filtering or triggering workflows.
-  repeated string github_labels = 7;
-
   // Optional: List of metrics to track.
   repeated bap.common.MetricSpec metrics = 8;
 
@@ -61,7 +46,7 @@ message BenchmarkConfig {
   repeated string tags = 10;
 
   // Prevent reuse of deleted tags.
-  reserved 5;
+  reserved 5, 6, 7;
 }
 
 // Represents a collection of benchmark configurations.
