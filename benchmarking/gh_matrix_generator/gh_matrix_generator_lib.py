@@ -190,7 +190,6 @@ class MatrixGenerator:
         base_job.description = benchmark.description
         base_job.owner = benchmark.owner
         base_job.workload.CopyFrom(workload_action)
-        base_job.github_labels.extend(benchmark.github_labels)
         base_job.metrics.extend(benchmark.metrics)
 
         jobs_to_emit = []

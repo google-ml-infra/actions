@@ -184,8 +184,6 @@ benchmarks {
     workload_action_inputs { key: "runtime_flags_hw" value: "--precision=fp32" }
   }
 
-  update_frequency_policy: QUARTERLY
-
   metrics {
     # REQUIRED: Must match the TensorBoard tag name (e.g., 'wall_time' in the log)
     name: "wall_time"
@@ -248,8 +246,6 @@ benchmarks {
     # Appends flag -> python script.py ... --use_gpu
     workload_action_inputs { key: "runtime_flags_hw" value: "--use_gpu" }
   }
-
-  update_frequency_policy: QUARTERLY
 
   metrics {
     # REQUIRED: Must match the TensorBoard tag name

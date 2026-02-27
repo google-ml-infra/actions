@@ -574,7 +574,11 @@ jobs:
           FINAL_DIR="$GITHUB_WORKSPACE/final_artifacts"
           mkdir -p "$FINAL_DIR"
           
-          bazel run //benchmarking/artifact_bundler -- \
+          bazel run //benchmarking/artifact_bundler \
+            --noshow_progress \
+            --noshow_loading_progress \
+            --ui_event_filters=-info \
+            -- \
             --raw_dir="$RAW_DIR" \
             --final_dir="$FINAL_DIR" \
             --job_id="$JOB_ID"
