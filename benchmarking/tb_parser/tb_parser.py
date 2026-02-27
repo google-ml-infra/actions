@@ -63,6 +63,8 @@ def main():
   parser.add_argument("--tblog_dir", required=True)
   parser.add_argument("--output_dir", required=True)
   parser.add_argument("--config_id", required=True)
+  parser.add_argument("--benchmark_name", required=True)
+  parser.add_argument("--environment_config_id", required=True)
   parser.add_argument("--commit_sha", required=True)
   parser.add_argument("--github_run_id", required=True)
   parser.add_argument("--workflow_type", required=True, help="e.g. PRESUBMIT")
@@ -82,6 +84,8 @@ def main():
   # Create BenchmarkResult message
   result = benchmark_result_pb2.BenchmarkResult(
     config_id=args.config_id,
+    benchmark_name=args.benchmark_name,
+    environment_config_id=args.environment_config_id,
     commit_sha=args.commit_sha,
     run_timestamp=ts,
     stats=computed_stats,
