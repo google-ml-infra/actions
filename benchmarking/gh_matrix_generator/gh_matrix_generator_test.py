@@ -41,7 +41,6 @@ VALID_SUITE_PBTXT = """
         tags: ["presubmit", "postsubmit", "cpu"]
         workload_action_inputs { key: "runtime_flags_hw" value: "--precision=fp32" }
       }
-      update_frequency_policy: QUARTERLY
       metrics {
         name: "wall_time_ms"
         unit: "ms"
@@ -71,7 +70,6 @@ VALID_SUITE_PBTXT = """
         container_image: "gcr.io/testing/gpu-container:latest"
         tags: ["presubmit", "gpu"]
       }
-      update_frequency_policy: WEEKLY
     }
     """
 
@@ -89,7 +87,6 @@ INVALID_SUITE_MISSING_ID_PBTXT = """
         container_image: "gcr.io/testing/cpu-container:latest"
         tags: ["presubmit"]
       }
-      update_frequency_policy: QUARTERLY
     }
     """
 
@@ -235,8 +232,13 @@ def test_generate_matrix_content_correctness():
 
   assert cpu_entry["config_id"] == "cpu_benchmark_basic_cpu"
   assert cpu_entry["workflow_type"] == "PRESUBMIT"
-  assert cpu_entry["runner_label"] == "linux-x86-n2-32"
-  assert cpu_entry["container_image"] == "gcr.io/testing/cpu-container:latest"
+
+  assert cpu_entry["environment_config"]["id"] == "basic_cpu"
+  assert cpu_entry["environment_config"]["runner_label"] == "linux-x86-n2-32"
+  assert (
+    cpu_entry["environment_config"]["container_image"]
+    == "gcr.io/testing/cpu-container:latest"
+  )
 
   action_inputs = cpu_entry["workload"]["action_inputs"]
   assert action_inputs["target"] == "//b:cpu"

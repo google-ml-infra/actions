@@ -30,6 +30,7 @@ Our platform handles the following:
 - Static threshold analysis and regression detection.
 - A/B testing and regression detection.
 - Publishing results to Google Cloud Pub/Sub for downstream consumption.
+- Bundling all benchmark results, A/B report, and workload artifacts into a single GitHub Actions artifact per top-level job.
 
 ## Create a workflow file
 
@@ -183,8 +184,6 @@ benchmarks {
     workload_action_inputs { key: "runtime_flags_hw" value: "--precision=fp32" }
   }
 
-  update_frequency_policy: QUARTERLY
-
   metrics {
     # REQUIRED: Must match the TensorBoard tag name (e.g., 'wall_time' in the log)
     name: "wall_time"
@@ -247,8 +246,6 @@ benchmarks {
     # Appends flag -> python script.py ... --use_gpu
     workload_action_inputs { key: "runtime_flags_hw" value: "--use_gpu" }
   }
-
-  update_frequency_policy: QUARTERLY
 
   metrics {
     # REQUIRED: Must match the TensorBoard tag name
@@ -398,11 +395,12 @@ except Exception as e:
     print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
     sys.exit(1)
 ```
+
 ### Saving Workload Artifacts
 
 If your workload produces files other than metrics (e.g., raw logits, images, or custom JSON logs), you can save them to `WORKLOAD_ARTIFACTS_DIR`.
 
-Any file written to this directory is automatically zipped and uploaded as a GitHub Actions artifact (retained for 7 days), even if the benchmark workload fails.
+Any file written to this directory is automatically collected by the platform. At the end of the workflow run, all metrics, reports, and workload artifacts are consolidated into a single download.
 
 ```python
 import os
@@ -448,6 +446,28 @@ jobs:
     with:
       registry_file: "benchmarking/my_registry.pbtxt"
       ab_mode: true # Enable A/B testing
+```
+
+## Artifact Bundling
+
+To prevent the Github Actions workflow run from being cluttered with dozens of artifacts from individual benchmark jobs, BAP automatically merges the results from the parallel matrix into a single, unified GitHub Actions artifact per top-level job named `artifacts-<job_id>`. 
+
+Note: The individual intermediate artifacts generated during the matrix run are ephemeral and automatically cleaned up by the platform.
+
+### Directory Structure
+
+When downloaded and extracted, the bundle provides a clean, navigable directory tree containing the original matrix definition, the generated A/B report (if applicable), and all benchmark results and custom workload artifacts organized by environment:
+
+```text
+artifacts-<job_id>/
+├── matrix.json
+├── ab_report.md
+└── <benchmark_name>/
+    └── <environment_config_id>/
+        ├── single_run/ # (or BASELINE / EXPERIMENT if ab_mode: true)
+        │   ├── benchmark_result.json
+        │   └── workload_artifacts/
+        │       └── <your_custom_files>
 ```
 
 ## Testing / Ad-hoc Runs
