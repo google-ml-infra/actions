@@ -40,14 +40,16 @@ jobs:
       matrix:
         scenario:
           - name: implicit-cache-glob-linux
-            runner: linux-x86-n2-16
+            runner: ubuntu-latest
             python_version: '3.12'
             cache_glob: ''
             summary_label: 'implicit-cache-glob'
             expected_summary_label: 'implicit-cache-glob'
+            add_python_to_path: 'true'
+            export_python_env: 'true'
 
           - name: implicit-cache-glob-windows
-            runner: windows-x86-n2-16
+            runner: windows-latest
             python_version: '3.12'
             cache_glob: ''
             summary_label: ''
@@ -56,7 +58,7 @@ jobs:
             export_python_env: 'true'
 
           - name: custom-cache-glob
-            runner: linux-x86-n2-16
+            runner: ubuntu-latest
             python_version: '3.12'
             cache_glob: '.github/workflows/setup-uv-python-test.yaml'
             summary_label: 'custom-cache-glob'
@@ -148,7 +150,7 @@ jobs:
 
   invalid-python-version:
     name: Invalid python-version fails clearly
-    runs-on: linux-x86-n2-16
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
         with:
