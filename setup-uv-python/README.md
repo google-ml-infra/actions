@@ -20,6 +20,8 @@ Composite action for installing Python via `uv`.
 | `cache-python`          | No       | `true`    | Cache uv-managed Python installations.          |
 | `cache-dependency-glob` | No       | `''`      | Files used by `setup-uv` to compute cache keys. |
 | `cache-suffix`          | No       | `''`      | Optional suffix for cache busting/debugging.    |
+| `add-python-to-path`    | No       | `true`    | Add the venv binary directory to `PATH`.        |
+| `export-python-env`     | No       | `true`    | Export `PYTHON_BIN` and `VIRTUAL_ENV`.          |
 
 ## Outputs
 
@@ -29,17 +31,21 @@ Composite action for installing Python via `uv`.
 
 ## Ways to run Python from within the workflow
 
-- `python -m <module>`
-- `python3 -m <module>`
-- `${{ steps.<setup_step_id>.outputs.python-bin }} -m <module>`
-- `$PYTHON_BIN -m <module>` (bash) or `$env:PYTHON_BIN -m <module>` (PowerShell)
+- `python` (when `add-python-to-path` is `true`)
+- `python3` (when `add-python-to-path` is `true`)
+- `${{ steps.<setup_step_id>.outputs.python-bin }}` (always)
+- `$PYTHON_BIN` (Bash) or `$env:PYTHON_BIN -m` (PowerShell)
+  when `export-python-env` is `true`
 
-## Environment changes
+## Environment changes (default behavior)
+
+So long as `add-python-to-path` and `export-python-env` are `true`,
+which they are by default, the following environment changes are made:
 
 - Exports `PYTHON_BIN` and `VIRTUAL_ENV` for subsequent steps.
 - Updates `PATH` to include the venv binary directory.
 
-## Usage example (no debug output)
+## Usage example
 
 ```yaml
 - name: Set up uv-managed Python
@@ -64,10 +70,20 @@ Composite action for installing Python via `uv`.
     python3 -c "import sys; print(sys.version)"
 ```
 
-If you need the explicit interpreter path:
+If the default behavior of exporting `PYTHON_BIN`+`VIRTUAL_ENV`, or adding the
+bin directory to `PATH` is not desired, set `add-python-to-path` and/or
+`export-python-env` to `false`.
 
 ```yaml
-- run: ${{ steps.setup_python.outputs.python-bin }} -m pip --version
+- name: Set up uv-managed Python without PATH/env exports
+  id: setup_python
+  uses: google-ml-infra/actions/setup-uv-python@<SHA>
+  with:
+    python-version: '3.12'
+    add-python-to-path: 'false'
+    export-python-env: 'false'
+
+- run: ${{ steps.setup_python.outputs.python-bin }} -m pytest
 ```
 
 ## Step Summary Output

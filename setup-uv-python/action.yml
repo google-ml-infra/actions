@@ -12,7 +12,7 @@ inputs:
   uv-version:
     description: 'uv version to install.'
     required: false
-    default: '0.10.4'
+    default: '0.10.9'
   enable-cache:
     description: 'Whether to enable uv cache uploads/restores.'
     required: false
@@ -29,6 +29,14 @@ inputs:
     description: 'Optional suffix appended to setup-uv cache keys for cache busting/debugging.'
     required: false
     default: ''
+  add-python-to-path:
+    description: 'Whether to prepend the uv virtual environment binary (bin|Scripts) directory to PATH.'
+    required: false
+    default: 'true'
+  export-python-env:
+    description: 'Whether to export PYTHON_BIN and VIRTUAL_ENV environment variables.'
+    required: false
+    default: 'true'
 
 outputs:
   python-bin:
@@ -47,7 +55,7 @@ runs:
     - name: Install uv and set Python ${{ inputs.python-version }} (custom cache glob)
       if: ${{ inputs.cache-dependency-glob != '' }}
       id: setup_uv_with_glob
-      uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b  # v7.3.0
+      uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098  # v7.3.1
       with:
         version: ${{ inputs.uv-version }}
         python-version: ${{ inputs.python-version }}
@@ -61,7 +69,7 @@ runs:
     - name: Install uv and set Python ${{ inputs.python-version }} (implicit cache glob)
       if: ${{ inputs.cache-dependency-glob == '' }}
       id: setup_uv_default_glob
-      uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b  # v7.3.0
+      uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098  # v7.3.1
       with:
         version: ${{ inputs.uv-version }}
         python-version: ${{ inputs.python-version }}
@@ -74,6 +82,8 @@ runs:
       shell: bash
       env:
         UV_PYTHON_VERSION: ${{ inputs.python-version }}
+        ADD_PYTHON_TO_PATH: ${{ inputs.add-python-to-path }}
+        EXPORT_PYTHON_ENV: ${{ inputs.export-python-env }}
       run: bash "$GITHUB_ACTION_PATH/scripts/ensure_uv_python_runtime.sh"
 
     - name: Report Python setup duration

@@ -11,6 +11,14 @@ on:
       - 'setup-uv-python/**'
       - '.github/workflows/setup-uv-python-test.yaml'
   workflow_dispatch:
+    inputs:
+      halt-for-connection:
+        description: 'Should this workflow run wait for a remote connection?'
+        type: choice
+        default: 'no'
+        options:
+          - 'yes'
+          - 'no'
 
 permissions:
   contents: read
@@ -26,29 +34,53 @@ defaults:
 
 jobs:
   integration:
-    name: Integration (${{ matrix.scenario.name }}, ${{ matrix.scenario.runner }})
+    name: Test-Scenario (${{ matrix.scenario.name }}, ${{ matrix.scenario.runner }})
     strategy:
       fail-fast: false
       matrix:
         scenario:
-          - name: implicit-cache-glob
+          - name: implicit-cache-glob-linux
             runner: linux-x86-n2-16
             python_version: '3.12'
             cache_glob: ''
             summary_label: 'implicit-cache-glob'
             expected_summary_label: 'implicit-cache-glob'
-          - name: implicit-cache-glob
+
+          - name: implicit-cache-glob-windows
             runner: windows-x86-n2-16
             python_version: '3.12'
             cache_glob: ''
             summary_label: ''
             expected_summary_label: 'python-3.12'
+            add_python_to_path: 'true'
+            export_python_env: 'true'
+
           - name: custom-cache-glob
             runner: linux-x86-n2-16
             python_version: '3.12'
             cache_glob: '.github/workflows/setup-uv-python-test.yaml'
             summary_label: 'custom-cache-glob'
             expected_summary_label: 'custom-cache-glob'
+            add_python_to_path: 'true'
+            export_python_env: 'true'
+
+          - name: no-env-export
+            runner: ubuntu-latest
+            python_version: '3.12'
+            cache_glob: ''
+            summary_label: 'no-env-export'
+            expected_summary_label: 'no-env-export'
+            add_python_to_path: 'true'
+            export_python_env: 'false'
+
+          - name: no-path-export-env
+            runner: ubuntu-latest
+            python_version: '3.12'
+            cache_glob: ''
+            summary_label: 'no-path-export-env'
+            expected_summary_label: 'no-path-export-env'
+            add_python_to_path: 'false'
+            export_python_env: 'true'
     runs-on: ${{ matrix.scenario.runner }}
 
     steps:
@@ -65,6 +97,8 @@ jobs:
         with:
           python-version: ${{ matrix.scenario.python_version }}
           summary-label: ${{ matrix.scenario.summary_label }}
+          add-python-to-path: ${{ matrix.scenario.add_python_to_path }}
+          export-python-env: ${{ matrix.scenario.export_python_env }}
 
       - name: Set up uv-managed Python (custom cache glob)
         if: ${{ matrix.scenario.cache_glob != '' }}
@@ -76,23 +110,40 @@ jobs:
           python-version: ${{ matrix.scenario.python_version }}
           summary-label: ${{ matrix.scenario.summary_label }}
           cache-dependency-glob: ${{ matrix.scenario.cache_glob }}
+          add-python-to-path: ${{ matrix.scenario.add_python_to_path }}
+          export-python-env: ${{ matrix.scenario.export_python_env }}
 
       - name: Verify python aliases, output, and environment exports
         env:
           SETUP_PYTHON_BIN: ${{ steps.setup_python_default.outputs.python-bin || steps.setup_python_custom.outputs.python-bin }}
           EXPECTED_MINOR: ${{ matrix.scenario.python_version }}
           SUMMARY_LABEL: ${{ matrix.scenario.expected_summary_label }}
+          ADD_PYTHON_TO_PATH: ${{ matrix.scenario.add_python_to_path }}
+          EXPORT_PYTHON_ENV: ${{ matrix.scenario.export_python_env }}
         run: |
           set -euo pipefail
-          python setup-uv-python/tests/verify_setup_behavior.py \
-            --mode python \
+
+          PYTHON_CMD="$SETUP_PYTHON_BIN"
+          if [ "$ADD_PYTHON_TO_PATH" = 'true' ]; then
+            PYTHON_CMD='python'
+          fi
+
+          "$PYTHON_CMD" setup-uv-python/tests/verify_setup_behavior.py \
+            --check python-runtime \
             --expected-minor "$EXPECTED_MINOR" \
-            --setup-python-bin "$SETUP_PYTHON_BIN"
-          python3 setup-uv-python/tests/verify_setup_behavior.py \
-            --mode python3 \
-            --expected-minor "$EXPECTED_MINOR"
-          python setup-uv-python/tests/verify_setup_behavior.py \
-            --mode summary \
+            --setup-python-bin "$SETUP_PYTHON_BIN" \
+            --export-python-env "$EXPORT_PYTHON_ENV" \
+            --add-python-to-path "$ADD_PYTHON_TO_PATH"
+
+          if [ "$ADD_PYTHON_TO_PATH" = 'true' ]; then
+            python3 setup-uv-python/tests/verify_setup_behavior.py \
+              --check python3-alias \
+              --expected-minor "$EXPECTED_MINOR" \
+              --setup-python-bin "$SETUP_PYTHON_BIN"
+          fi
+
+          "$SETUP_PYTHON_BIN" setup-uv-python/tests/verify_setup_behavior.py \
+            --check summary-output \
             --summary-label "$SUMMARY_LABEL"
 
   invalid-python-version:
