@@ -15,7 +15,7 @@ Composite action for installing Python via `uv`.
 |-------------------------|----------|-----------|-------------------------------------------------|
 | `python-version`        | Yes      | N/A       | Python version to install.                      |
 | `summary-label`         | No       | `''`      | Optional label for step summary output.         |
-| `uv-version`            | No       | `0.10.4`  | `uv` version to install.                        |
+| `uv-version`            | No       | `0.10.10` | `uv` version to install.                        |
 | `enable-cache`          | No       | `true`    | Enable `uv` cache restore/save behavior.        |
 | `cache-python`          | No       | `true`    | Cache uv-managed Python installations.          |
 | `cache-dependency-glob` | No       | `''`      | Files used by `setup-uv` to compute cache keys. |
@@ -34,7 +34,7 @@ Composite action for installing Python via `uv`.
 - `python` (when `add-python-to-path` is `true`)
 - `python3` (when `add-python-to-path` is `true`)
 - `${{ steps.<setup_step_id>.outputs.python-bin }}` (always)
-- `$PYTHON_BIN` (Bash) or `$env:PYTHON_BIN -m` (PowerShell)
+- `$PYTHON_BIN` (Bash) or `& $env:PYTHON_BIN -m` (PowerShell)
   when `export-python-env` is `true`
 
 ## Environment changes (default behavior)

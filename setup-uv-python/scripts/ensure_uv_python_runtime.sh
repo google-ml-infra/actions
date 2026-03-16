@@ -39,9 +39,18 @@ if ! MANAGED_PYTHON_BIN="$(uv python find "$UV_PYTHON_VERSION" 2>/dev/null)"; th
   MANAGED_PYTHON_BIN="$(uv python find "$UV_PYTHON_VERSION")"
 fi
 
-# Create a venv. Clear the previous one, should it exist.
-VENV_PATH="${RUNNER_TEMP:-/tmp}/uv-ci-venv"
-uv venv --clear --python "$MANAGED_PYTHON_BIN" "$VENV_PATH"
+TEMP_ROOT="${RUNNER_TEMP:-/tmp}"
+VENV_PATH=''
+if command -v mktemp >/dev/null 2>&1; then
+  VENV_PATH="$(mktemp -d "${TEMP_ROOT%/}/uv-ci-venv-XXXXXX" 2>/dev/null || true)"
+fi
+# On the offchance mktemp is not available or fails,
+# fall back to using the PID and RANDOM.
+if [ -z "$VENV_PATH" ]; then
+  VENV_PATH="${TEMP_ROOT%/}/uv-ci-venv-$$-${RANDOM}"
+fi
+
+uv venv --python "$MANAGED_PYTHON_BIN" "$VENV_PATH"
 if [ -x "$VENV_PATH/bin/python" ]; then
   PYTHON_BIN="$VENV_PATH/bin/python"
 elif [ -x "$VENV_PATH/Scripts/python.exe" ]; then
