@@ -191,7 +191,7 @@ jobs:
       - name: Check out ML actions repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
-          repository: 'google-ml-infra/actions'
+          repository: "google-ml-infra/actions"
           ref: ${{ steps.resolve_refs.outputs.ml_actions_ref }}
           path: ml_actions
           persist-credentials: false
@@ -300,7 +300,7 @@ jobs:
       - name: Check out ML actions repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
-          repository: 'google-ml-infra/actions'
+          repository: "google-ml-infra/actions"
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
           path: ml_actions
           persist-credentials: false
@@ -355,9 +355,6 @@ jobs:
           COMMIT_SHA: ${{ steps.commit_info.outputs.sha }}
           BRANCH: ${{ steps.commit_info.outputs.ref }}
           BENCHMARK_RESULTS_DIR: "${{ github.workspace }}/results"
-          # Format: benchmark-result-{CONFIG}[-{AB_MODE}]-{JOB_ID}.json
-          BENCHMARK_RESULT_FILENAME: >-
-            benchmark-result-${{ matrix.config_id }}${{ matrix.ab_test_group && format('-{0}', matrix.ab_test_group) || '' }}-${{ needs.generate_matrix.outputs.job_id }}.json
         id: parse_tb_logs
         working-directory: ml_actions
         shell: bash
@@ -365,7 +362,7 @@ jobs:
           echo "::group::Parse TB event files"
           set -euo pipefail
           mkdir -p "$BENCHMARK_RESULTS_DIR"          
-          BENCHMARK_RESULT_FILE_PATH="$BENCHMARK_RESULTS_DIR/benchmark_result.json"
+          BENCHMARK_RESULT_FILE="$BENCHMARK_RESULTS_DIR/benchmark_result.json"
 
           bazel run //benchmarking/tb_parser \
             --noshow_progress \
@@ -374,7 +371,7 @@ jobs:
             -- \
             --metric_specs_json="$METRIC_SPECS_JSON" \
             --tblog_dir="$TENSORBOARD_OUTPUT_DIR" \
-            --output_dir="$BENCHMARK_RESULTS_DIR" \
+            --output_file="$BENCHMARK_RESULT_FILE" \
             --config_id="$BENCHMARK_CONFIG_ID" \
             --benchmark_name="$BENCHMARK_NAME" \
             --environment_config_id="$ENVIRONMENT_CONFIG_ID" \
@@ -387,7 +384,7 @@ jobs:
 
           {
             echo "benchmark_results_dir=$BENCHMARK_RESULTS_DIR"
-            echo "benchmark_result_file=$BENCHMARK_RESULT_FILE_PATH"
+            echo "benchmark_result_file=$BENCHMARK_RESULT_FILE"
           } >> "$GITHUB_OUTPUT"
 
           echo "::endgroup::"
@@ -459,7 +456,7 @@ jobs:
       - name: Check out ML actions repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
-          repository: 'google-ml-infra/actions'
+          repository: "google-ml-infra/actions"
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
           path: ml_actions
           persist-credentials: false
@@ -550,7 +547,7 @@ jobs:
       - name: Check out ML actions repo
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
-          repository: 'google-ml-infra/actions'
+          repository: "google-ml-infra/actions"
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
           path: ml_actions
           persist-credentials: false
@@ -585,7 +582,7 @@ jobs:
           
           echo "::endgroup::"
 
-      - name: Upload Bundled Artifacts
+      - name: Upload bundled artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
         with:
           name: artifacts-${{ needs.generate_matrix.outputs.job_id }}
