@@ -20,7 +20,9 @@ import os
 import platform
 import shutil
 import sys
+
 from datetime import datetime
+from typing import Optional
 
 
 class ConnectionSignals:
@@ -41,7 +43,6 @@ STATE_ENV_OUT_PATH = os.path.join(STATE_OUT_DIR, STATE_ENV_FILENAME)
 
 _UNIX_SHELLS = "bash", "sh", "zsh"
 _WINDOWS_SHELLS = "pwsh.exe", "powershell.exe", "cmd.exe"
-_ALL_SHELLS = _UNIX_SHELLS + _WINDOWS_SHELLS
 
 # Check if debug logging should be enabled for the scripts:
 # WAIT_FOR_CONNECTION_DEBUG is a custom variable.
@@ -117,23 +118,23 @@ def setup_logging():
 
 
 def get_best_shell(
-  ci_env: dict[str, str] | None = None, prefer_native: bool = False
-) -> str | None:
+  ci_env: dict[str, str] | None = None, use_native: bool = False
+) -> tuple[Optional[str], tuple[str, ...]]:
   """Get the most convenient shell."""
 
   ci_env_path = ci_env.get("PATH") if ci_env else None
 
   if platform.system() == "Windows":
-    # Just in case, add .exe for safer matching
-    unix_exe_shells = tuple(f"{shell}.exe" for shell in _UNIX_SHELLS)
-    if prefer_native:
-      shells = _WINDOWS_SHELLS + unix_exe_shells
+    if use_native:
+      suitable_shells = _WINDOWS_SHELLS
     else:
-      shells = unix_exe_shells + _WINDOWS_SHELLS
+      # Just in case, add .exe for safer matching
+      unix_exe_shells = tuple(f"{shell}.exe" for shell in _UNIX_SHELLS)
+      suitable_shells = unix_exe_shells + _WINDOWS_SHELLS
   else:
-    shells = _ALL_SHELLS
+    suitable_shells = _UNIX_SHELLS
 
-  for shell in shells:
+  for shell in suitable_shells:
     shell_path = None
     if ci_env_path:
       # On the off-chance a shell was installed during a workflow
@@ -142,18 +143,20 @@ def get_best_shell(
       shell_path = shutil.which(shell)
 
     if shell_path:
-      return shell_path
+      return shell_path, suitable_shells
+
+  return None, suitable_shells
 
 
 def get_shell_invocation(
-  ci_env: dict[str, str] | None = None, prefer_native: bool = False
+  ci_env: dict[str, str] | None = None, use_native: bool = False
 ) -> tuple[str, ...]:
   """Create the invocation command for the shell subprocess."""
 
-  shell = get_best_shell(ci_env=ci_env, prefer_native=prefer_native)
+  shell, preferred_shells = get_best_shell(ci_env=ci_env, use_native=use_native)
   if not shell:
     # This should not be possible - at least one should be found.
-    raise RuntimeError(f"Could not find a suitable shell out of: {_ALL_SHELLS}.")
+    raise RuntimeError(f"Could not find a suitable shell out of: {preferred_shells}.")
   shell_name = os.path.basename(shell)
 
   if shell_name in _WINDOWS_SHELLS:

@@ -58,10 +58,10 @@ def parse_args():
     action="store_true",
   )
   parser.add_argument(
-    "--prefer-native-shell",
-    dest="prefer_native_shell",
+    "--use-native-shell",
+    dest="use_native_shell",
     help=(
-      "Prefer picking a native shell (Powershell/CMD) on Windows over a Unix one. "
+      "Pick a native shell (Powershell/CMD) on Windows over a Unix one. "
       "False by default."
     ),
     action="store_true",
@@ -196,7 +196,7 @@ def main():
     print("=" * 100)
 
   shell_invocation = utils.get_shell_invocation(
-    ci_env=env_data, prefer_native=args.prefer_native_shell
+    ci_env=env_data, use_native=args.use_native_shell
   )
   shell_str = " ".join(shell_invocation)
   logging.info(f"Launching interactive shell via {shell_str!r}...")
