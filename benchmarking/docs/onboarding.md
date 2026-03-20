@@ -301,26 +301,26 @@ import numpy as np
 tblog_dir = os.environ.get("TENSORBOARD_OUTPUT_DIR")
 
 if not tblog_dir:
-    print("Error: TENSORBOARD_OUTPUT_DIR env var not set.", file=sys.stderr)
-    sys.exit(1)
+  print("Error: TENSORBOARD_OUTPUT_DIR env var not set.", file=sys.stderr)
+  sys.exit(1)
 
 fake_data = np.array([101.2, 100.5, 102.1, 99.8, 101.5])
 
 try:
-    # Uses the V2 'tensor' bucket
-    writer = tf.summary.create_file_writer(tblog_dir)
-    with writer.as_default():
-        for i, value in enumerate(fake_data):
-            # The tag "wall_time" MUST match the "name" in your MetricSpec.
-            tf.summary.scalar("wall_time", value, step=i)
+  # Uses the V2 'tensor' bucket
+  writer = tf.summary.create_file_writer(tblog_dir)
+  with writer.as_default():
+    for i, value in enumerate(fake_data):
+      # The tag "wall_time" MUST match the "name" in your MetricSpec.
+      tf.summary.scalar("wall_time", value, step=i)
 
-    writer.flush()
-    writer.close()
-    print("Successfully wrote metrics.")
+  writer.flush()
+  writer.close()
+  print("Successfully wrote metrics.")
 
 except Exception as e:
-    print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
-    sys.exit(1)
+  print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
+  sys.exit(1)
 ```
 
 #### Option 2: Using tensorboardX (V1)
@@ -335,25 +335,25 @@ from tensorboardX import SummaryWriter
 tblog_dir = os.environ.get("TENSORBOARD_OUTPUT_DIR")
 
 if not tblog_dir:
-    print("Error: TENSORBOARD_OUTPUT_DIR env var not set.", file=sys.stderr)
-    sys.exit(1)
+  print("Error: TENSORBOARD_OUTPUT_DIR env var not set.", file=sys.stderr)
+  sys.exit(1)
 
 fake_data = [101.2, 100.5, 102.1, 99.8, 101.5]
 
 try:
-    # Uses the V1 'simple_value' bucket
-    writer = SummaryWriter(log_dir=tblog_dir)
-    
-    for i, value in enumerate(fake_data):
-        # The tag "wall_time" MUST match the "name" in your MetricSpec.
-        writer.add_scalar("wall_time", value, global_step=i)
+  # Uses the V1 'simple_value' bucket
+  writer = SummaryWriter(log_dir=tblog_dir)
 
-    writer.close()
-    print("Successfully wrote metrics.")
+  for i, value in enumerate(fake_data):
+    # The tag "wall_time" MUST match the "name" in your MetricSpec.
+    writer.add_scalar("wall_time", value, global_step=i)
+
+  writer.close()
+  print("Successfully wrote metrics.")
 
 except Exception as e:
-    print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
-    sys.exit(1)
+  print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
+  sys.exit(1)
 ```
 
 #### Option 3: Using TensorBoard (V1)
@@ -369,31 +369,31 @@ from tensorboard.summary.writer.event_file_writer import EventFileWriter
 
 tblog_dir = os.environ.get("TENSORBOARD_OUTPUT_DIR")
 if not tblog_dir:
-    sys.exit("Error: TENSORBOARD_OUTPUT_DIR env var not set.")
+  sys.exit("Error: TENSORBOARD_OUTPUT_DIR env var not set.")
 
 fake_data = [101.2, 100.5, 102.1, 99.8, 101.5]
 
 try:
-    # Manually writes V1 'simple_value' events
-    writer = EventFileWriter(tblog_dir)
+  # Manually writes V1 'simple_value' events
+  writer = EventFileWriter(tblog_dir)
 
-    for i, value in enumerate(fake_data):
-        event = event_pb2.Event(
-            step=i,
-            wall_time=time.time(),
-            summary=summary_pb2.Summary(
-              # The tag "wall_time" MUST match the "name" in your MetricSpec.
-              value=[summary_pb2.Summary.Value(tag="wall_time", simple_value=value)]
-            )
-        )
-        writer.add_event(event)
+  for i, value in enumerate(fake_data):
+    event = event_pb2.Event(
+      step=i,
+      wall_time=time.time(),
+      summary=summary_pb2.Summary(
+        # The tag "wall_time" MUST match the "name" in your MetricSpec.
+        value=[summary_pb2.Summary.Value(tag="wall_time", simple_value=value)]
+      ),
+    )
+    writer.add_event(event)
 
-    writer.close()
-    print("Successfully wrote metrics.")
+  writer.close()
+  print("Successfully wrote metrics.")
 
 except Exception as e:
-    print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
-    sys.exit(1)
+  print(f"Error writing TensorBoard logs: {e}", file=sys.stderr)
+  sys.exit(1)
 ```
 
 ### Saving Workload Artifacts
@@ -409,9 +409,9 @@ import numpy as np
 artifact_dir = os.environ.get("WORKLOAD_ARTIFACTS_DIR")
 
 if artifact_dir:
-    # Write arbitrary files
-    with open(os.path.join(artifact_dir, "logits.npy"), "wb") as f:
-        np.save(f, my_logits)
+  # Write arbitrary files
+  with open(os.path.join(artifact_dir, "logits.npy"), "wb") as f:
+    np.save(f, my_logits)
 ```
 
 ## A/B Testing Configuration
