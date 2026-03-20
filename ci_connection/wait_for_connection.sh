@@ -28,7 +28,7 @@ source "$(dirname "$0")/utils.sh"
 TRACE_FILE="$(_normalize_path "${HOME}/connection_trace_$(date +%s).log")"
 # Automatically find an available FD (>=10) and store its number in trace_fd
 exec {trace_fd}>"${TRACE_FILE}"
-export BASH_XTRACEFD="$trace_fd"   # Bash will write x-trace to this FD
+BASH_XTRACEFD="$trace_fd"   # Bash will write x-trace to this FD
 
 set -x
 
