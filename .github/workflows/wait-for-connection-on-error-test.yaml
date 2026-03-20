@@ -3,7 +3,7 @@ name: Connection Test - On Error
 on:
   pull_request:
     paths:
-      - ci_connection
+      - ci_connection/**
       - .github/workflows/wait-for-connection-on-error-test.yaml
     branches:
       - main

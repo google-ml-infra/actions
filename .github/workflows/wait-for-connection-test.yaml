@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
     paths:
-      - ci_connection
+      - ci_connection/**
       - .github/workflows/wait-for-connection-test.yaml
     branches:
       - main
