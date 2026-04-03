@@ -50,8 +50,8 @@ message BenchmarkResult {
   // the exact benchmark execution start time.
   google.protobuf.Timestamp run_timestamp = 3 [(buf.validate.field).required = true];
 
-  // REQUIRED: A list of all computed statistics captured during the run.
-  repeated ComputedStat stats = 4 [(buf.validate.field).repeated.min_items = 1];
+  // Optional: A list of all computed statistics captured during the run.
+  repeated ComputedStat stats = 4;
 
   // REQUIRED: The ID of the GitHub Actions workflow run for traceability.
   int64 github_run_id = 5 [(buf.validate.field).int64.gt = 0];

@@ -1,0 +1,214 @@
+name: setup-uv-python integration test
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'setup-uv-python/**'
+      - '.github/workflows/setup-uv-python-test.yaml'
+  workflow_dispatch:
+    inputs:
+      halt-for-connection:
+        description: 'Should this workflow run wait for a remote connection?'
+        type: choice
+        default: 'no'
+        options:
+          - 'yes'
+          - 'no'
+
+permissions:
+  contents: read
+
+# - For PRs, group by PR number and cancel stale in-progress runs.
+# - For workflow_dispatch events, group by actor+ref. Cancel stale in-progress runs from the same
+#   actor on the same ref.
+concurrency:
+  group: >-
+    ${{ github.workflow }}-
+    ${{
+        (github.event_name == 'pull_request'
+         && format('pr-{0}', github.event.pull_request.number))
+
+        || (github.event_name == 'workflow_dispatch'
+            && format('dispatch-{0}-{1}', github.actor, github.ref))
+
+        || format('ref-{0}', github.ref)
+    }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  integration:
+    name: Test-Scenario (${{ matrix.scenario.name }}, ${{ matrix.scenario.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - name: implicit-cache-glob-linux
+            runner: ubuntu-latest
+            python_version: '3.14'
+            cache_glob: ''
+            summary_label: 'implicit-cache-glob'
+            expected_summary_label: 'implicit-cache-glob'
+            add_python_to_path: 'true'
+            export_python_env: 'true'
+
+          - name: implicit-cache-glob-windows
+            runner: windows-latest
+            python_version: '3.14'
+            cache_glob: ''
+            summary_label: ''
+            expected_summary_label: 'python-3.14'
+            add_python_to_path: 'true'
+            export_python_env: 'true'
+
+          - name: custom-cache-glob
+            runner: ubuntu-latest
+            python_version: '3.14'
+            cache_glob: '.github/workflows/setup-uv-python-test.yaml'
+            summary_label: 'custom-cache-glob'
+            expected_summary_label: 'custom-cache-glob'
+            add_python_to_path: 'true'
+            export_python_env: 'true'
+
+          - name: no-env-export
+            runner: ubuntu-latest
+            python_version: '3.14'
+            cache_glob: ''
+            summary_label: 'no-env-export'
+            expected_summary_label: 'no-env-export'
+            add_python_to_path: 'true'
+            export_python_env: 'false'
+
+          - name: no-path-export-env
+            runner: ubuntu-latest
+            python_version: '3.14'
+            cache_glob: ''
+            summary_label: 'no-path-export-env'
+            expected_summary_label: 'no-path-export-env'
+            add_python_to_path: 'false'
+            export_python_env: 'true'
+    runs-on: ${{ matrix.scenario.runner }}
+
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up uv-managed Python (implicit cache glob)
+        if: ${{ matrix.scenario.cache_glob == '' }}
+        id: setup_python_default
+        uses: ./setup-uv-python
+        env:
+          CI_UV_DEBUG: 'true'
+        with:
+          python-version: ${{ matrix.scenario.python_version }}
+          summary-label: ${{ matrix.scenario.summary_label }}
+          add-python-to-path: ${{ matrix.scenario.add_python_to_path }}
+          export-python-env: ${{ matrix.scenario.export_python_env }}
+
+      # Halt for connection for testing.
+      - name: Wait For Connection
+        uses: ./ci_connection/
+        with:
+          halt-dispatch-input: ${{ inputs.halt-for-connection }}
+
+      - name: Set up uv-managed Python (custom cache glob)
+        if: ${{ matrix.scenario.cache_glob != '' }}
+        id: setup_python_custom
+        uses: ./setup-uv-python
+        env:
+          CI_UV_DEBUG: 'true'
+        with:
+          python-version: ${{ matrix.scenario.python_version }}
+          summary-label: ${{ matrix.scenario.summary_label }}
+          cache-dependency-glob: ${{ matrix.scenario.cache_glob }}
+          add-python-to-path: ${{ matrix.scenario.add_python_to_path }}
+          export-python-env: ${{ matrix.scenario.export_python_env }}
+
+      - name: Verify python aliases, output, and environment exports
+        env:
+          SETUP_PYTHON_BIN: ${{ steps.setup_python_default.outputs.python-bin || steps.setup_python_custom.outputs.python-bin }}
+          EXPECTED_MINOR: ${{ matrix.scenario.python_version }}
+          SUMMARY_LABEL: ${{ matrix.scenario.expected_summary_label }}
+          ADD_PYTHON_TO_PATH: ${{ matrix.scenario.add_python_to_path }}
+          EXPORT_PYTHON_ENV: ${{ matrix.scenario.export_python_env }}
+        run: |
+          set -euo pipefail
+
+          PYTHON_CMD="$SETUP_PYTHON_BIN"
+          if [ "$ADD_PYTHON_TO_PATH" = 'true' ]; then
+            PYTHON_CMD='python'
+          fi
+
+          "$PYTHON_CMD" setup-uv-python/tests/verify_setup_behavior.py \
+            --check python-runtime \
+            --expected-minor "$EXPECTED_MINOR" \
+            --setup-python-bin "$SETUP_PYTHON_BIN" \
+            --export-python-env "$EXPORT_PYTHON_ENV" \
+            --add-python-to-path "$ADD_PYTHON_TO_PATH"
+
+          if [ "$ADD_PYTHON_TO_PATH" = 'true' ]; then
+            python3 setup-uv-python/tests/verify_setup_behavior.py \
+              --check python3-alias \
+              --expected-minor "$EXPECTED_MINOR" \
+              --setup-python-bin "$SETUP_PYTHON_BIN"
+          fi
+
+          "$SETUP_PYTHON_BIN" setup-uv-python/tests/verify_setup_behavior.py \
+            --check summary-output \
+            --summary-label "$SUMMARY_LABEL"
+
+  multiple-invocations:
+    name: Multiple action invocations keep prior outputs valid
+    runs-on: ubuntu-latest
+    env:
+      FIRST_PYTHON_VERSION: '3.13'
+      SECOND_PYTHON_VERSION: '3.14'
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up first uv-managed Python
+        id: setup_python_first
+        uses: ./setup-uv-python
+        with:
+          python-version: ${{ env.FIRST_PYTHON_VERSION }}
+          summary-label: 'first-invocation'
+
+      - name: Set up second uv-managed Python
+        id: setup_python_second
+        uses: ./setup-uv-python
+        with:
+          python-version: ${{ env.SECOND_PYTHON_VERSION }}
+          summary-label: 'second-invocation'
+
+      - name: Verify both python-bin outputs remain valid
+        env:
+          FIRST_PYTHON_BIN: ${{ steps.setup_python_first.outputs.python-bin }}
+          SECOND_PYTHON_BIN: ${{ steps.setup_python_second.outputs.python-bin }}
+        run: |
+          set -euo pipefail
+
+          if [ "$FIRST_PYTHON_BIN" = "$SECOND_PYTHON_BIN" ]; then
+            echo 'Expected distinct python-bin outputs for sequential action invocations'
+            exit 1
+          fi
+
+          FIRST_MINOR="$("$FIRST_PYTHON_BIN" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")"
+          SECOND_MINOR="$("$SECOND_PYTHON_BIN" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")"
+
+          if [ "$FIRST_MINOR" != "$FIRST_PYTHON_VERSION" ]; then
+            echo "Expected first python-bin to report $FIRST_PYTHON_VERSION, got '$FIRST_MINOR'"
+            exit 1
+          fi
+
+          if [ "$SECOND_MINOR" != "$SECOND_PYTHON_VERSION" ]; then
+            echo "Expected second python-bin to report $SECOND_PYTHON_VERSION, got '$SECOND_MINOR'"
+            exit 1
+          fi

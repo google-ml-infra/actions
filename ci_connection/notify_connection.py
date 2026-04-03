@@ -50,10 +50,19 @@ def parse_args():
     dest="no_env",
     help=(
       "Whether to use the env variables from the CI shell, in the shell spawned "
-      "for the user. True by default. If `wait_on_error.py` was used with an "
+      "for the user. False by default. If `wait_on_error.py` was used with an "
       "explicit request to save the env, the script can retrieve them from that time. "
       "Otherwise, the `env` information is retrieved from "
       "`wait_for_connection.py`, dynamically."
+    ),
+    action="store_true",
+  )
+  parser.add_argument(
+    "--use-native-shell",
+    dest="use_native_shell",
+    help=(
+      "Pick a native shell (Powershell/CMD) on Windows over a Unix one. "
+      "False by default."
     ),
     action="store_true",
   )
@@ -186,13 +195,12 @@ def main():
     print(f"Failed command was:\n{shell_command}\n")
     print("=" * 100)
 
-  if utils.is_linux_or_linux_like_shell():
-    logging.info("Launching interactive Bash session...")
-    subprocess.run(["bash", "-i"], env=env_data)
-  else:
-    logging.info("Launching interactive PowerShell session...")
-    # -NoExit keeps the shell open after running any profile scripts
-    subprocess.run(["powershell.exe", "-NoExit"], env=env_data)
+  shell_invocation = utils.get_shell_invocation(
+    ci_env=env_data, use_native=args.use_native_shell
+  )
+  shell_str = " ".join(shell_invocation)
+  logging.info(f"Launching interactive shell via {shell_str!r}...")
+  subprocess.run(shell_invocation, env=env_data)
 
   send_message(ConnectionSignals.CONNECTION_CLOSED)
 

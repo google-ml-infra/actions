@@ -200,5 +200,21 @@ def test_parse_and_compute_skips_missing_metric(mock_event_accumulator, capsys):
   assert "Warning: Metric metric_b defined in registry but not found" in captured.err
 
 
+def test_parse_and_compute_empty_metrics(mock_event_accumulator):
+  """Tests that an empty metric specs list safely returns an empty result list."""
+  mock_event_accumulator.Tags.return_value = {
+    "tensors": ["random_stuff"],
+    "scalars": [],
+  }
+
+  # Initialize parser with an empty list.
+  parser = tb_parser_lib.TensorBoardParser([])
+  results = parser.parse_and_compute("fake_log_dir")
+
+  # It should bypass the loops and cleanly return an empty list.
+  assert results == []
+  assert len(results) == 0
+
+
 if __name__ == "__main__":
   sys.exit(pytest.main(sys.argv))
