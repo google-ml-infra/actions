@@ -40,7 +40,6 @@ runs:
       id: buildifier-check
       shell: bash
       env:
-        TARGET_SHA: ${{ github.event.before }}
         FILE_PATHS: ${{ inputs.filepaths }}
       run: |
         # Add this line to resolve the dubious ownership error
