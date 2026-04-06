@@ -295,3 +295,46 @@ def test_find_previous_successful_job_run_not_found(mocker):
 
   with pytest.raises(ValueError, match="No previous successful run found for job"):
     client.find_previous_successful_job_run(failed_run, "my_job")
+
+
+def test_get_commit(mocker):
+  """Tests getting a specific commit."""
+  client = github_client.GithubClient("owner/repo", token="test-token")
+  mock_repo = client._repo
+  expected_commit = mocker.Mock()
+  mock_repo.get_commit.return_value = expected_commit
+  
+  result = client.get_commit("mock_sha")
+  assert result == expected_commit
+  mock_repo.get_commit.assert_called_once_with("mock_sha")
+
+
+def test_get_last_commit_before_found(mocker):
+  """Tests finding the last commit before a date when commits exist."""
+  client = github_client.GithubClient("owner/repo", token="test-token")
+  mock_gh = client._gh
+  mock_target_repo = mocker.Mock()
+  mock_gh.get_repo.return_value = mock_target_repo
+  
+  expected_commit = mocker.Mock()
+  mock_commits = [expected_commit, mocker.Mock()]
+  mock_target_repo.get_commits.return_value = mock_commits
+  
+  result = client.get_last_commit_before("other/repo", "2023-01-01T00:00:00Z")
+  
+  assert result == expected_commit
+  mock_target_repo.get_commits.assert_called_once_with(sha="main", until="2023-01-01T00:00:00Z")
+
+
+def test_get_last_commit_before_not_found(mocker):
+  """Tests getting last commit before a date when no commits exist."""
+  client = github_client.GithubClient("owner/repo", token="test-token")
+  mock_gh = client._gh
+  mock_target_repo = mocker.Mock()
+  mock_gh.get_repo.return_value = mock_target_repo
+  
+  mock_target_repo.get_commits.return_value = []
+  
+  result = client.get_last_commit_before("other/repo", "2023-01-01T00:00:00Z")
+  
+  assert result is None
