@@ -36,3 +36,7 @@ jobs:
         uses: ./ci_clangformat/
         with:
           filepaths: "tests/ci_clangformat/formatted_files/*.h tests/ci_clangformat/formatted_files/*.cc"
+      - name: "Run clang-format with no matching files"
+        uses: ./ci_clangformat/
+        with:
+          filepaths: "tests/ci_clangformat/no_cc_files/**" # directory that contains no .cc or .h files

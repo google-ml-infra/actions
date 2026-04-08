@@ -8,9 +8,34 @@ found, ensuring code quality before merging.
 The action uses your .clang-format style file if present in the repository
 root; otherwise, it will use the .clang-format.default under this folder.
 
-This action offers the following configuration through its inputs:
-* `clang_format_version`: Choose the exact clang-format version to use,
- with `20.1.5` as the default to align with recent stable releases.
+## Usage
+
+Add this step to your GitHub Actions workflow:
+
+```yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Clang-format Check
+        uses: ./ci_clangformat/
+```
+
+## Inputs
+
+*   **`clang_format_version`**: (Optional) The exact `clang-format` version to use. Defaults to `20.1.5`.
+*   **`filepaths`**: (Optional) A space-separated list of file paths or glob patterns to check.
+If not specified, the action defaults to checking all modified `.h` and `.cc` files.
+
+### Example with custom filepaths and version
+
+```yaml
+- name: Run Clang-format Check
+  uses: ./ci_clangformat/
+  with:
+    clang_format_version: "18.1.8"
+    filepaths: "src/*.cc include/*.h"
+```
 
 ## Resolving Formatting Failures
 If a workflow run fails due to formatting violations, you're expected to
