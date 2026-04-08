@@ -16,7 +16,6 @@
 
 import argparse
 import json
-import os
 import sys
 from typing import List
 from google.protobuf import json_format, timestamp_pb2
@@ -30,6 +29,7 @@ def _parse_metric_specs(
   metric_specs_json: str,
 ) -> List[metric_pb2.MetricSpec]:
   """Parses the JSON metric specifications list into a list of MetricSpec protos."""
+
   try:
     metric_specs_list = json.loads(metric_specs_json)
   except json.JSONDecodeError as e:
@@ -38,6 +38,10 @@ def _parse_metric_specs(
 
   # Convert list of metric spec dicts to a list of MetricSpec protos
   metric_specs = []
+
+  if not metric_specs_list:
+    return metric_specs
+
   for metric_dict in metric_specs_list:
     metric_spec = metric_pb2.MetricSpec()
     json_format.ParseDict(metric_dict, metric_spec)
@@ -58,10 +62,12 @@ def _format_validation_error(violation) -> str:
 def main():
   parser = argparse.ArgumentParser(description="Parse TensorBoard logs.")
   parser.add_argument(
-    "--metric_specs_json", required=True, help="JSON list of MetricSpecs"
+    "--metric_specs_json", required=True, help="JSON list of MetricSpecs."
   )
   parser.add_argument("--tblog_dir", required=True)
-  parser.add_argument("--output_dir", required=True)
+  parser.add_argument(
+    "--output_file", required=True, help="Full path to write the JSON benchmark result."
+  )
   parser.add_argument("--config_id", required=True)
   parser.add_argument("--benchmark_name", required=True)
   parser.add_argument("--environment_config_id", required=True)
@@ -106,16 +112,14 @@ def main():
     )
     sys.exit(1)
 
-  benchmark_result_file = os.path.join(args.output_dir, "benchmark_result.json")
-
   # Create benchmark result artifact file
   try:
-    with open(benchmark_result_file, "w") as f:
+    with open(args.output_file, "w") as f:
       f.write(json_format.MessageToJson(result))
-    print(f"Successfully parsed TensorBoard logs and created {benchmark_result_file}.")
+    print(f"Successfully parsed TensorBoard logs and created {args.output_file}.")
   except Exception as e:
     print(
-      f"Error writing result artifact to '{benchmark_result_file}': {e}",
+      f"Error writing result artifact to '{args.output_file}': {e}",
       file=sys.stderr,
     )
     sys.exit(1)

@@ -6,7 +6,7 @@ name: Connection Test without pre-installed Python
 on:
   pull_request:
     paths:
-    - ci_connection
+    - ci_connection/**
     - .github/workflows/wait-for-connection-no-python.yaml
     branches:
       - main
