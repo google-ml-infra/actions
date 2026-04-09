@@ -95,5 +95,8 @@ runs:
         xargs -0 uvx clang-format=="$CLANG_FORMAT_VERSION" -style=file:"$ACTION_DEFAULT_CLANG_FORMAT" $CLANG_FORMAT_COMMON_ARGS < <(
           printf '%s\0' "${CHANGED_FILES[@]}"
         )
-      fi
-
+      fi || {
+        echo "::error::clang-format check failed. To fix, run clang-format locally and commit the changes:"
+        echo "::error::  uvx clang-format==${CLANG_FORMAT_VERSION} -i --verbose --style=file ${CHANGED_FILES[*]}"
+        exit 1
+      }
