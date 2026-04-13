@@ -1,0 +1,71 @@
+# Copyright 2025 Google LLC
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     https://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+name: "Run buildifier"
+description: 'Action to run buildifier on changed build files'
+
+inputs:
+  filepaths:
+    description: 'Optional space-separated list of file paths to check. If not provided, all bazel will be checked.'
+    required: false
+    default: >
+      :(glob)**/BUILD
+      :(glob)**/BUILD.bazel
+      :(glob)**/WORKSPACE
+      :(glob)**/WORKSPACE.bazel
+      :(glob)**/MODULE.bazel
+      :(glob)**/*.bzl
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Checkout code
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        fetch-depth: 2
+        persist-credentials: false
+
+    - name: Check formatting with buildifier
+      id: buildifier-check
+      shell: bash
+      env:
+        FILE_PATHS: ${{ inputs.filepaths }}
+      run: |
+        # Add this line to resolve the dubious ownership error
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+        BAZEL_PATTERNS="$FILE_PATHS"
+        
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          echo "Detecting changed Bazel files..."
+
+          DIFF_BASE="HEAD~1"
+          
+          echo "Comparing changes from $DIFF_BASE to HEAD"
+        
+          GIT_DIFF_CMD="git diff -z --name-only --diff-filter=d $DIFF_BASE HEAD -- $BAZEL_PATTERNS"
+    
+          echo "Checking formatting of changed bazel files..."
+          $GIT_DIFF_CMD | xargs -0 buildifier --mode=check -v
+          
+        elif [[ "${{ github.event_name }}" == "push" ]]; then
+          # Run on specified files if this is a push event
+          echo "Checking formatting of specified bazel files..."
+          # Use git ls-files to safely expand the patterns (including git pathspecs)
+          git ls-files -z -- $BAZEL_PATTERNS | xargs -0 -r buildifier --mode=check -v
+
+        else
+          echo "::error::Unsupported event type: ${GITHUB_EVENT_NAME}"
+          exit 1
+        fi
