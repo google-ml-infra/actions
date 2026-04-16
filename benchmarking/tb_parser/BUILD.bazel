@@ -34,6 +34,7 @@ py_binary(
     srcs = ["tb_parser.py"],
     deps = [
         ":tb_parser_lib",
+        "//benchmarking/utils:metric_parser",
         "@pypi//protovalidate",
     ],
 )

@@ -15,39 +15,12 @@
 """Script to extract statistics from TensorFlow event files and produce a BenchmarkResult JSON artifact."""
 
 import argparse
-import json
 import sys
-from typing import List
 from google.protobuf import json_format, timestamp_pb2
+from benchmarking.utils import metric_parser
 from benchmarking.tb_parser import tb_parser_lib
-from benchmarking.proto.common import metric_pb2
 from benchmarking.proto import benchmark_result_pb2
 from protovalidate import validate, ValidationError
-
-
-def _parse_metric_specs(
-  metric_specs_json: str,
-) -> List[metric_pb2.MetricSpec]:
-  """Parses the JSON metric specifications list into a list of MetricSpec protos."""
-
-  try:
-    metric_specs_list = json.loads(metric_specs_json)
-  except json.JSONDecodeError as e:
-    print(f"Error: Failed to parse --metric_specs_json: {e}", file=sys.stderr)
-    sys.exit(1)
-
-  # Convert list of metric spec dicts to a list of MetricSpec protos
-  metric_specs = []
-
-  if not metric_specs_list:
-    return metric_specs
-
-  for metric_dict in metric_specs_list:
-    metric_spec = metric_pb2.MetricSpec()
-    json_format.ParseDict(metric_dict, metric_spec)
-    metric_specs.append(metric_spec)
-
-  return metric_specs
 
 
 def _format_validation_error(violation) -> str:
@@ -80,7 +53,7 @@ def main():
 
   args = parser.parse_args()
 
-  metric_specs = _parse_metric_specs(args.metric_specs_json)
+  metric_specs = metric_parser.parse_metric_specs_from_json(args.metric_specs_json)
   tb_parser = tb_parser_lib.TensorBoardParser(metric_specs)
   computed_stats = tb_parser.parse_and_compute(args.tblog_dir)
 
