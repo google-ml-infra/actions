@@ -19,33 +19,12 @@ Script to perform static threshold analysis on a benchmark result.
 import argparse
 import json
 import sys
-from typing import List
 from google.protobuf import json_format
+from benchmarking.utils import metric_parser
 from benchmarking.proto import benchmark_result_pb2
-from benchmarking.proto.common import metric_pb2
 from benchmarking.static_threshold_analyzer.static_threshold_analyzer_lib import (
   StaticAnalyzer,
 )
-
-
-def _parse_metric_specs(
-  metric_specs_json: str,
-) -> List[metric_pb2.MetricSpec]:
-  """Parses the JSON metric specifications list into a list of MetricSpec protos."""
-  try:
-    metric_specs_list = json.loads(metric_specs_json)
-  except json.JSONDecodeError as e:
-    print(f"Error: Failed to parse --metric_specs_json: {e}", file=sys.stderr)
-    sys.exit(1)
-
-  # Convert list of dicts to a list of MetricSpec protos
-  metric_specs = []
-  for metric_dict in metric_specs_list:
-    metric_spec = metric_pb2.MetricSpec()
-    json_format.ParseDict(metric_dict, metric_spec)
-    metric_specs.append(metric_spec)
-
-  return metric_specs
 
 
 def _load_benchmark_result(
@@ -76,7 +55,7 @@ def main():
   parser.add_argument("--benchmark_result_file", required=True)
   args = parser.parse_args()
 
-  metric_specs = _parse_metric_specs(args.metric_specs_json)
+  metric_specs = metric_parser.parse_metric_specs_from_json(args.metric_specs_json)
   benchmark_result = _load_benchmark_result(args.benchmark_result_file)
   analyzer = StaticAnalyzer(metric_specs)
   analyzer.run_analysis(benchmark_result)
