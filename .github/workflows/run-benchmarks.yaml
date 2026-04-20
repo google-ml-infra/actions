@@ -115,7 +115,7 @@ jobs:
       job_id: ${{ steps.gen_job_id.outputs.job_id }}
     steps:
       - name: Check out user repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # ratchet:actions/checkout@v6.0.2
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -189,7 +189,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # ratchet:actions/checkout@v6.0.2
         with:
           repository: "google-ml-infra/actions"
           ref: ${{ steps.resolve_refs.outputs.ml_actions_ref }}
@@ -247,7 +247,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Upload matrix JSON artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # ratchet:actions/upload-artifact@v7.0.1
         with:
           name: shard-matrix-${{ steps.gen_job_id.outputs.job_id }}
           path: ${{ steps.generate.outputs.matrix_json_path }}
@@ -275,7 +275,7 @@ jobs:
 
     steps:
       - name: Check out user repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # ratchet:actions/checkout@v6.0.2
         with:
           repository: ${{ github.repository }}
           # For A/B mode, use the checkout ref. Otherwise fall back to SHA.
@@ -298,7 +298,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # ratchet:actions/checkout@v6.0.2
         with:
           repository: "google-ml-infra/actions"
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
@@ -335,7 +335,7 @@ jobs:
 
       - name: Upload workload artifacts
         if: always() # Uploads even if the workload fails
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # ratchet:actions/upload-artifact@v7.0.1
         with:
           # Format: shard-workload-artifacts-{CONFIG}[-{AB_MODE}]-{JOB_ID}.json
           name: shard-workload-artifacts-${{ matrix.config_id }}${{ matrix.ab_test_group && format('-{0}', matrix.ab_test_group) || '' }}-${{ needs.generate_matrix.outputs.job_id }}
@@ -390,7 +390,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Upload benchmark result
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # ratchet:actions/upload-artifact@v7.0.1
         with:
           # Format: shard-benchmark-result-{CONFIG}[-{AB_MODE}]-{JOB_ID}
           name: shard-benchmark-result-${{ matrix.config_id }}${{ matrix.ab_test_group && format('-{0}', matrix.ab_test_group) || '' }}-${{ needs.generate_matrix.outputs.job_id }}
@@ -454,7 +454,7 @@ jobs:
     if: inputs.ab_mode == true && !cancelled()
     steps:
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # ratchet:actions/checkout@v6.0.2
         with:
           repository: "google-ml-infra/actions"
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
@@ -462,7 +462,7 @@ jobs:
           persist-credentials: false
 
       - name: Download benchmark results
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # ratchet:actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # ratchet:actions/download-artifact@v8.0.1
         with:
           # Only download artifacts created in this specific job
           pattern: shard-benchmark-result-*-${{ needs.generate_matrix.outputs.job_id }}
@@ -505,7 +505,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Upload A/B report
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # ratchet:actions/upload-artifact@v7.0.1
         with:
           name: shard-ab-report-${{ needs.generate_matrix.outputs.job_id }}
           path: ${{ github.workspace }}/ab_report.md
@@ -513,7 +513,7 @@ jobs:
 
       - name: Post PR comment
         if: inputs.post_pr_comment == true && github.event_name == 'pull_request' && !cancelled()
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # ratchet:actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # ratchet:actions/github-script@v9.0.0
         with:
           script: |
             const scriptPath = require('path').resolve('./ml_actions/benchmarking/post_pr_comment/post_pr_comment.js');
@@ -545,7 +545,7 @@ jobs:
     
     steps:
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # ratchet:actions/checkout@v6.0.2
         with:
           repository: "google-ml-infra/actions"
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
@@ -553,7 +553,7 @@ jobs:
           persist-credentials: false
 
       - name: Download all job artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # ratchet:actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # ratchet:actions/download-artifact@v8.0.1
         with:
           pattern: shard-*-${{ needs.generate_matrix.outputs.job_id }}
           path: raw_artifacts
@@ -583,13 +583,13 @@ jobs:
           echo "::endgroup::"
 
       - name: Upload bundled artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # ratchet:actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # ratchet:actions/upload-artifact@v7.0.1
         with:
           name: artifacts-${{ needs.generate_matrix.outputs.job_id }}
           path: final_artifacts/
 
       - name: Delete temporary artifacts
-        uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # ratchet:geekyeggo/delete-artifact@v5
+        uses: geekyeggo/delete-artifact@176a747ab7e287e3ff4787bf8a148716375ca118 # ratchet:geekyeggo/delete-artifact@v6.0.0
         with:
           name: shard-*-${{ needs.generate_matrix.outputs.job_id }}
           useGlob: true
