@@ -1,0 +1,7 @@
+# VALID: Pinned to SHA and trusted org
+benchmarks {
+  name: "valid_action"
+  workload {
+    action: "google-ml-infra/actions/benchmarking/actions/workload_executors/bazel@0123456789abcdef0123456789abcdef01234567"
+  }
+}

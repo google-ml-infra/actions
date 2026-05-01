@@ -1,0 +1,7 @@
+# INVALID: Not pinned to a SHA (uses a tag)
+benchmarks {
+  name: "fail_tag"
+  workload {
+    action: "actions/checkout@v4"
+  }
+}
