@@ -93,6 +93,11 @@ on:
         required: false
         type: string
         default: ""
+      custom_env_vars:
+        description: "Multi-line string of environment variables to inject into the runner environment (formatted like a .env file)."
+        required: false
+        type: string
+        default: ""
     
     outputs:
       job_id:
@@ -353,6 +358,8 @@ jobs:
 
       - name: Set up benchmark environment
         shell: bash
+        env:
+          CUSTOM_ENV_VARS: ${{ inputs.custom_env_vars }}
         run: |
           echo "::group::Set up benchmark environment"
           set -euo pipefail
@@ -370,6 +377,14 @@ jobs:
             echo "TENSORBOARD_OUTPUT_DIR=$TENSORBOARD_OUTPUT_DIR"
             echo "WORKLOAD_ARTIFACTS_DIR=$WORKLOAD_ARTIFACTS_DIR"
           } >> "$GITHUB_ENV"
+
+          # Inject custom environment variables if provided.
+          if [[ -n "$CUSTOM_ENV_VARS" ]]; then
+            echo "Injecting custom environment variables..."
+            set +x  # Disable command echoing to prevent leaking vars in logs
+            printf "%s\n" "$CUSTOM_ENV_VARS" >> "$GITHUB_ENV"
+            set -x  # Re-enable command echoing
+          fi
 
           echo "::endgroup::"
 

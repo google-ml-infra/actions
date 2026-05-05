@@ -29,6 +29,25 @@ def main():
     sys.exit(1)
 
   print(f"Received TENSORBOARD_OUTPUT_DIR: {tblog_dir}.")
+
+  e2e_test_var = os.environ.get("E2E_TEST_VAR")
+  another_var = os.environ.get("ANOTHER_VAR")
+
+  if e2e_test_var:
+    print(f"Received E2E_TEST_VAR: {e2e_test_var}.")
+    if e2e_test_var != "hello_from_e2e_test":
+      print(
+        f"Error: E2E_TEST_VAR expected 'hello_from_e2e_test', got '{e2e_test_var}'",
+        file=sys.stderr,
+      )
+      sys.exit(1)
+
+  if another_var:
+    print(f"Received ANOTHER_VAR: {another_var}.")
+    if another_var != "123":
+      print(f"Error: ANOTHER_VAR expected '123', got '{another_var}'", file=sys.stderr)
+      sys.exit(1)
+
   args = sys.argv[1:]
   print(f"Received runtime_flags: {args}.")
   fake_metrics = [101.2, 100.5, 102.1, 99.8, 101.5]
