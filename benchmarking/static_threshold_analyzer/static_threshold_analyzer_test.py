@@ -182,6 +182,49 @@ def test_stat_not_found_in_result(capsys):
   )
 
 
+def test_run_analysis_regex_pattern():
+  """Tests that a pattern spec evaluates thresholds against all matching concrete metrics."""
+  metric_specs = [
+    metric_pb2.MetricSpec(
+      pattern="torch_tpu/.*/step_time",
+      unit="s",
+      stats=[
+        metric_pb2.StatSpec(
+          stat=metric_pb2.Stat.MEAN,
+          comparison=metric_pb2.ComparisonSpec(
+            baseline={"value": 10.0},
+            threshold={"value": 0.1},  # 10% tolerance (max 11.0 before regression)
+            improvement_direction=metric_pb2.ImprovementDirection.LESS,
+          ),
+        )
+      ],
+    )
+  ]
+
+  # Create a result with two matching metrics. One passes, one fails.
+  result = _create_benchmark_result(
+    computed_stats=[
+      _create_computed_stat(
+        "torch_tpu/llama/step_time", metric_pb2.Stat.MEAN, 12.0
+      ),  # Regresses! (12 > 11)
+      _create_computed_stat(
+        "torch_tpu/gemma/step_time", metric_pb2.Stat.MEAN, 10.5
+      ),  # Passes! (10.5 <= 11)
+      _create_computed_stat(
+        "unrelated/step_time", metric_pb2.Stat.MEAN, 20.0
+      ),  # Ignored (doesn't match pattern)
+    ]
+  )
+
+  analyzer = StaticAnalyzer(metric_specs)
+  analyzer.run_analysis(result)
+
+  # Only llama should be in the regressions list
+  assert len(analyzer.regressions) == 1
+  assert analyzer.regressions[0]["metric"] == "torch_tpu/llama/step_time"
+  assert analyzer.regressions[0]["current"] == 12.0
+
+
 # --- Tests for Reporting Logic ---
 
 
