@@ -257,15 +257,11 @@ class EnvironmentSeeder:
         self.requirements_txt = os.path.join(self.output_dir, self.requirements_txt)
 
       if self.requirements_txt == HOST_REQUIREMENTS_FILE:
+        suffix = "".join(map(lambda _: hexdigits[randint(0, 16)], range(5)))
         alts = (
           os.path.join(self.output_dir, "requirements.txt"),
           os.path.join(self.output_dir, "requirements-gen.txt"),
-          os.path.join(
-            self.output_dir,
-            f"requirements-{
-              ''.join(map(lambda _: hexdigits[randint(0, 16)], range(5)))
-            }.txt",
-          ),
+          os.path.join(self.output_dir, f"requirements-{suffix}.txt"),
         )
         raise FileNotFoundError(
           f"Expected unique requirements.txt file found existing {HOST_REQUIREMENTS_FILE}. "
