@@ -53,7 +53,12 @@ def main():
 
   args = parser.parse_args()
 
-  metric_specs = metric_parser.parse_metric_specs_from_json(args.metric_specs_json)
+  try:
+    metric_specs = metric_parser.parse_metric_specs_from_json(args.metric_specs_json)
+  except ValueError as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)
+
   tb_parser = tb_parser_lib.TensorBoardParser(metric_specs)
   computed_stats = tb_parser.parse_and_compute(args.tblog_dir)
 

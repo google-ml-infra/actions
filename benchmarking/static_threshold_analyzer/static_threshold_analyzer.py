@@ -55,7 +55,12 @@ def main():
   parser.add_argument("--benchmark_result_file", required=True)
   args = parser.parse_args()
 
-  metric_specs = metric_parser.parse_metric_specs_from_json(args.metric_specs_json)
+  try:
+    metric_specs = metric_parser.parse_metric_specs_from_json(args.metric_specs_json)
+  except ValueError as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)
+
   benchmark_result = _load_benchmark_result(args.benchmark_result_file)
   analyzer = StaticAnalyzer(metric_specs)
   analyzer.run_analysis(benchmark_result)
