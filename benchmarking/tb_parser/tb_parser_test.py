@@ -197,7 +197,7 @@ def test_parse_and_compute_skips_missing_metric(mock_event_accumulator, capsys):
 
   # It should also print a clear warning for the missing metric_b.
   captured = capsys.readouterr()
-  assert "Warning: Metric metric_b defined in registry but not found" in captured.err
+  assert "Warning: Metric 'metric_b' not found in logs." in captured.err
 
 
 def test_parse_and_compute_empty_metrics(mock_event_accumulator):
@@ -214,6 +214,33 @@ def test_parse_and_compute_empty_metrics(mock_event_accumulator):
   # It should bypass the loops and cleanly return an empty list.
   assert results == []
   assert len(results) == 0
+
+
+def test_parse_and_compute_regex_expansion(mock_event_accumulator):
+  """Verifies one pattern spec can match and expand into multiple results."""
+  specs = [
+    metric_pb2.MetricSpec(
+      pattern="torch_tpu/.*/step_time",
+      unit="s",
+      stats=[metric_pb2.StatSpec(stat=metric_pb2.Stat.MEAN)],
+    )
+  ]
+
+  tag1, tag2 = "torch_tpu/llama/step_time", "torch_tpu/gemma/step_time"
+  mock_event_accumulator.Tags.return_value = {"tensors": [tag1, tag2], "scalars": []}
+  mock_event_accumulator.Tensors.return_value = [_create_fake_tensor_event(10.0)]
+
+  parser = tb_parser_lib.TensorBoardParser(specs)
+  results = parser.parse_and_compute("fake_dir")
+
+  # Assert that we correctly expanded into two distinct results
+  assert len(results) == 2
+  names = {r.metric_name for r in results}
+  assert names == {tag1, tag2}
+
+  # Verify both concrete tags successfully processed the value
+  assert results[0].value.value == 10.0
+  assert results[1].value.value == 10.0
 
 
 if __name__ == "__main__":

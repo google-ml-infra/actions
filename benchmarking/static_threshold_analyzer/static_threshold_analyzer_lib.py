@@ -17,6 +17,7 @@ Library for performing static threshold analysis on a benchmark result.
 """
 
 import sys
+import re
 from typing import Dict, List, Union, TypedDict
 from benchmarking.proto import benchmark_result_pb2
 from benchmarking.proto.common import metric_pb2
@@ -73,38 +74,54 @@ class StaticAnalyzer:
     }
 
     for metric_spec in self.metric_specs:
+      id_type = metric_spec.WhichOneof("identifier")
+
       for stat_spec in metric_spec.stats:
         # Only perform the check if comparison rules are defined.
         if stat_spec.HasField("comparison"):
           comparison = stat_spec.comparison
           stat_name = metric_pb2.Stat.Name(stat_spec.stat)
-          key = (metric_spec.name, stat_name)
 
-          if key not in result_map:
+          # Find all matching concrete metric names from the parsed results
+          matched_concrete_metrics = []
+          if id_type == "name":
+            if (metric_spec.name, stat_name) in result_map:
+              matched_concrete_metrics.append(metric_spec.name)
+          elif id_type == "pattern":
+            regex = re.compile(metric_spec.pattern)
+            for res_metric_name, res_stat_name in result_map.keys():
+              if res_stat_name == stat_name and regex.search(res_metric_name):
+                matched_concrete_metrics.append(res_metric_name)
+
+          if not matched_concrete_metrics:
+            identifier = (
+              metric_spec.pattern if id_type == "pattern" else metric_spec.name
+            )
             print(
-              f"Warning: Skipping check for {metric_spec.name} ({stat_name}): Computed statistic not found in artifact.",
+              f"Warning: Skipping check for {identifier} ({stat_name}): Computed statistic not found in artifact.",
               file=sys.stderr,
             )
             continue
 
-          result_stat = result_map[key]
-          current_value = result_stat.value.value
-          unit = result_stat.unit
+          for concrete_metric in matched_concrete_metrics:
+            result_stat = result_map[(concrete_metric, stat_name)]
+            current_value = result_stat.value.value
+            unit = result_stat.unit
 
-          baseline = comparison.baseline.value
-          threshold = comparison.threshold.value
-          direction = comparison.improvement_direction
+            baseline = comparison.baseline.value
+            threshold = comparison.threshold.value
+            direction = comparison.improvement_direction
 
-          if _is_regression(current_value, baseline, threshold, direction):
-            self.regressions.append({
-              "config_id": benchmark_result.config_id,
-              "metric": metric_spec.name,
-              "stat": stat_name,
-              "current": current_value,
-              "baseline": baseline,
-              "threshold": threshold * 100,
-              "unit": unit,
-            })
+            if _is_regression(current_value, baseline, threshold, direction):
+              self.regressions.append({
+                "config_id": benchmark_result.config_id,
+                "metric": concrete_metric,
+                "stat": stat_name,
+                "current": current_value,
+                "baseline": baseline,
+                "threshold": threshold * 100,
+                "unit": unit,
+              })
 
   def report_results(self):
     """Reports results to stdout/stderr and terminates with failure if regressions were found."""
