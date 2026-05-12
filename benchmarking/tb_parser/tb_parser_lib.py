@@ -63,9 +63,7 @@ class TensorBoardParser:
     """
     self.metric_specs = metric_specs
 
-  def _read_tensorboard_metrics(
-    self, tblog_dir: str
-  ) -> Mapping[str, Sequence[float]]:
+  def _read_tensorboard_metrics(self, tblog_dir: str) -> Mapping[str, Sequence[float]]:
     """Reads scalar data for tracked metrics from both V1 and V2 buckets.
 
     We explicitly check both 'scalars' and 'tensors' buckets because:
