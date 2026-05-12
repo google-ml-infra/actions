@@ -65,9 +65,16 @@ message StatSpec {
 
 // Defines a specific metric to be tracked.
 message MetricSpec {
-  // REQUIRED: The name of the metric. This MUST exactly match the
-  // tag used when logging to TensorBoard (e.g., "wall_time").
-  string name = 1 [(buf.validate.field).string.min_len = 1];
+  // REQUIRED: Match by either an exact name or a regex pattern.
+  oneof identifier {
+    // The name of the metric. This MUST exactly match the
+    // tag used when logging to TensorBoard (e.g., "wall_time").
+    string name = 1 [(buf.validate.field).string.min_len = 1];
+
+    // A regex pattern used to match multiple TensorBoard tags
+    // (e.g., "torch_tpu/.*/post_warmup_step_time_seconds").
+    string pattern = 4 [(buf.validate.field).string.min_len = 1];
+  }
 
   // REQUIRED: The unit of measurement (e.g., "ms", "percent", "gb").
   string unit = 2 [(buf.validate.field).string.min_len = 1];
