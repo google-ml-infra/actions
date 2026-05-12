@@ -21,14 +21,14 @@ MetricSpecs. It outputs a list of ComputedStat protos.
 
 import sys
 import re
-from typing import List, Dict, Set
+import collections.abc
 import numpy as np
 import tensorflow as tf
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 from benchmarking.proto import benchmark_result_pb2
 from benchmarking.proto.common import metric_pb2
 
-MetricSpecs = List[metric_pb2.MetricSpec]
+MetricSpecs = collections.abc.Sequence[metric_pb2.MetricSpec]
 
 # A map from the Stat enum string name to the corresponding numpy function.
 STAT_FN_MAP = {
@@ -63,7 +63,9 @@ class TensorBoardParser:
     """
     self.metric_specs = metric_specs
 
-  def _read_tensorboard_metrics(self, tblog_dir: str) -> Dict[str, List[float]]:
+  def _read_tensorboard_metrics(
+    self, tblog_dir: str
+  ) -> collections.abc.Mapping[str, collections.abc.Sequence[float]]:
     """Reads scalar data for tracked metrics from both V1 and V2 buckets.
 
     We explicitly check both 'scalars' and 'tensors' buckets because:
@@ -93,7 +95,7 @@ class TensorBoardParser:
     all_available_tags = available_scalars | available_tensors
 
     # Resolve concrete tags to extract based on oneof identifier (name or pattern)
-    tags_to_extract: Set[str] = set()
+    tags_to_extract: set[str] = set()
     for spec in self.metric_specs:
       id_type = spec.WhichOneof("identifier")
       if id_type == "name":
@@ -123,7 +125,7 @@ class TensorBoardParser:
 
   def parse_and_compute(
     self, tblog_dir: str
-  ) -> List[benchmark_result_pb2.ComputedStat]:
+  ) -> collections.abc.Sequence[benchmark_result_pb2.ComputedStat]:
     """Reads event logs, computes stats, and returns a list of ComputedStat messages."""
     raw_data = self._read_tensorboard_metrics(tblog_dir)
     computed_stats = []
