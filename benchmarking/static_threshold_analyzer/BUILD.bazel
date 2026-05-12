@@ -30,6 +30,7 @@ py_binary(
     main = "static_threshold_analyzer.py",
     srcs = ["static_threshold_analyzer.py"],
     deps = [
+        "//benchmarking/utils:metric_parser",
         ":static_threshold_analyzer_lib",
     ],
 )
