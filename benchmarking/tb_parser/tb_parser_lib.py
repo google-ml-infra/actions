@@ -21,14 +21,14 @@ MetricSpecs. It outputs a list of ComputedStat protos.
 
 import sys
 import re
-import collections.abc
+from collections.abc import Mapping, Sequence
 import numpy as np
 import tensorflow as tf
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 from benchmarking.proto import benchmark_result_pb2
 from benchmarking.proto.common import metric_pb2
 
-MetricSpecs = collections.abc.Sequence[metric_pb2.MetricSpec]
+MetricSpecs = Sequence[metric_pb2.MetricSpec]
 
 # A map from the Stat enum string name to the corresponding numpy function.
 STAT_FN_MAP = {
@@ -65,7 +65,7 @@ class TensorBoardParser:
 
   def _read_tensorboard_metrics(
     self, tblog_dir: str
-  ) -> collections.abc.Mapping[str, collections.abc.Sequence[float]]:
+  ) -> Mapping[str, Sequence[float]]:
     """Reads scalar data for tracked metrics from both V1 and V2 buckets.
 
     We explicitly check both 'scalars' and 'tensors' buckets because:
@@ -125,7 +125,7 @@ class TensorBoardParser:
 
   def parse_and_compute(
     self, tblog_dir: str
-  ) -> collections.abc.Sequence[benchmark_result_pb2.ComputedStat]:
+  ) -> Sequence[benchmark_result_pb2.ComputedStat]:
     """Reads event logs, computes stats, and returns a list of ComputedStat messages."""
     raw_data = self._read_tensorboard_metrics(tblog_dir)
     computed_stats = []
