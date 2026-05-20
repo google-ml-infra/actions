@@ -57,3 +57,17 @@ jobs:
       ab_mode: true
       post_pr_comment: true
 
+  run_custom_env_e2e_test:
+    name: Custom Env E2E Test
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/run-benchmarks.yaml
+    with:
+      registry_file: "benchmarking/e2e_test/test_registry.pbtxt"
+      benchmark_filter: "e2e_python_benchmark_summary_v2"
+      custom_env_vars: |
+        E2E_TEST_VAR=hello_from_e2e_test
+        ANOTHER_VAR=123
+
+
