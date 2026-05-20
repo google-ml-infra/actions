@@ -1,0 +1,7 @@
+# INVALID: Untrusted organization
+benchmarks {
+  name: "fail_untrusted_org"
+  workload {
+    action: "malicious-user/repo@0123456789abcdef0123456789abcdef01234567"
+  }
+}

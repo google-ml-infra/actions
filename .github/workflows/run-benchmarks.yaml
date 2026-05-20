@@ -104,8 +104,54 @@ permissions:
   pull-requests: write  # Required for posting PR comments.
 
 jobs:
+  validate_registry:
+    name: Validate Registry Security
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d  # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
+    steps:
+      - name: Check out user repo
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: user_repo
+          persist-credentials: false
+
+      - name: Resolve ML Actions ref
+        id: resolve_refs
+        shell: bash
+        env:
+          # If we are in the actions repo itself, use the current SHA. Otherwise, use the input ref.
+          ML_ACTIONS_REF: ${{ github.repository == 'google-ml-infra/actions' && github.sha || inputs.ml_actions_ref }}
+        run: |
+          echo "ml_actions_ref=$ML_ACTIONS_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Check out ML actions repo
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        with:
+          repository: "google-ml-infra/actions"
+          ref: ${{ steps.resolve_refs.outputs.ml_actions_ref }}
+          path: ml_actions
+          persist-credentials: false
+
+      - name: Run Security Suite
+        working-directory: ml_actions
+        shell: bash
+        env:
+          REGISTRY_FILE: ${{ inputs.registry_file }}
+        run: |
+          echo "::group::Run Security Suite"
+          set -euo pipefail
+
+          # Validate registry file
+          REGISTRY_PATH="$GITHUB_WORKSPACE/user_repo/$REGISTRY_FILE"
+          bazel run //benchmarking/validate_registry:validate_registry -- "$REGISTRY_PATH"
+          echo "::endgroup::"
+
   generate_matrix:
     name: Generate matrix
+    needs: [validate_registry]
     runs-on: linux-x86-n2-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:9fded8d1413cabb6ef043611cbe446471e842a429e100d96d4ea183f2821e270 # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest

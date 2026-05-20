@@ -1,0 +1,32 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+
+py_library(
+    name = "validate_registry_lib",
+    srcs = ["validate_registry.py"],
+    data = ["security_policy.json"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//benchmarking/proto:benchmark_registry_py_proto",
+        "@protobuf//:protobuf_python",
+    ],
+)
+
+py_binary(
+    name = "validate_registry",
+    srcs = ["validate_registry.py"],
+    main = "validate_registry.py",
+    data = ["security_policy.json"],
+    python_version = "PY3",
+    deps = [":validate_registry_lib"],
+)
+
+py_test(
+    name = "validate_registry_test",
+    srcs = ["validate_registry_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":validate_registry_lib",
+        "@pypi//pytest",
+    ],
+)

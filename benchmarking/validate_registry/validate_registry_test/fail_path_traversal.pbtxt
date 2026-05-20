@@ -1,0 +1,7 @@
+# INVALID: Path traversal in local action
+benchmarks {
+  name: "fail_path_traversal"
+  workload {
+    action: "./../secrets/malicious_executor"
+  }
+}

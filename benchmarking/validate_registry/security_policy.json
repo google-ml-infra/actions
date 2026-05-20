@@ -1,0 +1,4 @@
+{
+    "trusted_orgs": ["google-ml-infra", "openxla", "actions", "google-pytorch"],
+    "comment": "Approved organization allowlist"
+}

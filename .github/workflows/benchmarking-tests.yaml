@@ -28,9 +28,56 @@ jobs:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:e1461af32bf27640ddbcde7c3e7a10f194142779e9ed3bba962040812e626a1c # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # ratchet:actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
         with:
           persist-credentials: false
       - name: Run benchmarking Bazel tests
         run: |
           bazel test --test_output=errors //benchmarking/...
+
+  # QUICK TEST: Verify all security scenarios (Pass, Fail, Side cases)
+  security_integration_tests:
+    name: Security Case (${{ matrix.case.name }})
+    runs-on: linux-x86-n2-16
+    container:
+      image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - name: "Valid Pinned Action"
+            file: "benchmarking/validate_registry/validate_registry_test/pass_valid.pbtxt"
+            expected: "success"
+          - name: "Unpinned Tag Blocked"
+            file: "benchmarking/validate_registry/validate_registry_test/fail_tag.pbtxt"
+            expected: "failure"
+          - name: "Untrusted Org Blocked"
+            file: "benchmarking/validate_registry/validate_registry_test/fail_untrusted_org.pbtxt"
+            expected: "failure"
+          - name: "Path Traversal Blocked"
+            file: "benchmarking/validate_registry/validate_registry_test/fail_path_traversal.pbtxt"
+            expected: "failure"
+    steps:
+      - name: Checkout toolkit
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Assert Validator Result
+        shell: bash
+        run: |
+          echo "Testing file: ${{ matrix.case.file }}"
+          echo "Expected outcome: ${{ matrix.case.expected }}"
+          # Run the validator
+          if bazel run //benchmarking/validate_registry:validate_registry -- "$GITHUB_WORKSPACE/${{ matrix.case.file }}"; then
+            RESULT="success"
+          else
+            RESULT="failure"
+          fi
+          echo "Actual result: $RESULT"
+          # ASSERT: If the actual result doesn't match the expected outcome, fail the job.
+          if [ "$RESULT" != "${{ matrix.case.expected }}" ]; then
+            echo "::error::Validation result mismatch! Expected ${{ matrix.case.expected }} but got $RESULT."
+            exit 1
+          fi
+          echo "Assertion passed!"
