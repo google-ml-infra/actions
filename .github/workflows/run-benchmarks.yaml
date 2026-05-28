@@ -127,7 +127,7 @@ jobs:
           fi
 
       - name: Check out user repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # ratchet:actions/checkout@v6.0.2
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -144,7 +144,7 @@ jobs:
           echo "ml_actions_ref=$ML_ACTIONS_REF" >> "$GITHUB_OUTPUT"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # ratchet:actions/checkout@v6.0.2
         with:
           repository: "google-ml-infra/actions"
           ref: ${{ steps.resolve_refs.outputs.ml_actions_ref }}
@@ -177,7 +177,7 @@ jobs:
       job_id: ${{ steps.gen_job_id.outputs.job_id }}
     steps:
       - name: Check out user repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6.0.2
         with:
           repository: ${{ github.repository }}
           ref: ${{ github.sha }}
@@ -251,7 +251,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6.0.2
         with:
           repository: "google-ml-infra/actions"
           ref: ${{ steps.resolve_refs.outputs.ml_actions_ref }}
@@ -337,7 +337,7 @@ jobs:
 
     steps:
       - name: Check out user repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6.0.2
         with:
           repository: ${{ github.repository }}
           # For A/B mode, use the checkout ref. Otherwise fall back to SHA.
@@ -360,7 +360,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6.0.2
         with:
           repository: "google-ml-infra/actions"
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
@@ -516,7 +516,7 @@ jobs:
     if: inputs.ab_mode == true && !cancelled()
     steps:
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6.0.2
         with:
           repository: "google-ml-infra/actions"
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
@@ -607,7 +607,7 @@ jobs:
     
     steps:
       - name: Check out ML actions repo
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # ratchet:actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v6.0.2
         with:
           repository: "google-ml-infra/actions"
           ref: ${{ needs.generate_matrix.outputs.ml_actions_ref }}
