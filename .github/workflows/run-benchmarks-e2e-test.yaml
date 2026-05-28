@@ -44,6 +44,7 @@ jobs:
     with:
       registry_file: "benchmarking/e2e_test/test_registry.pbtxt"
       tag_filter: "e2e-test"
+      runner: "linux-x86-n2-16"
 
   run_ab_e2e_test:
     name: A/B Mode E2E Test
@@ -56,4 +57,5 @@ jobs:
       benchmark_filter: "e2e_bazel_benchmark"
       ab_mode: true
       post_pr_comment: true
+      runner: "linux-x86-n2-16"
 
