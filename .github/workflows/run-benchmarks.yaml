@@ -106,7 +106,7 @@ permissions:
 jobs:
   validate_registry:
     name: Validate Registry Security
-    runs-on: linux-x86-n2-16
+    runs-on: linux-x86-n4-16
     container:
       image: us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest@sha256:fa95dacafd53199ab68e3c28c488c0cc0d5fad3a4b0ac20af27f2bd0a061a55d  # ratchet:us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest
     steps:
