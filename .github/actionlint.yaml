@@ -3,5 +3,6 @@ self-hosted-runner:
   labels:
     - "windows-x86-n2-16"
     - "linux-x86-n2-16"
+    - "linux-x86-n4-16"
     - "linux-arm64-c4a-16"
     - "linux-x86-g2-48-l4-4gpu"
