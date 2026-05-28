@@ -24,7 +24,7 @@ jobs:
     container:
       image: us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build:latest@sha256:ca6fff944073ad89676de696f503c1a758bed96c3ce1a258e1d6e545cad37afb # ratchet:us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build:latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # ratchet:actions/checkout@v4
         with:
           persist-credentials: false
       - name: Fail on purpose
