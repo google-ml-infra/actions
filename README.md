@@ -12,5 +12,4 @@ documented in this repo.
 - [`ci_connection`](ci_connection/README.md): Action for pausing and connecting to workflows for debugging/testing.
 - [`setup-uv-python`](setup-uv-python/README.md): Action for uv-managed Python setup in workflows.
 - [`python_seed_env`](python_seed_env/README.md): Seed-based Python environment CLI tooling.
-- [`benchmarking/actions`](benchmarking/docs/onboarding.md): Composite actions used by benchmarking pipelines.
 - `ci_dashboard`: CI dashboard.
