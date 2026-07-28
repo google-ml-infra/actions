@@ -15,11 +15,11 @@ jobs:
   test-runner:
     strategy:
       matrix:
-        runner: ["linux-x86-n2-16", "linux-arm64-c4a-16", "windows-x86-n2-16"]
+        runner: ["test-linux-n2-16", "test-linux-n2-32", "test-windows-n2-16"]
     runs-on: ${{ matrix.runner }}
-    container: ${{ (contains(matrix.runner, 'linux-x86') && 'us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:latest') ||
-                   (contains(matrix.runner, 'linux-arm64') && 'us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build-arm64:latest') ||
-                   (contains(matrix.runner, 'windows-x86') && null) }}
+    container: ${{ (contains(matrix.runner, 'test-linux') && 'us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:infrastructure-public-image-2c74567ee8e0') ||
+                   (contains(matrix.runner, 'arm64') && 'us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build-arm64:infrastructure-public-image-8f4da9c96079') ||
+                   (contains(matrix.runner, 'windows') && null) }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
         with:
