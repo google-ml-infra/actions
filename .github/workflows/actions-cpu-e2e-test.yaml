@@ -15,7 +15,7 @@ jobs:
   test-runner:
     strategy:
       matrix:
-        runner: ["test-linux-n2-16", "test-linux-n2-32", "test-windows-n2-16"]
+        runner: ["test-linux-n2-16", "test-linux-n2-32", "test-windows-n2-16", "test-linux-c4a-16"]
     runs-on: ${{ matrix.runner }}
     container: ${{ (contains(matrix.runner, 'test-linux') && 'us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build:infrastructure-public-image-2c74567ee8e0') ||
                    (contains(matrix.runner, 'arm64') && 'us-docker.pkg.dev/ml-oss-artifacts-published/ml-public-container/ml-build-arm64:infrastructure-public-image-8f4da9c96079') ||
