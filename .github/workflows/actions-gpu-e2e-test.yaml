@@ -13,7 +13,7 @@ permissions: {}
 
 jobs:
   test-runner:
-    runs-on: linux-x86-g2-48-l4-4gpu
+    runs-on: test-linux-l4-4gpu
     container: ghcr.io/nvidia/jax:jax
     steps:
       - name: Print out devices

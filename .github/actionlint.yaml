@@ -10,3 +10,4 @@ self-hosted-runner:
     - "test-linux-n2-32"
     - "test-windows-n2-16"
     - "test-linux-c4a-16"
+    - "test-linux-l4-4gpu"
