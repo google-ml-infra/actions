@@ -1,0 +1,100 @@
+name: 'Check License Headers'
+description: 'Reusable Action that scans workspace files for Apache or custom license headers, with highly configurable exclusions'
+inputs:
+  copyright-holder:
+    description: 'The copyright holder name to check in the header.'
+    required: true
+  license-type:
+    description: 'The license type to verify (e.g., apache, mit, bsd).'
+    required: true
+  exclude-paths:
+    description: 'Comma-separated list of folder paths to prune/exclude.'
+    required: false
+    default: ''
+  exclude-extensions:
+    description: 'Comma-separated list of additional file extensions to exclude (e.g. tflite, tfrecord).'
+    required: false
+    default: ''
+  exclude-files:
+    description: 'Comma-separated list of additional specific filenames to exclude (e.g. my_custom_template.yaml).'
+    required: false
+    default: ''
+  scan-path:
+    description: 'The directory path where the scan should begin (defaults to repository root).'
+    required: false
+    default: '.'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Install addlicense if not present'
+      shell: bash
+      run: |
+        if ! command -v addlicense &> /dev/null; then
+          echo "addlicense CLI not found. Installing github.com/google/addlicense..."
+          go install github.com/google/addlicense@b289835c0741ba2fb92dd5f61af070e79c69a55e # v1.2.0
+        fi
+
+    - name: 'Run license header checks'
+      shell: bash
+      env:
+        INPUT_EXCLUDE_PATHS: ${{ inputs.exclude-paths }}
+        INPUT_EXCLUDE_EXTENSIONS: ${{ inputs.exclude-extensions }}
+        INPUT_EXCLUDE_FILES: ${{ inputs.exclude-files }}
+        INPUT_SCAN_PATH: ${{ inputs.scan-path }}
+        INPUT_COPYRIGHT_HOLDER: ${{ inputs.copyright-holder }}
+        INPUT_LICENSE_TYPE: ${{ inputs.license-type }}
+      run: |
+        # Ensure Go bin path is active in current execution env
+        export PATH=$PATH:$(go env GOPATH)/bin
+
+        # Build addlicense arguments
+        ADDLICENSE_ARGS=(
+          -c "$INPUT_COPYRIGHT_HOLDER"
+          -l "$INPUT_LICENSE_TYPE"
+          -check
+        )
+
+        DEFAULT_IGNORE_PATTERNS=(
+          "**/*.Dockerfile" "**/Dockerfile"
+          "**/__init__.py" "_toc.yaml"
+          "**/*.bazel" "**/*.bzl" "**/*.BUILD"
+          "**/*.proto" "**/*.xml" "**/*.html"
+        )
+
+        for pattern in "${DEFAULT_IGNORE_PATTERNS[@]}"; do
+          ADDLICENSE_ARGS+=(-ignore "$pattern")
+        done
+
+        # Add user-supplied path exclusions
+        IFS=', ' read -r -a paths <<< "$INPUT_EXCLUDE_PATHS"
+        for p in "${paths[@]}"; do
+          [[ -n "$p" ]] && ADDLICENSE_ARGS+=(-ignore "${p%/}/**")
+        done
+
+        # Add user-supplied extension exclusions
+        IFS=', ' read -r -a exts <<< "$INPUT_EXCLUDE_EXTENSIONS"
+        for ext in "${exts[@]}"; do
+          [[ -n "$ext" ]] && ADDLICENSE_ARGS+=(-ignore "**/*.${ext#\*.}")
+        done
+
+        # Add user-supplied file exclusions
+        IFS=', ' read -r -a files <<< "$INPUT_EXCLUDE_FILES"
+        for f in "${files[@]}"; do
+          [[ -n "$f" ]] && ADDLICENSE_ARGS+=(-ignore "**/$f")
+        done
+
+        echo "Scanning path: $INPUT_SCAN_PATH"
+        echo "Running addlicense with ${#ADDLICENSE_ARGS[@]} arguments..."
+
+        if ! addlicense "${ADDLICENSE_ARGS[@]}" "$INPUT_SCAN_PATH"; then
+          echo "::error::License header check failed — the files listed above are missing license headers."
+          echo ""
+          echo "To fix, run addlicense on the flagged files:"
+          echo "  addlicense -c \"$INPUT_COPYRIGHT_HOLDER\" -l $INPUT_LICENSE_TYPE <file1> <file2> ..."
+          echo ""
+          echo "Then commit the updated files back to your branch."
+          exit 1
+        fi
+
+        echo "::notice::All files scanned under '$INPUT_SCAN_PATH' contain valid license headers."

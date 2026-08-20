@@ -1,0 +1,8 @@
+# Configuration for JAX seeder
+# PyPI project name to query for "latest" version
+pypi_project_name: "jax"
+github_org_repo: "jax-ml/jax"
+# Pattern for the lock file. {python_version_underscored} will be replaced (e.g., "3_11")
+lock_file_pattern: "build/requirements_lock_{python_version_underscored}.txt"
+# Pattern for the jax release github tag. {latest_version} will be replaced (e.g., "0.6.2")
+release_tag_pattern: "jax-v{latest_version}"

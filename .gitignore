@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Bazel directories
+bazel-*
+
 # Distribution / packaging
 .Python
 build/
@@ -153,3 +156,7 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# seed-env generated files
+python_seed_env/generated_env/
+python_seed_env/downloaded_base_and_seed_requirements/

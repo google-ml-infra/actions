@@ -16,7 +16,6 @@ description: 'Action to wait for connection from user (conditionally)'
 inputs:
   halt-dispatch-input:
     description: 'Should the action wait for user connection from workflow_dispatch?'
-    required: false
     default: "no"
 runs:
   using: "composite"
@@ -26,10 +25,10 @@ runs:
     env:
       PYTHONUNBUFFERED: 1
       HALT_DISPATCH_INPUT: ${{ inputs.halt-dispatch-input }}
+      # Important: The token is used only for retrieving PR labels via API.
+      # For the token to work, the calling workflow must have the following permissions
+      # set: go/ml-github-actions:connect#labels-read-permissions.
+      GITHUB_TOKEN: ${{ github.token }}
     # The calling workflow shouldn't fail in case this step does
     continue-on-error: true
-    run: |
-      # Pick an existing Python alias
-      python_bin=$(which python3 2>/dev/null || which python)
-      # Wait for the connection, if a halt was requested via a label/input
-      "$python_bin" "$GITHUB_ACTION_PATH/wait_for_connection.py"
+    run: bash "$GITHUB_ACTION_PATH/wait_for_connection.sh"

@@ -1,0 +1,55 @@
+# A workflow to test check-license composite action failure conditions
+
+name: Test CI License Check On Error Action
+# Run on pull_request or push
+on:
+  pull_request:
+    paths:
+      - .github/actions/check-license/**
+      - tests/ci_license/**
+      - .github/workflows/test_license_check_on_error.yml
+    branches:
+      - main
+  push:
+    paths:
+      - .github/actions/check-license/**
+      - tests/ci_license/**
+      - .github/workflows/test_license_check_on_error.yml
+    branches:
+      - main
+defaults:
+  run:
+    shell: bash
+
+permissions: {}
+
+jobs:
+  run-license-check:
+    runs-on: "ubuntu-latest"
+    container: "us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build:latest"  # zizmor: ignore[unpinned-images]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: "Set up Go"
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: 'stable'
+      - name: "Run license check on error action"
+        id: check-license
+        uses: ./ci_check_license
+        with:
+          scan-path: "tests/ci_license/unlicensed_files"
+          copyright-holder: "Google LLC"
+          license-type: "apache"
+          exclude-paths: "tests/ci_license/unlicensed_files/excluded_path"
+          exclude-extensions: 'yml'
+          exclude-files: 'tests/ci_license/unlicensed_files/excluded.py'
+        continue-on-error: true
+      - name: "Check license check result failed as expected"
+        if: steps.check-license.outcome == 'failure'
+        run: echo "License check failed as expected."
+      - name: "Check license check result did not fail as expected"
+        if: steps.check-license.outcome != 'failure'
+        run: echo "::error::License check did not fail as expected." && exit 1

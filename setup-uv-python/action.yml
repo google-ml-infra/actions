@@ -1,0 +1,101 @@
+name: 'Setup uv-managed Python'
+description: 'Install uv, install/select Python, and emit setup timing debug summary.'
+
+inputs:
+  python-version:
+    description: 'Python version to install.'
+    required: true
+  summary-label:
+    description: 'Optional label used in GitHub step summary output. If empty, defaults to python-<python-version>.'
+    required: false
+    default: ''
+  uv-version:
+    description: 'uv version to install.'
+    required: false
+    default: '0.10.10'
+  enable-cache:
+    description: 'Whether to enable uv cache uploads/restores.'
+    required: false
+    default: 'true'
+  cache-python:
+    description: 'Whether to cache uv-managed Python installations.'
+    required: false
+    default: 'true'
+  cache-dependency-glob:
+    description: 'Dependency files used to compute the setup-uv cache key. If empty, setup-uv determines the glob.'
+    required: false
+    default: ''
+  cache-suffix:
+    description: 'Optional suffix appended to setup-uv cache keys for cache busting/debugging.'
+    required: false
+    default: ''
+  add-python-to-path:
+    description: 'Whether to prepend the uv virtual environment binary (bin|Scripts) directory to PATH.'
+    required: false
+    default: 'true'
+  export-python-env:
+    description: 'Whether to export PYTHON_BIN and VIRTUAL_ENV environment variables.'
+    required: false
+    default: 'true'
+
+outputs:
+  python-bin:
+    description: 'Selected Python interpreter path.'
+    value: ${{ steps.select_python.outputs.python_bin }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Mark Python setup start
+      if: ${{ env.CI_UV_DEBUG == 'true' }}
+      id: mark_python_setup_start
+      shell: bash
+      run: printf 'py_setup_t0=%s\n' "$(date +%s)" >> "$GITHUB_OUTPUT"
+
+    - name: Install uv and set Python ${{ inputs.python-version }} (custom cache glob)
+      if: ${{ inputs.cache-dependency-glob != '' }}
+      id: setup_uv_with_glob
+      uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098  # v7.3.1
+      with:
+        version: ${{ inputs.uv-version }}
+        python-version: ${{ inputs.python-version }}
+        enable-cache: ${{ inputs.enable-cache }}
+        cache-python: ${{ inputs.cache-python }}
+        cache-dependency-glob: ${{ inputs.cache-dependency-glob }}
+        cache-suffix: ${{ inputs.cache-suffix }}
+
+    # Identical to the previous step, except the cache-dependency-glob input is omitted.
+    # Required as there is no way to omit just the cache-dependency-glob input.
+    - name: Install uv and set Python ${{ inputs.python-version }} (implicit cache glob)
+      if: ${{ inputs.cache-dependency-glob == '' }}
+      id: setup_uv_default_glob
+      uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098  # v7.3.1
+      with:
+        version: ${{ inputs.uv-version }}
+        python-version: ${{ inputs.python-version }}
+        enable-cache: ${{ inputs.enable-cache }}
+        cache-python: ${{ inputs.cache-python }}
+        cache-suffix: ${{ inputs.cache-suffix }}
+
+    - name: Ensure uv-managed Python runtime
+      id: select_python
+      shell: bash
+      env:
+        UV_PYTHON_VERSION: ${{ inputs.python-version }}
+        ADD_PYTHON_TO_PATH: ${{ inputs.add-python-to-path }}
+        EXPORT_PYTHON_ENV: ${{ inputs.export-python-env }}
+      run: bash "$GITHUB_ACTION_PATH/scripts/ensure_uv_python_runtime.sh"
+
+    - name: Report Python setup duration
+      if: ${{ env.CI_UV_DEBUG == 'true' }}
+      shell: bash
+      env:
+        SUMMARY_LABEL: ${{ inputs.summary-label != '' && inputs.summary-label || format('python-{0}', inputs.python-version) }}
+        PY_SETUP_T0: ${{ steps.mark_python_setup_start.outputs.py_setup_t0 }}
+        UV_CACHE_HIT: ${{ steps.setup_uv_with_glob.outputs.cache-hit || steps.setup_uv_default_glob.outputs.cache-hit }}
+        PYTHON_CACHE_HIT: ${{ steps.setup_uv_with_glob.outputs.python-cache-hit || steps.setup_uv_default_glob.outputs.python-cache-hit }}
+      run: |
+        echo "### ${SUMMARY_LABEL} Python setup" >> "$GITHUB_STEP_SUMMARY"
+        echo "- duration: $(( $(date +%s) - PY_SETUP_T0 ))s" >> "$GITHUB_STEP_SUMMARY"
+        echo "- uv cache hit: ${UV_CACHE_HIT}" >> "$GITHUB_STEP_SUMMARY"
+        echo "- python cache hit: ${PYTHON_CACHE_HIT}" >> "$GITHUB_STEP_SUMMARY"

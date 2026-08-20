@@ -1,0 +1,64 @@
+[project]
+name = "seed-env"
+version = "0.1.0a3"
+authors = [
+  { name="ml-velocity authors", email="ml-velocity-team+seed-env@google.com" },
+]
+description = "A CLI tool for environment setup that combines a seeder project with your specific requirements."
+readme = "README.md"
+requires-python = ">=3.7"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = ["cli", "environment", "seeding", "configuration"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Developers",
+]
+
+# Project runtime dependencies
+dependencies = [
+    "uv",
+    "pyyaml",
+    "requests",
+    "toml",
+    "packaging",
+]
+
+[project.urls]
+# Links to the project's homepage, bug tracker, etc.
+Homepage = "https://github.com/google-ml-infra/actions/tree/main/python_seed_env"
+"Source Code" = "https://github.com/google-ml-infra/actions/tree/main/python_seed_env"
+# Other: "Bug Tracker"
+
+[project.scripts]
+# Defines the command-line entry points
+# This creates the `seed-env` command that calls `main` in `seed_env/cli.py`
+seed-env = "seed_env.cli:main"
+
+[project.optional-dependencies]
+# Defines optional groups of dependencies, e.g., for development or specific features.
+dev = [
+    "pytest",
+    "pytest-mock",
+    # Add other development dependencies here
+]
+
+[tool.pyink]
+# Formatting configuration to follow Google style-guide
+line-length = 80
+preview = true
+pyink-indentation = 2
+pyink-use-majority-quotes = true
+
+[build-system]
+requires = ["setuptools>=77.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+"seed_env.seeder_configs" = ["*.yaml"]
+
+[tool.pytest.ini_options]
+# Pytest configuration
+# Point to the 'tests' directory directly under python_seed_env
+testpaths = ["tests"]

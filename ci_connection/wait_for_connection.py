@@ -44,7 +44,8 @@ def _get_run_attempt_num() -> int | None:
   try:
     attempt = int(os.getenv("GITHUB_RUN_ATTEMPT"))
     return attempt
-  except ValueError:  # shouldn't be possible in GitHub Actions, but to be safe
+  # Shouldn't be possible in GitHub Actions, but to be safe
+  except (TypeError, ValueError):
     logging.error("Could not retrieve GITHUB_RUN_ATTEMPT, assuming first attempt...")
     return 1
 
@@ -83,7 +84,8 @@ def is_debug_logging_enabled_and_job_type_is_schedule_or_workflow_dispatch() -> 
       logging.debug(f"Job type is {event_name}, not 'schedule' or 'workflow_dispatch'")
     if not actions_debug_enabled:
       logging.debug(
-        f"Job does not have logging enabled: RUNNER_DEBUG={actions_debug_enabled}"
+        f"Job does not have GH logging variable set: "
+        f"RUNNER_DEBUG={actions_debug_enabled}"
       )
   return result
 
@@ -128,7 +130,7 @@ def check_if_labels_require_connection_halting() -> Optional[bool]:
     )
     return True
   else:
-    if not HALT_ON_RETRY_LABEL:
+    if HALT_ON_RETRY_LABEL not in labels:
       logging.debug(f"No {HALT_ON_RETRY_LABEL!r} label found on the PR")
     else:
       logging.debug(
@@ -253,12 +255,9 @@ def construct_connection_command() -> tuple[str, str]:
   )
   python_bin = sys.executable
   main_connect_command = (
-    f"CONNECTION COMMAND (MAIN):\n"
     f'{connect_command} --entrypoint="{python_bin} {actions_path}/notify_connection.py"'
   )
-  fallback_connect_command = (
-    f'CONNECTION COMMAND (FALLBACK):\n{connect_command} --entrypoint="bash -i"'
-  )
+  fallback_connect_command = f'{connect_command} --entrypoint="bash -i"'
 
   return main_connect_command, fallback_connect_command
 
@@ -269,19 +268,23 @@ async def wait_for_connection(host: str = "127.0.0.1", port: int = 12455):
 
   logging.info("Googler connection only")
   logging.info("See go/ml-github-actions:connect for details\n")
-  _sep = "-" * 100
+  _sep = "=" * 75
   logging.info(
-    f"\n{_sep}\n{connect_command}\n{_sep}\n", extra={"bold": True, "underline": True}
+    f"\n{_sep} CONNECTION COMMAND {_sep}\n"
+    f"{connect_command}"
+    f"\n{_sep} CONNECTION COMMAND {_sep}\n",
+    extra={"bold": True},
   )
 
-  logging.info(f"{fallback_connect_command}\n")
-  logging.info(
+  logging.warning(
+    f"\nFALLBACK COMMAND - only use if the connection command above does not work:\n"
+    f"{fallback_connect_command}\n\n"
     "If the Python-based command doesn't work, use the Bash fallback above.\n"
     "Using this fallback will not let the runner know a connection "
-    "was made, and will not cause the runner to wait automatically.\n"
+    "has been made, and will not cause the runner to wait automatically.\n"
     "For the fallback, add a wait/sleep somewhere after the "
-    "'Wait for Connection' in your workflow manually, or use a different "
-    "image/container/Python so the main command can run successfully.\n"
+    "'Wait for Connection' step in your workflow manually, or use a different "
+    "container/Python so the main command can run successfully.\n"
   )
 
   server = await asyncio.start_server(process_messages, host, port)

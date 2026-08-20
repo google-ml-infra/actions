@@ -1,0 +1,58 @@
+name: Buildifier Check On Error
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/test-ci-buildifier-on-error.yaml
+      - tests/ci_buildifier/**
+      - ci_buildifier/**
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/test-ci-buildifier-on-error.yaml
+      - tests/ci_buildifier/**
+      - ci_buildifier/**
+
+defaults:
+  run:
+    shell: bash
+
+permissions: {}
+
+jobs:
+  buildifier-check:
+    name: Check Bazel Formatting
+    runs-on: "linux-x86-n2-16"
+    container: "us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build:latest"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Run buildifier
+        id: run-buildifier
+        uses: ./ci_buildifier
+        continue-on-error: true  # it should fail on unformatted files
+        with:
+          filepaths: >
+            tests/ci_buildifier/unformatted/*.bzl
+            tests/ci_buildifier/unformatted/BUILD
+            tests/ci_buildifier/unformatted/WORKSPACE
+            tests/ci_buildifier/unformatted/*.bazel
+
+      - name: Verify failure
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.run-buildifier.outcome }}
+        run: |
+          if [ "$OUTCOME" == "failure" ]; then
+            echo "Success: buildifier failed as expected."
+          else
+            echo "::error:: buildifier did not fail as expected."
+            exit 1
+          fi

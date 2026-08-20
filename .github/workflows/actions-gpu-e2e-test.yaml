@@ -1,0 +1,21 @@
+name: GPU End-to-End Test
+
+on:
+  workflow_dispatch: # Allows manual triggering or via Github API
+    inputs:
+      triggering_job_id:
+        description: 'ID of the Kokoro job that triggered this workflow'
+        required: false
+  schedule:
+    - cron: '0 10 * * *' # (UTC 10am everyday, and it corresponds to 3 am PDT everyday.)
+
+permissions: {}
+
+jobs:
+  test-runner:
+    runs-on: test-linux-l4-4gpu
+    container: ghcr.io/nvidia/jax:jax
+    steps:
+      - name: Print out devices
+        run: |
+          python -c "import jax; assert len(jax.devices()) == 4"

@@ -1,0 +1,13 @@
+# Configuration related to self-hosted runner.
+self-hosted-runner:
+  labels:
+    - "windows-x86-n2-16"
+    - "linux-x86-n2-16"
+    - "linux-x86-n4-16"
+    - "linux-arm64-c4a-16"
+    - "linux-x86-g2-48-l4-4gpu"
+    - "test-linux-n2-16"
+    - "test-linux-n2-32"
+    - "test-windows-n2-16"
+    - "test-linux-c4a-16"
+    - "test-linux-l4-4gpu"
