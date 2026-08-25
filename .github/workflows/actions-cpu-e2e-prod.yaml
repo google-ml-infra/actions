@@ -12,8 +12,9 @@ jobs:
     strategy:
       matrix:
         runner: ["linux-x86-n4-16", "linux-arm64-c4a-16", "linux-x86-g2-48-l4-4gpu"]
-    group: ml-actions-platform
-    runs-on: ${{ matrix.runner }}
+    runs-on:
+      labels: ${{ matrix.runner }}
+      group: ml-actions-platform
     container: ghcr.io/nvidia/jax:jax
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
