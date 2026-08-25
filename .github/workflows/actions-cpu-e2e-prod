@@ -1,0 +1,24 @@
+name: End-to-End Test
+
+on:
+  workflow_dispatch: # Allows manual triggering or via Github API
+  schedule:
+    - cron: '0 9 * * *' # (UTC 9am everyday, and it corresponds to 2 am PDT everyday.)
+
+permissions: {}
+
+jobs:
+  test-runner:
+    strategy:
+      matrix:
+        runner: ["linux-x86-n4-16", "linux-arm64-c4a-16", "linux-x86-g2-48-l4-4gpu"]
+    group: ml-actions-platform
+    runs-on: ${{ matrix.runner }}
+    container: ghcr.io/nvidia/jax:jax
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Print out devices
+        run: |
+          python -c "import jax; assert len(jax.devices()) == 4"
