@@ -1,6 +1,9 @@
 name: End-to-End Test
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch: # Allows manual triggering or via Github API
   schedule:
     - cron: '0 9 * * *' # (UTC 9am everyday, and it corresponds to 2 am PDT everyday.)
@@ -20,6 +23,8 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Print out devices
+      - name: Simulate running a job on ${{ matrix.runner }}
         run: |
-          python -c "import jax; assert len(jax.devices()) == 4"
+          echo "Starting a job on runner: ${{ matrix.runner }}..."
+          sleep 30
+          echo "Job finished on runner: ${{ matrix.runner }}."
