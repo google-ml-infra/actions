@@ -42,8 +42,15 @@ jobs:
         with:
           persist-credentials: false
       - name: Echo
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
           echo "Real job here..."
+          echo "     GITHUB_REF: $GITHUB_REF"
+          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          echo "GITHUB_REF_NAME: $GITHUB_REF_NAME"
       # Halt for connection if workflow dispatch is told to or if it is a retry with the label halt_on_retry
       - name: Wait For Connection
         uses: ./ci_connection/
