@@ -1,0 +1,47 @@
+name: Test BuildKit Runner
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-buildkit:
+    name: Test BuildKit Build
+    runs-on: test-linux-n2-buildkit
+    # For CONTAINER hardwareType, a job container is required
+    container:
+      image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
+
+      - name: Configure Docker Authentication
+        run: gcloud auth configure-docker us-docker.pkg.dev,gcr.io -q
+
+      # Connects BuildX to the rootless buildkitd sidecar running in the runner pod
+      - name: Set up Docker BuildX
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+        with:
+          driver: remote
+          endpoint: tcp://localhost:1234
+
+      - name: Verify BuildX Connection
+        run: |
+          docker buildx ls
+          docker buildx inspect
+
+      - name: Test Docker Build
+        run: |
+          cat << 'EOF' > Dockerfile.test
+          FROM alpine:latest
+          RUN echo "Hello from rootless BuildKit on GKE!" > /test.txt
+          CMD cat /test.txt
+          EOF
+
+          docker buildx build --file Dockerfile.test --load --tag test-buildkit:latest .
