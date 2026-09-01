@@ -12,7 +12,7 @@ jobs:
     runs-on: test-linux-n2-buildkit
     # For CONTAINER hardwareType, a job container is required
     container:
-      image: gcr.io/google.com/cloudsdktool/google-cloud-cli:alpine
+      image: gcr.io/google.com/cloudsdktool/google-cloud-cli:582.0.0
     permissions:
       contents: read
       id-token: write
