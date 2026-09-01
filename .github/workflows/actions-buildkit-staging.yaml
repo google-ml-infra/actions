@@ -41,8 +41,7 @@ jobs:
           RUN echo "BuildKit rootless daemon build succeeded!"
           EOF
       - name: Build test image
-        # docker/build-push-action@v5
-        uses: docker/build-push-action@31159d49c0d4756269a11516e574c5bc7b14de03
+        uses: docker/build-push-action@v5
         with:
           context: .
           push: false
