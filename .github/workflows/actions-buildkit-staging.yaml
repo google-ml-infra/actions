@@ -5,6 +5,8 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: '0 10 * * *' # (UTC 10am everyday, and it corresponds to 3 am PDT everyday.)
 
 jobs:
   test-buildkit:
