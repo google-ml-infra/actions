@@ -12,7 +12,7 @@ jobs:
     runs-on: test-linux-n2-buildkit
     # For CONTAINER hardwareType, a job container is required
     container:
-      image: gcr.io/google.com/cloudsdktool/google-cloud-cli:latest
+      image: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
     permissions:
       contents: read
       id-token: write
@@ -20,6 +20,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # ratchet:actions/checkout@v4
+        with:
+          # Explicitly disable credential persistence
+          persist-credentials: false
 
       - name: Configure Docker Authentication
         run: gcloud auth configure-docker us-docker.pkg.dev,gcr.io -q
@@ -38,7 +41,8 @@ jobs:
           RUN echo "BuildKit rootless daemon build succeeded!"
           EOF
       - name: Build test image
-        uses: docker/build-push-action@v5
+        # docker/build-push-action@v5
+        uses: docker/build-push-action@31159d49c0d4756269a11516e574c5bc7b14de03
         with:
           context: .
           push: false
