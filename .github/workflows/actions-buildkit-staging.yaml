@@ -31,17 +31,16 @@ jobs:
           driver: remote
           endpoint: tcp://localhost:1234
 
-      - name: Verify BuildX Connection
+      - name: Create Minimal Test Dockerfile
         run: |
-          docker buildx ls
-          docker buildx inspect
-
-      - name: Test Docker Build
-        run: |
-          cat << 'EOF' > Dockerfile.test
+          cat << 'EOF' > Dockerfile
           FROM alpine:latest
-          RUN echo "Hello from rootless BuildKit on GKE!" > /test.txt
-          CMD cat /test.txt
+          RUN echo "BuildKit rootless daemon build succeeded!"
           EOF
+      - name: Build test image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: test-buildkit:latest
 
-          docker buildx build --file Dockerfile.test --load --tag test-buildkit:latest .
