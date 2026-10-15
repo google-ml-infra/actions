@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   wait-on-error-test:
-    runs-on: "linux-x86-n2-16"
+    runs-on: "linux-x86-n4-16"
     timeout-minutes: 60
     container:
       image: us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build:latest@sha256:ca6fff944073ad89676de696f503c1a758bed96c3ce1a258e1d6e545cad37afb # ratchet:us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build:latest
