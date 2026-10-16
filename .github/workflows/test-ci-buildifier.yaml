@@ -25,7 +25,7 @@ permissions: {}
 jobs:
   buildifier-check:
     name: Check Bazel Formatting
-    runs-on: "linux-x86-n2-16"
+    runs-on: "linux-x86-n4-16"
     container: "us-central1-docker.pkg.dev/tensorflow-sigs/tensorflow/ml-build:latest"
 
     steps:

@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: ["linux-x86-n2-16", "windows-x86-n2-16"]
+        runner: ["linux-x86-n4-16", "windows-x86-n2-16"]
         instances: ["1"]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
